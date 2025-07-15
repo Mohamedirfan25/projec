@@ -1,0 +1,819 @@
+import React, { useState, useEffect } from "react";
+import axios from "axios";
+import {
+  Box,
+  Typography,
+  Button,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TextField,
+  MenuItem,
+  IconButton,
+  Menu,
+  InputAdornment,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Chip,
+  Select,
+  FormControl,
+  InputLabel,
+  Pagination,
+  Snackbar,
+  Paper,
+  Divider,
+  CircularProgress,
+  Alert,
+} from "@mui/material";
+import {
+  Delete as DeleteIcon,
+  MoreVert,
+  Edit,
+  Person,
+  FindInPage,
+  Badge,
+  Search,
+  Payment,
+  FilterList,
+  Close,
+} from "@mui/icons-material";
+
+const Status = ({ status }) => {
+  const statusStyles = {
+    PENDING: { backgroundColor: "#FFF5CC", color: "#FFAB00" },
+    COMPLETED: { backgroundColor: "#22C55E29", color: "#118D57" },
+    OVERDUE: { backgroundColor: "#FF563029", color: "#B71D1A" },
+    PARTIAL: { backgroundColor: "#E3F2FD", color: "#1565C0" },
+  };
+
+  const style =
+    statusStyles[status.toUpperCase()] || { backgroundColor: "inherit", color: "inherit" };
+
+  return (
+    <Chip
+      label={status}
+      sx={{
+        ...style,
+        borderRadius: "16px",
+        fontWeight: 500,
+        fontSize: "0.75rem",
+        height: "24px",
+      }}
+    />
+  );
+};
+
+const PaymentList = () => {
+  const [payments, setPayments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [filter, setFilter] = useState("");
+  const [filterAnchorEl, setFilterAnchorEl] = useState(null);
+  const [actionAnchorEl, setActionAnchorEl] = useState(null);
+  const [selectedPaymentId, setSelectedPaymentId] = useState(null);
+  const [openAddDialog, setOpenAddDialog] = useState(false);
+  const [openEditDialog, setOpenEditDialog] = useState(false);
+  const [addPaymentData, setAddPaymentData] = useState({
+    internId: "",
+    amount: 0,
+    paymentMethod: "",
+    transactionId: "",
+    status: "Pending",
+  });
+  const [editedPayment, setEditedPayment] = useState(null);
+  const [statusFilter, setStatusFilter] = useState("");
+  const [page, setPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(5);
+  const [deleteConfirmDialog, setDeleteConfirmDialog] = useState(false);
+  const [paymentToDelete, setPaymentToDelete] = useState(null);
+  const [snackBarOpen, setSnackBarOpen] = useState(false);
+  const [snackBarMessage, setSnackBarMessage] = useState("");
+  const [snackBarSeverity, setSnackBarSeverity] = useState("success");
+  const [logDialogOpen, setLogDialogOpen] = useState(false);
+  const [selectedInternLogs, setSelectedInternLogs] = useState(null);
+
+  // Fetch data from the API
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    const fetchPayments = async () => {
+      setLoading(true);
+      try {
+        const response = await axios.get("http://localhost:8000/Sims/fees/", {
+          headers: { Authorization: `Token ${token}` },
+        });
+        // Transform the API response data to match our component's structure
+        const transformedPayments = transformApiData(response.data);
+        setPayments(transformedPayments);
+        setError(null);
+      } catch (err) {
+        console.error("Error fetching payment data:", err);
+        setError("Failed to fetch payment data. Please try again later.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPayments();
+  }, []);
+
+  // Transform API data to match component structure
+  const transformApiData = (apiData) => {
+    return apiData.map((item) => {
+      // Determine status based on payment
+      let status = "Pending";
+      if (item.summary.total_paid === 0) {
+        status = "Pending";
+      } else if (item.summary.total_paid === item.summary.total_fee_amount) {
+        status = "Completed";
+      } else if (item.summary.total_paid < item.summary.total_fee_amount) {
+        status = "Partial";
+      }
+
+      // Transform payment logs
+      const logs = item.payment_details.map((payment) => ({
+        date: new Date(payment.paid_date).toISOString().slice(0, 10),
+        amount: parseFloat(payment.amount),
+        mode: payment.payment_method || "Not specified",
+      }));
+
+      return {
+        id: item.employee_id,
+        internId: `INT${String(item.employee_id).padStart(3, '0')}`,
+        name: item.employee_name,
+        date: logs.length > 0 ? logs[0].date : new Date().toISOString().slice(0, 10),
+        totalAmount: item.summary.total_fee_amount,
+        paid: item.summary.total_paid,
+        balance: item.summary.remaining_amount,
+        gpay: logs.some(log => log.mode?.toLowerCase()?.includes('gpay')),
+        status: status,
+        domain: item.domain,
+        scheme: item.scheme,
+        feeStructureId: item.summary.fee_structure_id,
+        logs: logs,
+      };
+    });
+  };
+
+  // Add new payment to API
+  const addPaymentToApi = async (paymentData) => {
+    try {
+      // Extract the employee_id from the internId
+      const employeeId = parseInt(paymentData.internId.replace(/INT0*/g, ''), 10);
+      
+      // Find the fee_structure_id for this employee
+      const employee = payments.find(p => p.id === employeeId);
+      if (!employee) {
+        throw new Error("Employee not found");
+      }
+      
+      const payload = {
+        emp_id: employeeId,
+        amount: paymentData.amount.toString(),
+        payment_method: paymentData.paymentMethod,
+        transaction_id: paymentData.transactionId,
+        fee_structure: employee.feeStructureId
+      };
+      
+      // Make API call to add payment
+      const response = await axios.post("http://localhost:8000/Sims/fees/add-payment/", payload);
+      
+      // Refresh payment list
+      const refreshResponse = await axios.get("http://localhost:8000/Sims/fees/");
+      const transformedPayments = transformApiData(refreshResponse.data);
+      setPayments(transformedPayments);
+      
+      return response.data;
+    } catch (err) {
+      console.error("Error adding payment:", err);
+      throw err;
+    }
+  };
+
+  const filteredPayments = payments.filter((payment) => {
+    return (
+      payment.name.toLowerCase().includes(filter.toLowerCase()) &&
+      (statusFilter ? payment.status === statusFilter : true)
+    );
+  });
+
+  const handleDeletePayment = async (id) => {
+    try {
+      // In a real implementation, you would call a delete endpoint
+      // await axios.delete(`http://localhost:8000/Sims/fees/delete-payment/${id}`);
+      
+      // Simulating deletion for now
+      setPayments((prevPayments) => prevPayments.filter((payment) => payment.id !== id));
+      
+      setSnackBarMessage("Payment deleted successfully!");
+      setSnackBarSeverity("success");
+      setSnackBarOpen(true);
+    } catch (err) {
+      console.error("Error deleting payment:", err);
+      setSnackBarMessage("Error deleting payment. Please try again.");
+      setSnackBarSeverity("error");
+      setSnackBarOpen(true);
+    }
+    
+    handleCloseActionMenu();
+  };
+
+  const handleOpenFilterMenu = (event) => {
+    setFilterAnchorEl(event.currentTarget);
+  };
+
+  const handleCloseFilterMenu = () => {
+    setFilterAnchorEl(null);
+  };
+
+  const handleOpenActionMenu = (event, paymentId) => {
+    setActionAnchorEl(event.currentTarget);
+    setSelectedPaymentId(paymentId);
+  };
+
+  const handleCloseActionMenu = () => {
+    setActionAnchorEl(null);
+    setSelectedPaymentId(null);
+  };
+
+  const handleEditPayment = (payment) => {
+    setEditedPayment(payment);
+    setOpenEditDialog(true);
+    handleCloseActionMenu();
+  };
+
+  const handleSaveEdit = async () => {
+    try {
+      // In a real implementation, you would call an update endpoint
+      // await axios.put(`http://localhost:8000/Sims/fees/update-payment/${editedPayment.id}`, editedPayment);
+      
+      // Updating local state for now
+      setPayments((prevPayments) =>
+        prevPayments.map((payment) =>
+          payment.id === editedPayment.id
+            ? { ...editedPayment, totalAmount: parseFloat(editedPayment.totalAmount) }
+            : payment
+        )
+      );
+      
+      setOpenEditDialog(false);
+      setSnackBarMessage("Payment updated successfully!");
+      setSnackBarSeverity("success");
+      setSnackBarOpen(true);
+    } catch (err) {
+      console.error("Error updating payment:", err);
+      setSnackBarMessage("Error updating payment. Please try again.");
+      setSnackBarSeverity("error");
+      setSnackBarOpen(true);
+    }
+  };
+
+  const handleAddPayment = async () => {
+    try {
+      const paymentData = {
+        internId: addPaymentData.internId,
+        amount: parseFloat(addPaymentData.amount),
+        paymentMethod: addPaymentData.paymentMethod,
+        transactionId: addPaymentData.transactionId
+      };
+      
+      await addPaymentToApi(paymentData);
+      
+      setOpenAddDialog(false);
+      setAddPaymentData({
+        internId: "",
+        amount: 0,
+        paymentMethod: "",
+        transactionId: "",
+        status: "Pending"
+      });
+      
+      setSnackBarMessage("Payment added successfully!");
+      setSnackBarSeverity("success");
+      setSnackBarOpen(true);
+    } catch (err) {
+      console.error("Error adding payment:", err);
+      setSnackBarMessage("Error adding payment. Please try again.");
+      setSnackBarSeverity("error");
+      setSnackBarOpen(true);
+    }
+  };
+
+  const handleResetFilters = () => {
+    setFilter("");
+    setStatusFilter("");
+  };
+
+  const openDeleteConfirmation = (paymentId) => {
+    setPaymentToDelete(paymentId);
+    setDeleteConfirmDialog(true);
+    handleCloseActionMenu();
+  };
+
+  const handleConfirmDelete = () => {
+    if (paymentToDelete) {
+      handleDeletePayment(paymentToDelete);
+    }
+    setDeleteConfirmDialog(false);
+    setPaymentToDelete(null);
+  };
+
+  const handleCloseConfirmDialog = () => {
+    setDeleteConfirmDialog(false);
+    setPaymentToDelete(null);
+  };
+
+  const handleChangePage = (event, newPage) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(1);
+  };
+
+  const handleOpenLogDialog = (internId) => {
+    const payment = payments.find(p => p.internId === internId);
+    if (payment) {
+      setSelectedInternLogs({
+        internId: payment.internId,
+        name: payment.name,
+        logs: payment.logs
+      });
+      setLogDialogOpen(true);
+    }
+  };
+
+  const paginatedPayments = filteredPayments.slice((page - 1) * rowsPerPage, page * rowsPerPage);
+
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Alert severity="error">{error}</Alert>
+      </Box>
+    );
+  }
+
+  return (
+    <Box sx={{ p: 3 }}>
+      <Typography variant="h5" sx={{ mb: 3, fontWeight: "bold" }}>
+        Payment List
+      </Typography>
+
+      {/* Header Section */}
+      <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
+        {/* Search Bar */}
+        <TextField
+          placeholder="Search by name..."
+          variant="outlined"
+          size="small"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <Search />
+              </InputAdornment>
+            ),
+          }}
+          sx={{ maxWidth: 300 }}
+        />
+
+        {/* Reset Button and Filter Icon */}
+        <Box>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={handleResetFilters}
+            startIcon={<Close />}
+            sx={{ mr: 1 }}
+          >
+            Reset
+          </Button>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={handleOpenFilterMenu}
+            startIcon={<FilterList />}
+          >
+            Filter
+          </Button>
+          <Menu
+            anchorEl={filterAnchorEl}
+            open={Boolean(filterAnchorEl)}
+            onClose={handleCloseFilterMenu}
+          >
+            <MenuItem onClick={() => setStatusFilter("Completed")}>Completed</MenuItem>
+            <MenuItem onClick={() => setStatusFilter("Pending")}>Pending</MenuItem>
+            <MenuItem onClick={() => setStatusFilter("Partial")}>Partial</MenuItem>
+          </Menu>
+        </Box>
+      </Box>
+
+      {/* Table Section */}
+      <TableContainer component={Paper} sx={{ mb: 3, boxShadow: 1 }}>
+        <Table>
+          <TableHead sx={{ backgroundColor: "#f5f5f5" }}>
+            <TableRow>
+              <TableCell>Intern ID</TableCell>
+              <TableCell>Name</TableCell>
+              <TableCell>Domain</TableCell>
+              <TableCell>Scheme</TableCell>
+              <TableCell>Date</TableCell>
+              <TableCell>Total Amount</TableCell>
+              <TableCell>Paid</TableCell>
+              <TableCell>Balance</TableCell>
+              <TableCell>Status</TableCell>
+              <TableCell>Action</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {paginatedPayments.map((payment) => (
+              <TableRow key={payment.id}>
+                <TableCell>
+                  <Button
+                    onClick={() => handleOpenLogDialog(payment.internId)}
+                    sx={{ textTransform: 'none', color: 'inherit', padding: 0 }}
+                  >
+                    {payment.internId}
+                  </Button>
+                </TableCell>
+                <TableCell>{payment.name}</TableCell>
+                <TableCell>{payment.domain}</TableCell>
+                <TableCell>{payment.scheme}</TableCell>
+                <TableCell>{payment.date}</TableCell>
+                <TableCell>${payment.totalAmount.toFixed(2)}</TableCell>
+                <TableCell>${payment.paid.toFixed(2)}</TableCell>
+                <TableCell>${payment.balance.toFixed(2)}</TableCell>
+                <TableCell>
+                  <Status status={payment.status} />
+                </TableCell>
+                <TableCell>
+                  <IconButton
+                    size="small"
+                    onClick={(e) => handleOpenActionMenu(e, payment.id)}
+                  >
+                    <MoreVert fontSize="small" />
+                  </IconButton>
+                  <Menu
+                    anchorEl={actionAnchorEl}
+                    open={Boolean(actionAnchorEl) && selectedPaymentId === payment.id}
+                    onClose={handleCloseActionMenu}
+                  >
+                    <MenuItem onClick={() => handleEditPayment(payment)}>
+                      <Edit fontSize="small" sx={{ color: "#1976d2", mr: 1 }} />
+                      Edit
+                    </MenuItem>
+                    <MenuItem onClick={() => openDeleteConfirmation(payment.id)}>
+                      <DeleteIcon fontSize="small" sx={{ color: "red", mr: 1 }} />
+                      Delete
+                    </MenuItem>
+                  </Menu>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+
+      {/* Pagination Section with Add Payment Button */}
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        {/* Add Payment Button */}
+        <Button
+          variant="contained"
+          onClick={() => setOpenAddDialog(true)}
+          startIcon={<Payment />}
+        >
+          Add Payment
+        </Button>
+
+        {/* Records per Page and Pagination */}
+        <Box sx={{ display: "flex", alignItems: "center" }}>
+          <Typography variant="body2" sx={{ mr: 1 }}>
+            Records per page:
+          </Typography>
+          <Select
+            value={rowsPerPage}
+            size="small"
+            onChange={handleChangeRowsPerPage}
+            sx={{ mr: 2, minWidth: 60 }}
+          >
+            <MenuItem value={5}>5</MenuItem>
+            <MenuItem value={10}>10</MenuItem>
+            <MenuItem value={20}>20</MenuItem>
+          </Select>
+          <Typography variant="body2" sx={{ mr: 2 }}>
+            {`(Showing ${paginatedPayments.length} of ${filteredPayments.length} records)`}
+          </Typography>
+          <Pagination
+            count={Math.ceil(filteredPayments.length / rowsPerPage)}
+            page={page}
+            onChange={handleChangePage}
+            color="primary"
+            shape="rounded"
+          />
+        </Box>
+      </Box>
+
+      {/* Add Payment Dialog */}
+      <Dialog open={openAddDialog} onClose={() => setOpenAddDialog(false)}>
+        <DialogTitle>Add Payment</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 400, mt: 1 }}>
+            <FormControl fullWidth>
+              <InputLabel>Intern ID</InputLabel>
+              <Select
+                value={addPaymentData.internId}
+                label="Intern ID"
+                onChange={(e) => setAddPaymentData({ ...addPaymentData, internId: e.target.value })}
+              >
+                {payments.map((payment) => (
+                  <MenuItem key={payment.internId} value={payment.internId}>
+                    {payment.internId} - {payment.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            
+            <TextField
+              label="Amount"
+              type="number"
+              value={addPaymentData.amount}
+              onChange={(e) => 
+                setAddPaymentData({ ...addPaymentData, amount: parseFloat(e.target.value) || 0 })
+              }
+              fullWidth
+            />
+            
+            <FormControl fullWidth>
+              <InputLabel>Payment Method</InputLabel>
+              <Select
+                value={addPaymentData.paymentMethod}
+                label="Payment Method"
+                onChange={(e) => setAddPaymentData({ ...addPaymentData, paymentMethod: e.target.value })}
+              >
+                <MenuItem value="Cash">Cash</MenuItem>
+                <MenuItem value="GPay">GPay</MenuItem>
+                <MenuItem value="Bank Transfer">Bank Transfer</MenuItem>
+                <MenuItem value="UPI">UPI</MenuItem>
+                <MenuItem value="Credit Card">Credit Card</MenuItem>
+              </Select>
+            </FormControl>
+            
+            <TextField
+              label="Transaction ID (optional)"
+              value={addPaymentData.transactionId}
+              onChange={(e) => setAddPaymentData({ ...addPaymentData, transactionId: e.target.value })}
+              fullWidth
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenAddDialog(false)}>Cancel</Button>
+          <Button onClick={handleAddPayment} variant="contained">
+            Add
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Edit Payment Dialog */}
+      <Dialog open={openEditDialog} onClose={() => setOpenEditDialog(false)}>
+        <DialogTitle>Edit Payment</DialogTitle>
+        <DialogContent>
+          {editedPayment && (
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 400, mt: 1 }}>
+              <TextField
+                label="Intern ID"
+                value={editedPayment.internId}
+                onChange={(e) => setEditedPayment({ ...editedPayment, internId: e.target.value })}
+                fullWidth
+                disabled
+              />
+              <TextField
+                label="Total Amount"
+                type="number"
+                value={editedPayment.totalAmount}
+                onChange={(e) => 
+                  setEditedPayment({ ...editedPayment, totalAmount: parseFloat(e.target.value) || 0 })
+                }
+                fullWidth
+              />
+              <FormControl fullWidth>
+                <InputLabel>Status</InputLabel>
+                <Select
+                  value={editedPayment.status}
+                  label="Status"
+                  onChange={(e) => setEditedPayment({ ...editedPayment, status: e.target.value })}
+                >
+                  <MenuItem value="Completed">Completed</MenuItem>
+                  <MenuItem value="Pending">Pending</MenuItem>
+                  <MenuItem value="Partial">Partial</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenEditDialog(false)}>Cancel</Button>
+          <Button onClick={handleSaveEdit} variant="contained">
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteConfirmDialog} onClose={handleCloseConfirmDialog}>
+        <DialogTitle>Confirm Deletion</DialogTitle>
+        <DialogContent>
+          <Typography>Are you sure you want to delete this payment?</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseConfirmDialog}>Cancel</Button>
+          <Button onClick={handleConfirmDelete} color="error">
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Payment Log Dialog */}
+      <Dialog
+        open={logDialogOpen}
+        onClose={() => setLogDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        sx={{
+          '& .MuiPaper-root': {
+            borderRadius: '8px',
+            overflow: 'hidden'
+          }
+        }}
+      >
+        <DialogTitle sx={{ bgcolor: '#f5f5f5', py: 2 }}>
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            Payment Logs
+          </Typography>
+          <IconButton
+            onClick={() => setLogDialogOpen(false)}
+            size="medium"
+            sx={{
+              position: 'absolute',
+              right: 12,
+              top: 10,
+              backgroundColor: 'rgba(0, 0, 0, 0.05)',
+              '&:hover': {
+                backgroundColor: 'rgba(0, 0, 0, 0.1)'
+              }
+            }}
+          >
+            <Close fontSize="small" />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ p: 3 }}>
+          {selectedInternLogs && (
+            <>
+              {/* Summary Section */}
+              <Box sx={{ mb: 3, display: 'flex', gap: 4 }}>
+                <Box>
+                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                    INTERN ID
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                    {selectedInternLogs.internId}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                    INTERN NAME
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                    {selectedInternLogs.name}
+                  </Typography>
+                </Box>
+              </Box>
+
+              {/* Table Section */}
+              <TableContainer component={Paper} variant="outlined" sx={{ mb: 3 }}>
+                <Table size="small">
+                  <TableHead sx={{ bgcolor: '#f5f5f5' }}>
+                    <TableRow>
+                      <TableCell>Date</TableCell>
+                      <TableCell>Amount</TableCell>
+                      <TableCell>Payment Mode</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {selectedInternLogs.logs.length > 0 ? (
+                      selectedInternLogs.logs.map((log, index) => {
+                        // Define mode-specific styling
+                        const modeStyles = {
+                          'CASH': { backgroundColor: '#E8F5E9', color: '#2E7D32' },
+                          'NET BANKING': { backgroundColor: '#E3F2FD', color: '#1565C0' },
+                          'UPI': { backgroundColor: '#F3E5F5', color: '#7B1FA2' },
+                          'GPAY': { backgroundColor: '#FFF3E0', color: '#E65100' }
+                        };
+                        
+                        const currentMode = log.mode ? log.mode.toUpperCase() : 'NOT SPECIFIED';
+                        const style = modeStyles[currentMode] || { backgroundColor: '#f5f5f5', color: '#424242' };
+                        
+                        return (
+                          <TableRow key={index}>
+                            <TableCell>{log.date}</TableCell>
+                            <TableCell>${log.amount.toFixed(2)}</TableCell>
+                            <TableCell>
+                              <Chip 
+                                label={log.mode || "Not specified"}
+                                size="small"
+                                sx={{
+                                  ...style,
+                                  fontWeight: 500,
+                                  fontSize: '0.75rem'
+                                }}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={3} align="center">
+                          No payment logs found
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+
+              {/* Total Section */}
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="body2" color="text.secondary">
+                  {selectedInternLogs.logs.length} payment record(s)
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    TOTAL:
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                    ${selectedInternLogs.logs.reduce((sum, log) => sum + log.amount, 0).toFixed(2)}
+                  </Typography>
+                </Box>
+              </Box>
+            </>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2, bgcolor: '#f5f5f5' }}>
+          <Button
+            onClick={() => setLogDialogOpen(false)}
+            variant="contained"
+            size="medium"
+            sx={{
+              borderRadius: '6px',
+              px: 3,
+              py: 0.8,
+              textTransform: 'none',
+              backgroundColor: '#2d2d2d',
+              color: '#fff',
+              fontWeight: '500',
+              boxShadow: 'none',
+              '&:hover': {
+                backgroundColor: '#444',
+                boxShadow: 'none'
+              }
+            }}
+          >
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Snackbar for Notifications */}
+      <Snackbar
+        open={snackBarOpen}
+        autoHideDuration={6000}
+        onClose={() => setSnackBarOpen(false)}
+      >
+        <Alert 
+          onClose={() => setSnackBarOpen(false)} 
+          severity={snackBarSeverity}
+          sx={{ width: '100%' }}
+        >
+          {snackBarMessage}
+        </Alert>
+      </Snackbar>
+    </Box>
+  );
+};
+
+export default PaymentList;

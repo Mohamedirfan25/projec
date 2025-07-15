@@ -1,0 +1,142 @@
+
+.container {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 20px;
+    font-family: Arial, sans-serif;
+  }
+  
+  header {
+    text-align: center;
+    margin-bottom: 20px;
+  }
+  
+  h1 {
+    font-size: 2rem;
+    color: #333;
+  }
+  
+  /* Password reset form styling */
+  .password-reset {
+    background-color: #f9f9f9;
+    padding: 10px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  }
+  
+  .input-group {
+    margin-bottom: 15px;
+  }
+  
+  label {
+    display: block;
+    font-size: 1rem;
+    margin-bottom: 5px;
+    color: #333;
+  }
+  
+   
+  input[type="password"] {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 1rem;
+    margin-top: 5px;
+    box-sizing: border-box;
+  }
+  
+  /* Password strength indicator */
+  .password-strength {
+    margin-top: 10px;
+    font-size: 0.9rem;
+  }
+  
+  .password-strength.strong {
+    color: green;
+  }
+  
+  .password-strength.moderate {
+    color: orange;
+  }
+  
+  .password-strength.weak {
+    color: red;
+  }
+  
+  /* Validation messages */
+  .message p {
+    font-size: 1rem;
+    margin-top: 10px;
+  }
+  
+  .message .success {
+    color: green;
+  }
+  
+  .message .error {
+    color: red;
+  }
+  
+  /* Buttons styling */
+  .submit-btn,
+  .cancel-btn {
+    width: 100%;
+    padding: 12px;
+    font-size: 1rem;
+    margin-top: 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    border: none;
+    background-color: #007bff;
+    color: white;
+    transition: background-color 0.1s ease;
+  }
+  
+  .submit-btn:hover,
+  .cancel-btn:hover {
+    background-color: #0056b3;
+  }
+  
+  /* Cancel button specific styling */
+  .cancel-btn {
+    background-color: #dc3545;
+  }
+  
+  .cancel-btn:hover {
+    background-color: #c82333;
+  }
+  
+  /* Links section */
+  .links {
+    margin-top: 15px;
+    text-align: center;
+  }
+  
+  .links a {
+    text-decoration: none;
+    color: #007bff;
+    font-size: 1rem;
+    margin: 0 5px;
+  }
+  
+  .links a:hover {
+    text-decoration: underline;
+  }
+  
+  @media (max-width: 768px) {
+  .navbar {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .nav-links {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .login-container {
+    margin: 20px;
+    padding: 15px;
+  }
+}

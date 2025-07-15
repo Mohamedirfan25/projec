@@ -1,0 +1,185 @@
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  background-color: #f4f4f4;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+}
+
+.container {
+  background-color: white;
+  padding: 30px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 400px;
+}
+  
+  header {
+    text-align: center;
+    margin-bottom: 20px;
+  }
+  
+  h1 {
+    font-size: 24px;
+    color: #333;
+  }
+  
+  .password-recovery {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .input-group {
+    margin-bottom: 15px;
+  }
+  
+  .input-group label {
+    font-size: 14px;
+    color: #555;
+    margin-bottom: 5px;
+    display: block;
+  }
+  
+  .input-group input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 14px;
+    color: #333;
+  }
+  
+  .input-group input:focus {
+    border-color: #007bff;
+    outline: none;
+  }
+  
+  .otp-input {
+    display: flex;
+    justify-content: space-between;
+  }
+  
+  .otp-input input {
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+    text-align: center;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+  }
+  
+  .otp-input input:focus {
+    border-color: #007bff;
+  }
+  
+  .message {
+    margin-bottom: 15px;
+    font-size: 14px;
+  }
+  
+  .success {
+    color: green;
+  }
+  
+  .error {
+    color: red;
+  }
+  
+  /* Password strength indicator */
+  .password-strength {
+    margin-top: 10px;
+    font-size: 0.9rem;
+  }
+  
+  .password-strength.strong {
+    color: green;
+  }
+  
+  .password-strength.moderate {
+    color: orange;
+  }
+  
+  .password-strength.weak {
+    color: red;
+  }
+  
+  /* Validation messages */
+  .message p {
+    font-size: 1rem;
+    margin-top: 10px;
+  }
+  
+  .message .success {
+    color: green;
+  }
+  
+  .message .error {
+    color: red;
+  }
+  
+  .submit-btn {
+    background-color: #3a28d8; /* Updated color */
+    color: white;
+    padding: 10px;
+    border: none;
+    border-radius: 5px;
+    font-size: 16px;
+    cursor: pointer;
+    width: 100%; /* Makes the button take up full width */
+    text-align: center
+  }
+  
+  .submit-btn:hover {
+    background-color: #000000;
+  }
+  
+  
+  /* Cancel button specific styling */
+  .cancel-btn {
+    background-color: #dc3545;
+  }
+  
+  .cancel-btn:hover {
+    background-color: #c82333;
+  }
+  
+  .links {
+    margin-top: 20px;
+    text-align: center;
+  }
+  
+  .links a {
+    font-size: 14px;
+    color: #007bff;
+    text-decoration: none;
+    margin: 0 10px;
+  }
+  
+  .links a:hover {
+    text-decoration: underline;
+  }
+  
+  @media (max-width: 768px) {
+  .navbar {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .nav-links {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .login-container {
+    margin: 20px;
+    padding: 15px;
+  }
+}

@@ -1,0 +1,105 @@
+/* General styles */
+body {
+  margin: 100;
+  font-family: Arial, sans-serif;
+  background-color: #f5f5f5;
+}
+
+/* Login container */
+.login-container {
+  max-width: 400px;
+  margin: 50px auto;
+  padding: 20px;
+  background-color: white;
+  box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.1);
+  border-radius: 6px;
+}
+
+header h1 {
+  text-align: center;
+  color: #333;
+  margin-bottom: 20px;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+}
+
+label {
+  margin-bottom: 5px;
+  font-weight: bold;
+  color: #555;
+}
+
+input {
+  padding: 10px;
+  margin-bottom: 15px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 1em;
+}
+
+input:focus {
+  outline: none;
+  border-color: #00bcd4;
+  box-shadow: 0px 0px 4px rgba(0, 188, 212, 0.6);
+}
+
+button {
+  background-color: #00bcd4;
+  color: white;
+  padding: 10px;
+  border: none;
+  border-radius: 4px;
+  font-size: 1em;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+button:hover {
+  background-color: #008c9e;
+}
+
+/* Error message styles */
+.error-message {
+  color: red;
+  font-size: 0.9em;
+  margin-top: -10px;
+  margin-bottom: 15px;
+}
+
+/* Links */
+.links {
+  text-align: center;
+  margin-top: 10px;
+}
+
+.links .btn {
+  color: #00bcd4;
+  text-decoration: none;
+  font-size: 0.9em;
+  transition: color 0.3s ease;
+}
+
+.links .btn:hover {
+  color: #008c9e;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .navbar {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .nav-links {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .login-container {
+    margin: 20px;
+    padding: 15px;
+  }
+}

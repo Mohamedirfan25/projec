@@ -1,0 +1,1782 @@
+import React, { useState, useEffect, useRef } from "react";
+import {
+  Box,
+  Drawer,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Button,
+  Typography,
+  Divider,
+  IconButton,
+  Snackbar,
+  Alert,
+  CircularProgress,
+  Grid,
+  Card,
+  CardContent,
+  Avatar,
+  AppBar,
+  Toolbar,
+  Badge,
+  Menu,
+  MenuItem,
+  CssBaseline,
+  ThemeProvider,
+  createTheme,
+  Switch,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  Collapse,
+} from "@mui/material";
+import { Bar, Line, Doughnut, Pie } from "react-chartjs-2";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  PointElement,
+  LineElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+} from "chart.js";
+import MenuIcon from "@mui/icons-material/Menu";
+import BusinessIcon from "@mui/icons-material/Business";
+import FeedbackIcon from "@mui/icons-material/Feedback";
+import NotificationsIcon from "@mui/icons-material/Notifications";
+import SettingsIcon from "@mui/icons-material/Settings";
+import Brightness4Icon from "@mui/icons-material/Brightness4";
+import Brightness7Icon from "@mui/icons-material/Brightness7";
+import LogoutIcon from "@mui/icons-material/Logout";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import LeaveManagement from "./LeaveManagement";
+import Tasks from "./Tasks";
+import Create from "./Create";
+import vdart from "./vdart.jpeg";
+import InternHoursCalculator from "./InternHoursCalculator";
+import AssetReport from "./AssetReport";
+import PerformancePage from "./PerformancePage";
+import InternProfile from "./InternProfile";
+import AttendanceManagement from "./AttendanceManagement";
+import axios from "axios";
+import PaymentStatusPage from './PaymentStatusPage';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  PointElement,
+  LineElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend
+);
+
+const App = () => {
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState("");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const [attendancePercentage, setAttendancePercentage] = useState(90);
+  const [leaveBalance, setLeaveBalance] = useState(5);
+  const [timerActive, setTimerActive] = useState(() => {
+    const savedTimerState = localStorage.getItem('timerActive');
+    return savedTimerState === 'true';
+  });
+  const [activeTimers, setActiveTimers] = useState(() => {
+    const savedActiveTimers = localStorage.getItem('activeTimers');
+    return savedActiveTimers ? JSON.parse(savedActiveTimers) : {
+      break: false,
+      lunch: false,
+      shiftout: false,
+    };
+  });
+  const [anchorEl, setAnchorEl] = useState(null);
+  const [currentTasks, setCurrentTasks] = useState([
+    { id: 1, name: "Task 1", progress: 75 },
+    { id: 2, name: "Task 2", progress: 30 },
+    { id: 3, name: "Task 3", progress: 100 },
+  ]);
+  const [darkMode, setDarkMode] = useState(false);
+  const [profileAnchorEl, setProfileAnchorEl] = useState(null);
+  const [notificationAnchorEl, setNotificationAnchorEl] = useState(null);
+  const [notifications, setNotifications] = useState([
+    { id: 1, message: "You have a new message from HR." },
+    { id: 2, message: "Performance review scheduled for next week." },
+    { id: 3, message: "Your leave request has been approved." },
+    { id: 4, message: "New task assigned to you." },
+  ]);
+  const [currentPage, setCurrentPage] = useState("Dashboard");
+  const [showPerformanceOverview, setShowPerformanceOverview] = useState(false);
+  const [showHoursCalculator, setShowHoursCalculator] = useState(false);
+  const [showStatusBarDetails, setShowStatusBarDetails] = useState(true);
+
+  const [personalInfo, setPersonalInfo] = useState({
+    name: "",
+    department: "",
+    position: "",
+    contact: "",
+    photo: "",
+  });
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [attendanceId, setAttendanceId] = useState(null);
+  const [breakTime, setBreakTime] = useState(() => {
+    const savedBreakTime = localStorage.getItem('breakTime');
+    return savedBreakTime ? parseInt(savedBreakTime) : 0;
+  });
+  const [lunchTime, setLunchTime] = useState(() => {
+    const savedLunchTime = localStorage.getItem('lunchTime');
+    return savedLunchTime ? parseInt(savedLunchTime) : 0;
+  });
+  const [shiftOutTime, setShiftOutTime] = useState(() => {
+    const savedShiftOutTime = localStorage.getItem('shiftOutTime');
+    return savedShiftOutTime ? parseInt(savedShiftOutTime) : 0;
+  });
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+
+  const breakTimerRef = useRef(null);
+  const lunchTimerRef = useRef(null);
+  const shiftOutTimerRef = useRef(null);
+  const startTimeRef = useRef(null);
+
+  // Initialize all timer states from localStorage on component mount
+  useEffect(() => {
+    const savedTimerActive = localStorage.getItem('timerActive') === 'true';
+    const savedStartTime = localStorage.getItem('timerStartTime');
+    const savedElapsedTime = localStorage.getItem('elapsedTime');
+    const savedBreakTime = localStorage.getItem('breakTime');
+    const savedLunchTime = localStorage.getItem('lunchTime');
+    const savedShiftOutTime = localStorage.getItem('shiftOutTime');
+    const savedActiveTimers = localStorage.getItem('activeTimers');
+    
+    if (savedTimerActive && savedStartTime) {
+      const now = Date.now();
+      const elapsedSeconds = Math.floor((now - parseInt(savedStartTime)) / 1000);
+      setElapsedTime(parseInt(savedElapsedTime || elapsedSeconds));
+      setTimerActive(true);
+      startTimeRef.current = parseInt(savedStartTime);
+      
+      // Restore other timer values
+      setBreakTime(parseInt(savedBreakTime) || 0);
+      setLunchTime(parseInt(savedLunchTime) || 0);
+      setShiftOutTime(parseInt(savedShiftOutTime) || 0);
+
+      // Restore active timer states
+      if (savedActiveTimers) {
+        const parsedActiveTimers = JSON.parse(savedActiveTimers);
+        setActiveTimers(parsedActiveTimers);
+
+        // Restart any active timers
+        if (parsedActiveTimers.break) {
+          breakTimerRef.current = setInterval(() => {
+            setBreakTime(prev => prev + 1);
+          }, 1000);
+        }
+        if (parsedActiveTimers.lunch) {
+          lunchTimerRef.current = setInterval(() => {
+            setLunchTime(prev => prev + 1);
+          }, 1000);
+        }
+        if (parsedActiveTimers.shiftout) {
+          shiftOutTimerRef.current = setInterval(() => {
+            setShiftOutTime(prev => prev + 1);
+          }, 1000);
+        }
+      }
+    }
+  }, []);
+
+  // Save all timer states to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('timerActive', timerActive.toString());
+    localStorage.setItem('activeTimers', JSON.stringify(activeTimers));
+    
+    if (timerActive) {
+      localStorage.setItem('timerStartTime', startTimeRef.current?.toString() || Date.now().toString());
+      localStorage.setItem('elapsedTime', elapsedTime.toString());
+      localStorage.setItem('breakTime', breakTime.toString());
+      localStorage.setItem('lunchTime', lunchTime.toString());
+      localStorage.setItem('shiftOutTime', shiftOutTime.toString());
+    } else {
+      localStorage.removeItem('timerActive');
+      localStorage.removeItem('timerStartTime');
+      localStorage.removeItem('elapsedTime');
+      localStorage.removeItem('breakTime');
+      localStorage.removeItem('lunchTime');
+      localStorage.removeItem('shiftOutTime');
+      localStorage.removeItem('activeTimers');
+    }
+  }, [timerActive, elapsedTime, breakTime, lunchTime, shiftOutTime, activeTimers]);
+
+  const postAttendance = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const today = new Date().toISOString().split("T")[0];
+
+      const res = await axios.post(
+        "http://localhost:8000/Sims/attendance/",
+        {
+          emp_id: personalInfo.emp_id,
+          name: personalInfo.name,
+          date: today,
+          check_in: new Date().toISOString(),
+          status: "Pending",
+          present_status: "Present",
+        },
+        {
+          headers: { Authorization: `Token ${token}` },
+        }
+      );
+
+      const attId = res.data?.attendance?.id;
+      if (attId) {
+        setAttendanceId(attId);
+        console.log("POST Attendance", res.data);
+      } else {
+        console.log("POST Attendance (Log only):", res.data);
+      }
+    } catch (error) {
+      console.error("Attendance POST failed", error);
+      if (error.response) {
+        console.log("Backend error response:", error.response.data);
+      }
+    }
+  };
+    
+  const patchAttendance = async (data) => {
+    if (!attendanceId) {
+      console.warn("No attendance ID to patch.");
+      return;
+    }
+  
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.patch(
+        `http://localhost:8000/Sims/attendance/${attendanceId}/`,
+        data,
+        {
+          headers: { Authorization: `Token ${token}` },
+        }
+      );
+      console.log("PATCH Attendance", res.data);
+    } catch (error) {
+      console.error("Attendance PATCH failed", error);
+    }
+  };
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        console.log("Token:", token);
+
+        if (!token) {
+          setError("No authentication token found.");
+          setLoading(false);
+          return;
+        }
+
+        const responseUser = await axios.get(
+          "http://localhost:8000/Sims/temps/",
+          {
+            headers: { Authorization: `Token ${token}` },
+          }
+        );
+
+        console.log("User Data Response:", responseUser.data);
+        const emp_id = responseUser.data.emp_id;
+
+        if (!emp_id) {
+          setError("Employee ID not found.");
+          setLoading(false);
+          return;
+        }
+
+        const response1 = await axios.get(
+          "http://localhost:8000/Sims/personal-data/",
+          {
+            headers: { Authorization: `Token ${token}` },
+          }
+        );
+        console.log("Personal Data Response:", response1.data);
+
+        const response2 = await axios.get(
+          "http://localhost:8000/Sims/college-details/",
+          {
+            headers: { Authorization: `Token ${token}` },
+          }
+        );
+        console.log("College Data Response:", response2.data);
+
+        const response3 = await axios.get("http://localhost:8000/Sims/temps/", {
+          headers: { Authorization: `Token ${token}` },
+        });
+        console.log("Temp Data Response:", response3.data);
+
+        if (response1.data && response2.data && response3.data) {
+          setPersonalInfo({
+            name: response1.data.username || "N/A",
+            department: response2.data.department || "N/A",
+            position: response3.data.role || "N/A",
+            contact: response1.data.phone_no || "N/A",
+            photo: response1.data.photo
+              ? `http://localhost:8000${response1.data.photo}`
+              : "",
+          });
+        }
+      } catch (err) {
+        console.error(
+          "Error fetching data:",
+          err.response ? err.response.data : err.message
+        );
+        setError("Unable to fetch data.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  useEffect(() => {
+    let timerId;
+
+    if (timerActive) {
+      const startTime = startTimeRef.current || Date.now();
+      startTimeRef.current = startTime;
+      
+      timerId = setInterval(() => {
+        const now = Date.now();
+        const elapsed = Math.floor((now - startTime) / 1000);
+        setElapsedTime(elapsed);
+      }, 1000);
+    }
+
+    return () => {
+      clearInterval(timerId);
+    };
+  }, [timerActive]);
+
+  const toggleTimer = () => {
+    if (timerActive) {
+      setConfirmDialogOpen(true);
+    } else {
+      const startTime = Date.now();
+      startTimeRef.current = startTime;
+      setTimerActive(true);
+      setElapsedTime(0);
+      setBreakTime(0);
+      setLunchTime(0);
+      setShiftOutTime(0);
+      setActiveTimers({
+        break: false,
+        lunch: false,
+        shiftout: false,
+      });
+      setSnackbarMessage("Checked in successfully!");
+      setSnackbarOpen(true);
+      postAttendance();
+    }
+  };
+
+  const stopBreakTimer = () => {
+    if (breakTimerRef.current) {
+      clearInterval(breakTimerRef.current);
+      breakTimerRef.current = null;
+    }
+    setActiveTimers(prev => ({
+      ...prev,
+      break: false
+    }));
+  };
+
+  const stopLunchTimer = () => {
+    if (lunchTimerRef.current) {
+      clearInterval(lunchTimerRef.current);
+      lunchTimerRef.current = null;
+    }
+    setActiveTimers(prev => ({
+      ...prev,
+      lunch: false
+    }));
+  };
+
+  const stopShiftOutTimer = () => {
+    if (shiftOutTimerRef.current) {
+      clearInterval(shiftOutTimerRef.current);
+      shiftOutTimerRef.current = null;
+    }
+    setActiveTimers(prev => ({
+      ...prev,
+      shiftout: false
+    }));
+  };
+
+  const toggleBreak = () => {
+    if (activeTimers.lunch || activeTimers.shiftout) {
+      setSnackbarMessage("Please end current activity before starting break!");
+      setSnackbarOpen(true);
+      return;
+    }
+  
+    if (!activeTimers.break) {
+      // Start break
+      breakTimerRef.current = setInterval(() => {
+        setBreakTime((prev) => prev + 1);
+      }, 1000);
+      setActiveTimers(prev => ({
+        ...prev,
+        break: true
+      }));
+      patchAttendance({ 
+        status: "start break",
+        reason:"Break",
+        check_in: new Date().toISOString()
+      });
+      setSnackbarMessage("Break started! Timer running...");
+    } else {
+      // End break
+      stopBreakTimer();
+      patchAttendance({
+        status: "end break",
+        check_out: new Date().toISOString()
+      });
+      setSnackbarMessage("Break ended successfully.");
+    }
+    setSnackbarOpen(true);
+  };
+
+  const toggleLunch = () => {
+    if (activeTimers.break || activeTimers.shiftout) {
+      setSnackbarMessage("Please end current activity before starting lunch!");
+      setSnackbarOpen(true);
+      return;
+    }
+  
+    if (!activeTimers.lunch) {
+      // Start lunch
+      lunchTimerRef.current = setInterval(() => {
+        setLunchTime((prev) => prev + 1);
+      }, 1000);
+      setActiveTimers(prev => ({
+        ...prev,
+        lunch: true
+      }));
+      patchAttendance({ 
+        status: "start lunch",
+        reason:"Lunch",
+        check_in: new Date().toISOString()
+      });
+      setSnackbarMessage("Lunch started! Timer running...");
+    } else {
+      // End lunch
+      stopLunchTimer();
+      patchAttendance({
+        status: "end lunch",
+        check_out: new Date().toISOString()
+      });
+      setSnackbarMessage("Lunch ended successfully.");
+    }
+    setSnackbarOpen(true);
+  };
+
+  const toggleOthers = () => {
+    if (activeTimers.break || activeTimers.lunch) {
+      setSnackbarMessage("Please end current activity before starting break!");
+      setSnackbarOpen(true);
+      return;
+    }
+  
+    if (!activeTimers.shiftout) {
+      // Start others
+      shiftOutTimerRef.current = setInterval(() => {
+        setShiftOutTime((prev) => prev + 1);
+      }, 1000);
+      setActiveTimers(prev => ({
+        ...prev,
+        shiftout: true
+      }));
+      patchAttendance({ 
+        status: "start out",
+        reason:"Meeting",
+        check_in: new Date().toISOString()
+      });
+      setSnackbarMessage("Meeting or Others started! Timer running...");
+    } else {
+      // End others
+      stopShiftOutTimer();
+      patchAttendance({
+        status: "end out",
+        check_out: new Date().toISOString()
+      });
+      setSnackbarMessage("Meeting or Others ended successfully.");
+    }
+    setSnackbarOpen(true);
+  };
+
+  const confirmToggleTimerOff = () => {
+    stopBreakTimer();
+    stopLunchTimer();
+    stopShiftOutTimer();
+    setTimerActive(false);
+    setElapsedTime(0);
+    setBreakTime(0);
+    setLunchTime(0);
+    setShiftOutTime(0);
+    setSnackbarMessage("Checked out successfully!");
+    setSnackbarOpen(true);
+    setConfirmDialogOpen(false);
+  
+    patchAttendance({
+      check_out: new Date().toISOString(),
+      status: "Approved",
+      present_status: "Present",
+    });
+    
+    // Clear all timer data from localStorage
+    localStorage.removeItem('timerActive');
+    localStorage.removeItem('timerStartTime');
+    localStorage.removeItem('elapsedTime');
+    localStorage.removeItem('breakTime');
+    localStorage.removeItem('lunchTime');
+    localStorage.removeItem('shiftOutTime');
+    localStorage.removeItem('activeTimers');
+  };
+
+  const cancelToggleTimerOff = () => {
+    setConfirmDialogOpen(false);
+  };
+
+  const toggleSidebar = () => {
+    setIsSidebarOpen(!isSidebarOpen);
+  };
+
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+    setShowHoursCalculator(false);
+    setShowPerformanceOverview(false);
+  };
+
+  const handleSnackbarClose = (event, reason) => {
+    if (reason === "clickaway") {
+      return;
+    }
+    setSnackbarOpen(false);
+  };
+
+  const toggleDarkMode = () => {
+    setDarkMode(!darkMode);
+  };
+
+  const handleProfileMenuOpen = (event) => {
+    setProfileAnchorEl(event.currentTarget);
+  };
+
+  const handleProfileMenuClose = () => {
+    setProfileAnchorEl(null);
+  };
+
+  const handleLogout = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        console.error("No authentication token found.");
+        return;
+      }
+
+      await axios.post(
+        "http://localhost:8000/Sims/logout/",
+        {},
+        {
+          headers: { Authorization: `Token ${token}` },
+        }
+      );
+
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      localStorage.removeItem('timerActive');
+      localStorage.removeItem('timerStartTime');
+      localStorage.removeItem('elapsedTime');
+      localStorage.removeItem('breakTime');
+      localStorage.removeItem('lunchTime');
+      localStorage.removeItem('shiftOutTime');
+      localStorage.removeItem('activeTimers');
+      window.location.href = "/login";
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
+  };
+
+  const handleNotificationMenuOpen = (event) => {
+    setNotificationAnchorEl(event.currentTarget);
+  };
+
+  const handleNotificationMenuClose = () => {
+    setNotificationAnchorEl(null);
+  };
+
+  const handleAddTask = (newTask) => {
+    setCurrentTasks([...currentTasks, newTask]);
+    setCurrentPage("Tasks");
+  };
+
+  const handleViewHoursCalculator = () => {
+    setShowHoursCalculator(true);
+  };
+
+  const [taskStatusCounts, setTaskStatusCounts] = useState({});
+
+  useEffect(() => {
+    const fetchPerformanceData = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await axios.get(
+          "http://localhost:8000/Sims/performance/",
+          {
+            headers: { Authorization: `Token ${token}` },
+          }
+        );
+
+        console.log("Performance API Response:", response.data);
+
+        if (response.data && response.data.status_counts) {
+          setTaskStatusCounts(response.data.status_counts);
+        } else {
+          console.error("Error: `status_counts` is missing", response.data);
+        }
+      } catch (error) {
+        console.error("Error fetching performance data:", error);
+        setTaskStatusCounts({});
+      }
+    };
+
+    fetchPerformanceData();
+  }, []);
+
+  const formatTime = (seconds) => {
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    return `${hrs.toString().padStart(2, "0")}:${mins
+      .toString()
+      .padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  const taskProgressChartData = {
+    labels: Object.keys(taskStatusCounts),
+    datasets: [
+      {
+        label: "Task Status",
+        data: Object.values(taskStatusCounts),
+        backgroundColor: [
+          "#4caf50",
+          "#ff9800",
+          "#f44336",
+          "#2196f3",
+          "#9c27b0",
+        ],
+        borderRadius: 10,
+      },
+    ],
+  };
+
+  const hoursProgress = {
+    labels: ["Week 1", "Week 2", "Week 3", "Week 4"],
+    datasets: [
+      {
+        label: "Hours Worked",
+        data: [25, 28, 31, 35],
+        borderColor: "#007bff",
+        backgroundColor: "rgba(0, 123, 255, 0.2)",
+        fill: true,
+        tension: 0.4,
+      },
+    ],
+  };
+
+  const skillsData = {
+    labels: ["JavaScript", "React", "Node.js", "SQL", "Python"],
+    datasets: [
+      {
+        data: [80, 75, 60, 70, 65],
+        backgroundColor: [
+          "#FF6384",
+          "#36A2EB",
+          "#FFCE56",
+          "#4BC0C0",
+          "#9966FF",
+        ],
+      },
+    ],
+  };
+
+  const sidebarWidth = 250;
+  
+  const dumbbellData = {
+    labels: ["Task 1", "Task 2", "Task 3", "Task 4"],
+    datasets: [
+      {
+        label: "End",
+        data: [4, 8, 2, 9],
+        backgroundColor: "#4caf50",
+      },
+      {
+        label: "Commited",
+        data: [5, 7, 3, 8],
+        backgroundColor: "#2196f3",
+      },
+    ],
+  };
+
+  const theme = createTheme({
+    palette: {
+      mode: darkMode ? "dark" : "light",
+    },
+  });
+
+  const [personalInfos, setPersonalInfos] = useState({
+    name: "Loading...",
+    email: "Loading...",
+  });
+
+  useEffect(() => {
+    const fetchPersonalsData = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) {
+          console.error("No authentication token found.");
+          return;
+        }
+
+        const response4 = await axios.get(
+          "http://localhost:8000/Sims/personal-data/",
+          {
+            headers: { Authorization: `Token ${token}` },
+          }
+        );
+
+        console.log("Personal Data Response:", response4.data);
+
+        setPersonalInfos({
+          name: response4.data.username || "N/A",
+          email: response4.data.email || "N/A",
+          photo: response4.data.photo
+            ? `http://localhost:8000${response4.data.photo}`
+            : null,
+        });
+      } catch (error) {
+        console.error("Error fetching personal details:", error);
+      }
+    };
+
+    fetchPersonalsData();
+  }, []);
+
+  const toggleStatusBarDetails = () => {
+    setShowStatusBarDetails(!showStatusBarDetails);
+  };
+
+  return (
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <Box sx={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+        {/* Combined AppBar with Status Bar */}
+        <AppBar
+          position="fixed"
+          sx={{
+            zIndex: (theme) => theme.zIndex.drawer + 1,
+            backgroundColor: darkMode ? "#121212" : "#EFEFEF",
+            boxShadow: "0px 2px 4px -1px rgba(0,0,0,0.2), 0px 4px 5px 0px rgba(0,0,0,0.14), 0px 1px 10px 0px rgba(0,0,0,0.12)",
+          }}
+        >
+          <Toolbar sx={{ 
+            display: "flex", 
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: "8px 16px",
+            minHeight: "64px"
+          }}>
+            {/* Left side - Logo and Menu */}
+            <Box sx={{ display: "flex", alignItems: "center" }}>
+             
+              <img
+                src={vdart}
+                alt="Vdart Logo"
+                style={{ height: "40px", marginRight: "8px" }}
+              />
+            </Box>
+
+            {/* Center - Timer Status */}
+            {timerActive && (
+              <Box sx={{ 
+                display: "flex", 
+                flexDirection: "column", 
+                alignItems: "center",
+                flexGrow: 1,
+                mx: 2
+              }}>
+                <Box sx={{ display: "flex", alignItems: "center" }}>
+                  <IconButton 
+                    size="small" 
+                    onClick={toggleStatusBarDetails}
+                    sx={{ mr: 1 }}
+                  >
+                    {showStatusBarDetails ? (
+                      <KeyboardArrowUpIcon sx={{ color: darkMode ? "white" : "black" }} />
+                    ) : (
+                      <KeyboardArrowDownIcon sx={{ color: darkMode ? "white" : "black" }} />
+                    )}
+                  </IconButton>
+                  <Typography
+                    variant="subtitle1"
+                    sx={{ 
+                      color: darkMode ? "white" : "black",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    Current Shift: {formatTime(elapsedTime)}
+                  </Typography>
+                </Box>
+
+                <Collapse 
+                  in={showStatusBarDetails} 
+                  timeout="auto" 
+                  unmountOnExit
+                  sx={{ width: "100%" }}
+                >
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "center",
+                      width: "100%",
+                      mt: 1,
+                      gap: 1,
+                    }}
+                  >
+                    <Box sx={{ 
+                      display: "flex",
+                      alignItems: "center",
+                      mx: 1
+                    }}>
+                      <Typography
+                        variant="body2"
+                        sx={{ 
+                          color: darkMode ? "white" : "black",
+                          mr: 1
+                        }}
+                      >
+                        Break: {formatTime(breakTime)}
+                      </Typography>
+                      <Button
+                        variant="contained"
+                        color={activeTimers.break ? "success" : "secondary"}
+                        size="small"
+                        onClick={toggleBreak}
+                        disabled={activeTimers.lunch || activeTimers.shiftout}
+                      >
+                        {activeTimers.break ? "End Break" : "Start Break"}
+                      </Button>
+                    </Box>
+
+                    <Box sx={{ 
+                      display: "flex",
+                      alignItems: "center",
+                      mx: 1
+                    }}>
+                      <Typography
+                        variant="body2"
+                        sx={{ 
+                          color: darkMode ? "white" : "black",
+                          mr: 1
+                        }}
+                      >
+                        Lunch: {formatTime(lunchTime)}
+                      </Typography>
+                      <Button
+                        variant="contained"
+                        color={activeTimers.lunch ? "success" : "warning"}
+                        size="small"
+                        onClick={toggleLunch}
+                        disabled={activeTimers.break || activeTimers.shiftout}
+                      >
+                        {activeTimers.lunch ? "End Lunch" : "Start Lunch"}
+                      </Button>
+                    </Box>
+
+                    <Box sx={{ 
+                      display: "flex",
+                      alignItems: "center",
+                      mx: 1
+                    }}>
+                      <Typography
+                        variant="body2"
+                        sx={{ 
+                          color: darkMode ? "white" : "black",
+                          mr: 1
+                        }}
+                      >
+                        Other: {formatTime(shiftOutTime)}
+                      </Typography>
+                      <Button
+                        variant="contained"
+                        color={activeTimers.shiftout ? "success" : "error"}
+                        size="small"
+                        onClick={toggleOthers}
+                        disabled={activeTimers.break || activeTimers.lunch}
+                      >
+                        {activeTimers.shiftout ? "Back In" : "Go Out"}
+                      </Button>
+                    </Box>
+                  </Box>
+                </Collapse>
+              </Box>
+            )}
+
+            {/* Right side - Icons */}
+            <Box sx={{ display: "flex", alignItems: "center" }}>
+              <IconButton color="inherit" onClick={handleNotificationMenuOpen}>
+                <Badge badgeContent={notifications.length} color="error">
+                  <NotificationsIcon sx={{ color: darkMode ? "white" : "black" }} />
+                </Badge>
+              </IconButton>
+              <Menu
+                anchorEl={notificationAnchorEl}
+                open={Boolean(notificationAnchorEl)}
+                onClose={handleNotificationMenuClose}
+              >
+                {notifications.length === 0 ? (
+                  <MenuItem disabled>No notifications</MenuItem>
+                ) : (
+                  notifications.map((notification) => (
+                    <MenuItem
+                      key={notification.id}
+                      onClick={handleNotificationMenuClose}
+                    >
+                      {notification.message}
+                    </MenuItem>
+                  ))
+                )}
+              </Menu>
+
+              <IconButton color="inherit" onClick={toggleDarkMode}>
+                {darkMode ? (
+                  <Brightness7Icon sx={{ color: "white" }} />
+                ) : (
+                  <Brightness4Icon sx={{ color: "black" }} />
+                )}
+              </IconButton>
+
+              <IconButton color="inherit" onClick={handleProfileMenuOpen}>
+                <Avatar
+                  alt="Profile"
+                  src={personalInfos?.photo || "/static/images/avatar/1.jpg"}
+                  sx={{ width: 40, height: 40 }}
+                />
+              </IconButton>
+              <Menu
+                anchorEl={profileAnchorEl}
+                open={Boolean(profileAnchorEl)}
+                onClose={handleProfileMenuClose}
+              >
+                <ListItem disablePadding>
+                  <ListItemButton>
+                    <ListItemText
+                      primary={
+                        <Typography sx={{ color: darkMode ? "white" : "black" }}>
+                          {personalInfos.name}
+                        </Typography>
+                      }
+                    />
+                  </ListItemButton>
+                </ListItem>
+                <ListItem disablePadding>
+                  <ListItemButton>
+                    <ListItemText
+                      primary={
+                        <Typography sx={{ color: darkMode ? "white" : "black" }}>
+                          {personalInfos.email}
+                        </Typography>
+                      }
+                    />
+                  </ListItemButton>
+                </ListItem>
+
+                <Divider />
+
+                <ListItem disablePadding>
+                  <ListItemButton onClick={handleProfileMenuClose}>
+                    <ListItemIcon>
+                      <SettingsIcon fontSize="small" sx={{ color: "black" }} />
+                    </ListItemIcon>
+                    <ListItemText primary="Settings" />
+                  </ListItemButton>
+                </ListItem>
+
+                <ListItem disablePadding>
+                  <ListItemButton
+                    onClick={handleLogout}
+                    sx={{
+                      color: "red",
+                      textDecoration: "none",
+                      "&:hover": {
+                        backgroundColor: "rgba(255, 0, 0, 0.1)",
+                        color: "red",
+                      },
+                    }}
+                  >
+                    <ListItemIcon>
+                      <LogoutIcon fontSize="small" sx={{ color: "black" }} />
+                    </ListItemIcon>
+                    <ListItemText primary="Logout" />
+                  </ListItemButton>
+                </ListItem>
+              </Menu>
+            </Box>
+          </Toolbar>
+        </AppBar>
+
+        <Box sx={{ display: "flex", flexGrow: 1, mt: 8 }}>
+          <Drawer
+            variant="permanent"
+            sx={{
+              width: isSidebarOpen ? 250 : 80,
+              flexShrink: 0,
+              transition: "width 0.3s ease",
+              "& .MuiDrawer-paper": {
+                width: isSidebarOpen ? 250 : 80,
+                transition: "width 0.3s ease",
+                bgcolor: darkMode ? "rgba(255, 255, 255, 0.2)" : "#F5F5F5",
+                color: darkMode ? "white" : "black",
+                padding: "15px",
+                marginTop: "64px",
+                height: `calc(100% - 64px)`,
+                overflow: "hidden",
+              },
+            }}
+          >
+            <Box display="flex" justifyContent="space-between" alignItems="center">
+              {isSidebarOpen && (
+                <Typography
+                  variant="h6"
+                  component="div"
+                  sx={{ color: darkMode ? "white" : "black" }}
+                >
+                  Intern Dashboard
+                </Typography>
+              )}
+              <IconButton onClick={toggleSidebar} color="inherit">
+                <MenuIcon />
+              </IconButton>
+            </Box>
+            <Divider sx={{ my: 2 }} />
+
+            {isSidebarOpen && (
+              <Box sx={{ display: "flex", alignItems: "center" }}>
+                <Typography variant="body1">Live Feed:</Typography>
+                <Switch
+                  checked={timerActive}
+                  onChange={toggleTimer}
+                  color="primary"
+                />
+                <Typography variant="body1" sx={{ ml: 1 }}></Typography>
+              </Box>
+            )}
+
+            <Divider sx={{ my: 2 }} />
+
+            <List sx={{ flexGrow: 1 }}>
+              {[
+                {
+                  text: "Dashboard",
+                  icon: <BusinessIcon />,
+                  page: "Dashboard",
+                },
+                { text: "Profile", icon: <BusinessIcon />, page: "Profile" },
+                {
+                  text: "Payment Status",
+                  icon: <BusinessIcon />,
+                  page: "Payment Status",
+                },
+                {
+                  text: "Asset Report Issue",
+                  icon: <BusinessIcon />,
+                  page: "Asset Report Issue",
+                },
+                {
+                  text: "Performance Feedback",
+                  icon: <FeedbackIcon />,
+                  page: "Performance Feedback",
+                },
+              ].map((item, index) => (
+                <React.Fragment key={item.text}>
+                  <ListItem disablePadding>
+                    <ListItemButton
+                      onClick={() => handlePageChange(item.page)}
+                      selected={currentPage === item.page}
+                    >
+                      <ListItemIcon sx={{ color: darkMode ? "white" : "black" }}>
+                        {item.icon}
+                      </ListItemIcon>
+                      {isSidebarOpen && (
+                        <ListItemText
+                          primary={
+                            <Typography sx={{ color: darkMode ? "white" : "black" }}>
+                              {item.text}
+                            </Typography>
+                          }
+                        />
+                      )}
+                    </ListItemButton>
+                  </ListItem>
+                  {index < 4 && <Divider />}
+                </React.Fragment>
+              ))}
+            </List>
+          </Drawer>
+
+          <Box
+            component="main"
+            sx={{
+              flexGrow: 1,
+              bgcolor: darkMode ? "#121212" : "#EFEFEF",
+              p: 3,
+              overflowY: "auto",
+              height: "calc(100vh - 64px)",
+              position: "relative",
+            }}
+          >
+            <Box sx={{ 
+              maxWidth: "1200px", 
+              margin: "0 auto", 
+              pl: 2 
+            }}>
+              {currentPage === "Payment Status" ? (
+                <PaymentStatusPage />
+              ) : currentPage === "Profile" ? (
+                <InternProfile personalInfo={personalInfo} />
+              ) : showPerformanceOverview ? (
+                <PerformancePage />
+              ) : showHoursCalculator ? (
+                <InternHoursCalculator handleClose={() => setShowHoursCalculator(false)} />
+              ) : currentPage === "Asset Report Issue" ? (
+                <AssetReport />
+              ) : currentPage === "Leave Management" ? (
+                <LeaveManagement />
+              ) : currentPage === "Tasks" ? (
+                <Tasks tasks={currentTasks} onPageChange={handlePageChange} />
+              ) : currentPage === "Create Task" ? (
+                <Create onAddTask={handleAddTask} />
+              ) : currentPage === "AttendanceManagement" ? (
+                <AttendanceManagement />
+              ) : currentPage === "Dashboard" ? (
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={3}>
+                    <Card
+                      sx={{
+                        height: "100%",
+                        bgcolor: darkMode ? "#333" : "white",
+                        borderRadius: "12px",
+                        boxShadow: darkMode
+                          ? "0px 4px 15px rgba(0, 0, 0, 0.5)"
+                          : "0px 4px 15px rgba(0, 0, 0, 0.1)",
+                        transition: "transform 0.2s ease, box-shadow 0.2s ease",
+                        "&:hover": {
+                          transform: "scale(1.03)",
+                          boxShadow: darkMode
+                            ? "0px 10px 25px rgba(0, 0, 0, 0.7)"
+                            : "0px 10px 25px rgba(0, 0, 0, 0.3)",
+                        },
+                      }}
+                    >
+                      <CardContent>
+                        <Typography
+                          variant="h6"
+                          gutterBottom
+                          style={{
+                            fontSize: "1rem",
+                            color: darkMode ? "white" : "black",
+                          }}
+                        >
+                          Personal Information
+                        </Typography>
+                        <Box
+                          sx={{
+                            display: "grid",
+                            justifyContent: "center",
+                            mb: 3,
+                          }}
+                        >
+                          <Avatar
+                            alt="J"
+                            src={personalInfo.photo}
+                            sx={{ width: 56, height: 56 }}
+                          />
+                        </Box>
+                        <Typography
+                          variant="body2"
+                          style={{
+                            fontSize: "0.9rem",
+                            color: darkMode ? "white" : "black",
+                            textAlign: "center",
+                          }}
+                        >
+                          <strong>Name:</strong> {personalInfo.name}
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          style={{
+                            fontSize: "0.9rem",
+                            color: darkMode ? "white" : "black",
+                            textAlign: "center",
+                          }}
+                        >
+                          <strong>Department:</strong> {personalInfo.department}
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          style={{
+                            fontSize: "0.9rem",
+                            color: darkMode ? "white" : "black",
+                            textAlign: "center",
+                          }}
+                        >
+                          <strong>Position:</strong> {personalInfo.position}
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          style={{
+                            fontSize: "0.9rem",
+                            color: darkMode ? "white" : "black",
+                            textAlign: "center",
+                          }}
+                        >
+                          <strong>Contact:</strong> {personalInfo.contact}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  <Grid item xs={12} md={3}>
+                    <Card
+                      sx={{
+                        height: "100%",
+                        bgcolor: darkMode ? "#333" : "white",
+                        borderRadius: "12px",
+                      }}
+                    >
+                      <CardContent>
+                        <Typography
+                          variant="h6"
+                          gutterBottom
+                          style={{
+                            fontSize: "1rem",
+                            color: darkMode ? "white" : "black",
+                          }}
+                        >
+                          Attendance Overview
+                        </Typography>
+                        <Box
+                          sx={{
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                          }}
+                        >
+                          <Box
+                            sx={{
+                              position: "relative",
+                              display: "inline-flex",
+                            }}
+                          >
+                            <CircularProgress
+                              variant="determinate"
+                              value={attendancePercentage}
+                              size={80}
+                              thickness={4}
+                              sx={{
+                                color:
+                                  attendancePercentage < 50
+                                    ? "red"
+                                    : "primary.main",
+                              }}
+                            />
+                            <Box
+                              sx={{
+                                top: 0,
+                                left: 0,
+                                bottom: 0,
+                                right: 0,
+                                position: "absolute",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                              }}
+                            >
+                              <Typography
+                                variant="caption"
+                                component="div"
+                                style={{
+                                  fontSize: "0.8rem",
+                                  color: darkMode ? "white" : "black",
+                                }}
+                              >
+                                {`${attendancePercentage}%`}
+                              </Typography>
+                            </Box>
+                          </Box>
+                          <Typography
+                            variant="body2"
+                            style={{
+                              fontSize: "0.8rem",
+                              marginTop: "10px",
+                              color: darkMode ? "white" : "black",
+                            }}
+                          >
+                            Attendance
+                          </Typography>
+                          <Button
+                            variant="contained"
+                            color="primary"
+                            size="small"
+                            sx={{ mt: 2 }}
+                            onClick={() =>
+                              handlePageChange("AttendanceManagement")
+                            }
+                          >
+                            View Details
+                          </Button>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  <Grid item xs={12} md={3}>
+                    <Card
+                      sx={{
+                        height: "100%",
+                        bgcolor: darkMode ? "#333" : "white",
+                        borderRadius: "12px",
+                        boxShadow: darkMode
+                          ? "0px 4px 15px rgba(0, 0, 0, 0.5)"
+                          : "0px 4px 15px rgba(0, 0, 0, 0.1)",
+                        transition: "transform 0.2s ease, box-shadow 0.2s ease",
+                        "&:hover": {
+                          transform: "scale(1.03)",
+                          boxShadow: darkMode
+                            ? "0px 10px 25px rgba(0, 0, 0, 0.7)"
+                            : "0px 10px 25px rgba(0, 0, 0, 0.3)",
+                        },
+                      }}
+                    >
+                      <CardContent>
+                        <Typography
+                          variant="h6"
+                          gutterBottom
+                          style={{
+                            fontSize: "1rem",
+                            color: darkMode ? "white" : "black",
+                          }}
+                        >
+                          Leave Balance
+                        </Typography>
+                        <Box
+                          sx={{
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                          }}
+                        >
+                          <Box
+                            sx={{
+                              position: "relative",
+                              display: "inline-flex",
+                            }}
+                          >
+                            <CircularProgress
+                              variant="determinate"
+                              value={(leaveBalance / 20) * 100}
+                              size={80}
+                              thickness={4}
+                            />
+                            <Box
+                              sx={{
+                                top: 0,
+                                left: 0,
+                                bottom: 0,
+                                right: 0,
+                                position: "absolute",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                              }}
+                            >
+                              <Typography
+                                variant="caption"
+                                component="div"
+                                color="text.secondary"
+                                style={{
+                                  fontSize: "0.8rem",
+                                  color: darkMode ? "white" : "black",
+                                }}
+                              >
+                                {leaveBalance}
+                              </Typography>
+                            </Box>
+                          </Box>
+                          <Typography
+                            variant="body2"
+                            style={{
+                              fontSize: "0.8rem",
+                              marginTop: "10px",
+                              color: darkMode ? "white" : "black",
+                            }}
+                          >
+                            Remaining Leave Days
+                          </Typography>
+                          <Button
+                            variant="contained"
+                            color="primary"
+                            size="small"
+                            sx={{ mt: 2 }}
+                            onClick={() => handlePageChange("Leave Management")}
+                          >
+                            Request Leave
+                          </Button>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  <Grid item xs={12} md={3}>
+                    <Card
+                      sx={{
+                        height: "100%",
+                        bgcolor: darkMode ? "#333" : "white",
+                        borderRadius: "12px",
+                        boxShadow: darkMode
+                          ? "0px 4px 15px rgba(0, 0, 0, 0.5)"
+                          : "0px 4px 15px rgba(0, 0, 0, 0.1)",
+                        transition: "transform 0.2s ease, box-shadow 0.2s ease",
+                        "&:hover": {
+                          transform: "scale(1.03)",
+                          boxShadow: darkMode
+                            ? "0px 10px 25px rgba(0, 0, 0, 0.7)"
+                            : "0px 10px 25px rgba(0, 0, 0, 0.3)",
+                        },
+                      }}
+                    >
+                      <CardContent>
+                        <Typography
+                          variant="h6"
+                          gutterBottom
+                          style={{
+                            fontSize: "1rem",
+                            color: darkMode ? "white" : "black",
+                          }}
+                        >
+                          Task Progress
+                        </Typography>
+
+                        <Box sx={{ textAlign: "center" }}>
+                          {Object.keys(taskStatusCounts).length > 0 ? (
+                            <Pie
+                              data={taskProgressChartData}
+                              options={{
+                                responsive: true,
+                                maintainAspectRatio: false,
+                              }}
+                            />
+                          ) : (
+                            <Typography>No task data available</Typography>
+                          )}
+                        </Box>
+                        <Button
+                          variant="contained"
+                          color="primary"
+                          size="small"
+                          sx={{ mt: 2 }}
+                          onClick={() => handlePageChange("Tasks")}
+                        >
+                          View Details
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  <Grid item xs={12} md={6}>
+                    <Card
+                      sx={{
+                        height: "100%",
+                        bgcolor: darkMode ? "#333" : "white",
+                        borderRadius: "12px",
+                        boxShadow: darkMode
+                          ? "0px 4px 15px rgba(0, 0, 0, 0.5)"
+                          : "0px 4px 15px rgba(0, 0, 0, 0.1)",
+                        transition: "transform 0.2s ease, box-shadow 0.2s ease",
+                        "&:hover": {
+                          transform: "scale(1.03)",
+                          boxShadow: darkMode
+                            ? "0px 10px 25px rgba(0, 0, 0, 0.7)"
+                            : "0px 10px 25px rgba(0, 0, 0, 0.3)",
+                        },
+                      }}
+                    >
+                      <CardContent>
+                        <Typography
+                          variant="h6"
+                          gutterBottom
+                          style={{
+                            fontSize: "1rem",
+                            color: darkMode ? "white" : "black",
+                          }}
+                        >
+                          Performance Overview
+                        </Typography>
+                        <Box sx={{ textAlign: "center" }}>
+                          <Bar
+                            data={dumbbellData}
+                            options={{
+                              responsive: true,
+                              scales: {
+                                x: {
+                                  stacked: true,
+                                },
+                                y: {
+                                  stacked: true,
+                                },
+                              },
+                            }}
+                          />
+                          <Button
+                            variant="contained"
+                            color="primary"
+                            size="small"
+                            sx={{ mt: 2 }}
+                            onClick={() => setShowPerformanceOverview(true)}
+                          >
+                            View Details
+                          </Button>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  <Grid item xs={12} md={6}>
+                    <Card
+                      sx={{
+                        height: "100%",
+                        bgcolor: darkMode ? "#333" : "white",
+                        borderRadius: "12px",
+                        boxShadow: darkMode
+                          ? "0px 4px 15px rgba(0, 0, 0, 0.5)"
+                          : "0px 4px 15px rgba(0, 0, 0, 0.1)",
+                        transition: "transform 0.2s ease, box-shadow 0.2s ease",
+                        "&:hover": {
+                          transform: "scale(1.03)",
+                          boxShadow: darkMode
+                            ? "0px 10px 25px rgba(0, 0, 0, 0.7)"
+                            : "0px 10px 25px rgba(0, 0, 0, 0.3)",
+                        },
+                      }}
+                    >
+                      <CardContent>
+                        <Typography
+                          variant="h6"
+                          gutterBottom
+                          style={{
+                            fontSize: "1rem",
+                            color: darkMode ? "white" : "black",
+                          }}
+                        >
+                          Hours Calculation
+                        </Typography>
+                        <Box sx={{ textAlign: "center" }}>
+                          <Line
+                            data={hoursProgress}
+                            options={{ responsive: true }}
+                          />
+                          <Button
+                            variant="contained"
+                            color="primary"
+                            size="small"
+                            sx={{ mt: 2 }}
+                            onClick={handleViewHoursCalculator}
+                          >
+                            View Details
+                          </Button>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  <Grid item xs={12} md={6}>
+                    <Card
+                      sx={{
+                        height: "100%",
+                        bgcolor: darkMode ? "#333" : "white",
+                        borderRadius: "12px",
+                        boxShadow: darkMode
+                          ? "0px 4px 15px rgba(0, 0, 0, 0.5)"
+                          : "0px 4px 15px rgba(0, 0, 0, 0.1)",
+                        transition: "transform 0.2s ease, box-shadow 0.2s ease",
+                        "&:hover": {
+                          transform: "scale(1.03)",
+                          boxShadow: darkMode
+                            ? "0px 10px 25px rgba(0, 0, 0, 0.7)"
+                            : "0px 10px 25px rgba(0, 0, 0, 0.3)",
+                        },
+                      }}
+                    >
+                      <CardContent>
+                        <Typography
+                          variant="h6"
+                          gutterBottom
+                          style={{
+                            fontSize: "1rem",
+                            color: darkMode ? "white" : "black",
+                          }}
+                        >
+                          Current Tasks
+                        </Typography>
+                        <Box>
+                          {currentTasks.map((task) => (
+                            <Box
+                              key={task.id}
+                              sx={{
+                                display: "flex",
+                                alignItems: "center",
+                                mb: 2,
+                              }}
+                            >
+                              <Typography
+                                sx={{ flexGrow: 1 }}
+                                style={{
+                                  fontSize: "0.8rem",
+                                  color: darkMode ? "white" : "black",
+                                }}
+                              >
+                                {task.name}
+                              </Typography>
+                              <CircularProgress
+                                variant="determinate"
+                                value={task.progress}
+                                size={24}
+                              />
+                              <Typography
+                                sx={{ ml: 2 }}
+                                style={{
+                                  fontSize: "0.8rem",
+                                  color: darkMode ? "white" : "black",
+                                }}
+                              >
+                                {task.progress}%
+                              </Typography>
+                            </Box>
+                          ))}
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  <Grid item xs={12} md={6}>
+                    <Card
+                      sx={{
+                        height: "100%",
+                        bgcolor: darkMode ? "#333" : "white",
+                        borderRadius: "12px",
+                        boxShadow: darkMode
+                          ? "0px 4px 15px rgba(0, 0, 0, 0.5)"
+                          : "0px 4px 15px rgba(0, 0, 0, 0.1)",
+                        transition: "transform 0.2s ease, box-shadow 0.2s ease",
+                        "&:hover": {
+                          transform: "scale(1.03)",
+                          boxShadow: darkMode
+                            ? "0px 10px 25px rgba(0, 0, 0, 0.7)"
+                            : "0px 10px 25px rgba(0, 0, 0, 0.3)",
+                        },
+                      }}
+                    >
+                      <CardContent>
+                        <Typography
+                          variant="h6"
+                          gutterBottom
+                          style={{
+                            fontSize: "1rem",
+                            color: darkMode ? "white" : "black",
+                          }}
+                        >
+                          Skills Assessment
+                        </Typography>
+                        <Box sx={{ height: 200 }}>
+                          <Doughnut
+                            data={skillsData}
+                            options={{
+                              responsive: true,
+                              maintainAspectRatio: false,
+                            }}
+                          />
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                </Grid>
+              ) : (
+                <Typography variant="h6" component="div" sx={{ p: 2 }}>
+                  {currentPage} Content goes here!
+                </Typography>
+              )}
+            </Box>
+          </Box>
+        </Box>
+
+        <Snackbar
+          open={snackbarOpen}
+          autoHideDuration={6000}
+          onClose={handleSnackbarClose}
+        >
+          <Alert
+            onClose={handleSnackbarClose}
+            severity="success"
+            sx={{ width: "100%" }}
+          >
+            {snackbarMessage}
+          </Alert>
+        </Snackbar>
+
+        <Dialog open={confirmDialogOpen} onClose={cancelToggleTimerOff}>
+          <DialogTitle>Confirm Stop Timer</DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              Are you sure you want to close todays shift?
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={cancelToggleTimerOff} color="primary">
+              Cancel
+            </Button>
+            <Button onClick={confirmToggleTimerOff} color="secondary">
+              OK
+            </Button>
+          </DialogActions>
+        </Dialog>
+      </Box>
+    </ThemeProvider>
+  );
+};
+
+export default App;
+
+when a break starts, the timer stops but in that time while we refreshing the page
+the timers starts, it should stay stopped right?
+and fix it  for all the cases and give me updated proper working code
