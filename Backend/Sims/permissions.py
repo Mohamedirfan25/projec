@@ -1,4 +1,20 @@
 from rest_framework.permissions import BasePermission
+
+class IsAdmin(BasePermission):
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        try:
+            temp = getattr(user, 'profile', None)
+            if temp:
+                return temp.is_admin
+            # Fallback: check Temp model directly
+            from .models import Temp
+            temp_obj = Temp.objects.get(user=user)
+            return temp_obj.role.lower() == 'admin'
+        except Exception:
+            return False
 from .models import Temp, UserData
 
 class BaseStaffAccessPermission(BasePermission):

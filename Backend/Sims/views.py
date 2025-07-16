@@ -6,6 +6,7 @@ from .serializers import *
 from django.contrib.auth import authenticate, get_user_model
 from rest_framework.authtoken.models import Token
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from .permissions import IsAdmin
 from rest_framework.authentication import TokenAuthentication
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
@@ -306,7 +307,7 @@ class TempView(APIView):
 
 
 class UserDataView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsAdmin]
     def check_user_role(self, username, role_type):
         if not User.objects.filter(username=username).exists():
             return False, Response({"error": f"Reporting {role_type} not found"}, status=status.HTTP_400_BAD_REQUEST)
@@ -2896,7 +2897,7 @@ class RegisterView(APIView):
 
 class DashboardView(APIView):
     authentication_classes = [TokenAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsAdmin]
     
     def get(self, request):
         # Total Users Count
@@ -3169,7 +3170,7 @@ class DomainView(APIView):
 
 
 class PerformanceView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsAdmin]
 
     def get(self, request):
         # Automatically update tasks to 'Missing' if they are not completed within the committed date
@@ -3209,7 +3210,7 @@ class PerformanceView(APIView):
 
 
 class MonthlyTaskCountView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsAdmin]
     def get(self, request):
         # Get logged-in intern
         try:
@@ -3238,7 +3239,7 @@ class MonthlyTaskCountView(APIView):
         return Response({"intern": request.user.username, "task_counts": monthly_task_data}, status=status.HTTP_200_OK)
     
 class InternCountByDomainView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsAdmin]
 
     def get(self, request):
         try:
@@ -3303,7 +3304,7 @@ class InternCountByDomainView(APIView):
 
 
 class StaffDetailsView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsAdmin]
 
     def get(self, request):
         try:

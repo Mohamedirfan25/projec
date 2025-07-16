@@ -117,6 +117,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import DeleteIcon from '@mui/icons-material/Delete';
+import PauseCircleIcon from '@mui/icons-material/PauseCircle';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -255,13 +256,21 @@ const generateCompletedCertificate = async (empId, firstName) => {
 const InternLists = ({ setActiveComponent, showAddForm: externalShowAddForm, onFormComplete, onFormCancel }) => {
 
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('InProgress');
+  // Set default tab to 'In Progress' (matches tab value, not 'InProgress')
+  const [activeTab, setActiveTab] = useState('In Progress');
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(5);
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedInternId, setSelectedInternId] = useState(null);
-  const [interns, setInterns] = useState([]); // Active interns
+  // Initialize interns as an object with all tab keys to avoid blank data
+  const [interns, setInterns] = useState({
+    'In Progress': [],
+    'Completed': [],
+    'Yet to Join': [],
+    'Hold and Wait': [],
+    'Discontinued': [],
+  });
   const [openSnackbar, setOpenSnackbar] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [snackbarSeverity, setSnackbarSeverity] = useState("success");
@@ -276,6 +285,7 @@ const InternLists = ({ setActiveComponent, showAddForm: externalShowAddForm, onF
   const [showAddForm, setShowAddForm] = useState(externalShowAddForm || false);
   const [showEditedForm, setShowEditedForm] = useState(false);
   const [selectedEditData, setSelectedEditData] = useState(null); // optional, to pass data
+  const [actionSubMenuAnchorEl, setActionSubMenuAnchorEl] = useState(null);
 
   const fetchInterns = async () => {
   try {
@@ -315,22 +325,30 @@ const InternLists = ({ setActiveComponent, showAddForm: externalShowAddForm, onF
 
     const today = new Date();
 
-    const activeInterns = [];
+    // Group interns by status
+    const inProgressInterns = [];
+    const completedInterns = [];
+    const yetToJoinInterns = [];
+    const holdAndWaitInterns = [];
     const discontinuedInterns = [];
     const deletedInterns = [];
 
     combinedData.forEach((item) => {
-      const endDate = item.end_date ? new Date(item.end_date) : null;
-      const isDeleted = item.user_status?.toLowerCase() === "deleted";
-      const isDiscontinued = item.user_status?.toLowerCase() === "discontinued";
-
-      const status = isDeleted
-        ? "Deleted"
-        : isDiscontinued
-        ? "Discontinued"
-        : endDate && endDate < today
-        ? "Completed"
-        : "InProgress";
+      const userStatus = item.user_status?.toLowerCase();
+      let status = "In Progress";
+      if (userStatus === "deleted") {
+        status = "Deleted";
+      } else if (userStatus === "discontinued") {
+        status = "Discontinued";
+      } else if (userStatus === "completed") {
+        status = "Completed";
+      } else if (userStatus === "yettojoin") {
+        status = "Yet to Join";
+      } else if (userStatus === "holdandwait") {
+        status = "Hold and Wait";
+      } else if (userStatus === "inprogress") {
+        status = "In Progress";
+      }
 
       const internData = {
         id: item.emp_id,
@@ -359,18 +377,28 @@ const InternLists = ({ setActiveComponent, showAddForm: externalShowAddForm, onF
         aadharNumber: item.aadharNumber || "",
       };
 
-      if (isDeleted) {
+      if (status === "Deleted") {
         deletedInterns.push(internData);
-      } else if (isDiscontinued) {
+      } else if (status === "Discontinued") {
         discontinuedInterns.push(internData);
-      } else {
-        activeInterns.push(internData);
+      } else if (status === "Yet to Join") {
+        yetToJoinInterns.push(internData);
+      } else if (status === "Hold and Wait") {
+        holdAndWaitInterns.push(internData);
+      } else if (status === "Completed") {
+        completedInterns.push(internData);
+      } else if (status === "In Progress") {
+        inProgressInterns.push(internData);
       }
     });
 
-    // Merge active and discontinued into one list
-    const combinedInterns = [...activeInterns, ...discontinuedInterns];
-    setInterns(combinedInterns);
+    setInterns({
+      'In Progress': inProgressInterns,
+      'Completed': completedInterns,
+      'Yet to Join': yetToJoinInterns,
+      'Hold and Wait': holdAndWaitInterns,
+      'Discontinued': discontinuedInterns,
+    });
     setDeletedInterns(deletedInterns);
   } catch (error) {
     console.error("Failed to fetch interns:", error);
@@ -415,7 +443,35 @@ useEffect(() => {
       setOpenSnackbar(true);
     }
   };
- const handleDiscontinueIntern = async (internId) => {
+const handleSetStatus = async (internId, status) => {
+  try {
+    const token = localStorage.getItem("token");
+    // Map tab display values to backend status values
+    const statusMap = {
+      'In Progress': 'inprogress',
+      'Completed': 'completed',
+      'Yet to Join': 'yettojoin',
+      'Hold and Wait': 'holdandwait',
+      'Discontinued': 'discontinued',
+    };
+    const backendStatus = statusMap[status] || status;
+    const response = await axios.patch(
+      `http://localhost:8000/Sims/user-data/${internId}/`,
+      { user_status: backendStatus },
+      { headers: { Authorization: `Token ${token}` } }
+    );
+    await fetchInterns();
+    setSnackbarMessage(`Intern status set to ${status}`);
+    setSnackbarSeverity("success");
+    setOpenSnackbar(true);
+  } catch (error) {
+    setSnackbarMessage("Failed to update intern status. Please try again.");
+    setSnackbarSeverity("error");
+    setOpenSnackbar(true);
+  }
+};
+
+const handleDiscontinueIntern = async (internId) => {
   try {
     const token = localStorage.getItem("token");
 
@@ -505,25 +561,25 @@ const handleUndoDelete = async (internId) => {
       intern.scheme.toLowerCase().includes(searchTerm.toLowerCase()) ||
       intern.domain.toLowerCase().includes(searchTerm.toLowerCase())
     )
-    : interns.filter(intern =>
-  intern.status === activeTab &&                                // ← must match exactly
-  (intern.id.toString().includes(searchTerm) ||
-    intern.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    intern.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    intern.scheme.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    intern.domain.toLowerCase().includes(searchTerm.toLowerCase())) &&
-  (filters.department === '' || intern.department === filters.department) &&
-  (filters.scheme === '' || intern.scheme === filters.scheme) &&
-  (filters.domain === '' || intern.domain === filters.domain)
-);
+    : (interns[activeTab] || []).filter(intern =>
+        (intern.id.toString().includes(searchTerm) ||
+          intern.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          intern.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          intern.scheme.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          intern.domain.toLowerCase().includes(searchTerm.toLowerCase())) &&
+        (filters.department === '' || intern.department === filters.department) &&
+        (filters.scheme === '' || intern.scheme === filters.scheme) &&
+        (filters.domain === '' || intern.domain === filters.domain)
+      );
 
   const columns = [
     'Intern ID', 'Intern Name', 'Email ID', 'Department', 'Scheme', 'Domain', 'Start Date', 'End Date', 'Status', 'Action'
   ];
 
-  const departments = [...new Set(interns.map(intern => intern.department))];
-  const schemes = [...new Set(interns.map(intern => intern.scheme))];
-  const domains = [...new Set(interns.map(intern => intern.domain))];
+  const currentInternsArray = Array.isArray(interns[activeTab]) ? interns[activeTab] : [];
+  const departments = [...new Set(currentInternsArray.map(intern => intern.department))];
+  const schemes = [...new Set(currentInternsArray.map(intern => intern.scheme))];
+  const domains = [...new Set(currentInternsArray.map(intern => intern.domain))];
 
   const count = Math.ceil(filteredInterns.length / rowsPerPage);
   const paginatedInterns = filteredInterns.slice(
@@ -781,7 +837,7 @@ const handleUndoDelete = async (internId) => {
           >
             <Tab
               label="In Progress"
-              value="InProgress"
+              value="In Progress"
               icon={<WorkIcon fontSize="small" />}
               iconPosition="start"
               sx={{
@@ -795,6 +851,30 @@ const handleUndoDelete = async (internId) => {
               label="Completed"
               value="Completed"
               icon={<CheckCircleIcon fontSize="small" />}
+              iconPosition="start"
+              sx={{
+                textTransform: 'none',
+                fontWeight: 500,
+                fontSize: '0.875rem',
+                minHeight: 48
+              }}
+            />
+            <Tab
+              label="Yet to Join"
+              value="Yet to Join"
+              icon={<PersonIcon fontSize="small" />}
+              iconPosition="start"
+              sx={{
+                textTransform: 'none',
+                fontWeight: 500,
+                fontSize: '0.875rem',
+                minHeight: 48
+              }}
+            />
+            <Tab
+              label="Hold and Wait"
+              value="Hold and Wait"
+              icon={<PauseCircleIcon fontSize="small" />}
               iconPosition="start"
               sx={{
                 textTransform: 'none',
@@ -897,152 +977,84 @@ const handleUndoDelete = async (internId) => {
                       </Typography>
                     </TableCell>
                     <TableCell>{intern.department}</TableCell>
-                    <TableCell>
-                      <Chip
-                        label={intern.scheme}
-                        size="small"
-                        sx={{
-                          backgroundColor: schemeColors[intern.scheme]?.bg || '#f5f5f5',
-                          color: schemeColors[intern.scheme]?.text || 'text.primary',
-                          fontWeight: 500,
-                          minWidth: 80
-                        }}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={intern.domain}
-                        size="small"
-                        sx={{
-                          backgroundColor: domainColors[intern.domain]?.bg || '#f5f5f5',
-                          color: domainColors[intern.domain]?.text || 'text.primary',
-                          fontWeight: 500
-                        }}
-                      />
-                    </TableCell>
+                    <TableCell>{intern.scheme}</TableCell>
+                    <TableCell>{intern.domain}</TableCell>
                     <TableCell>{intern.startDate}</TableCell>
                     <TableCell>{intern.endDate}</TableCell>
                     <TableCell>
                       <Chip
                         label={intern.status}
-                        size="small"
                         sx={{
-                          backgroundColor:
-                            intern.status === 'InProgress' ? 'rgba(33, 150, 243, 0.1)' :
-                              intern.status === 'Completed' ? 'rgba(76, 175, 80, 0.1)' : 'rgba(244, 67, 54, 0.1)',
+                          fontWeight: 700,
+                          fontSize: '1em',
+                          px: 2,
+                          py: 0.5,
+                          borderRadius: 1,
+                          minWidth: 110,
+                          textAlign: 'center',
+                          bgcolor:
+                            intern.status === 'Completed' ? '#d0f5e8'
+                            : intern.status === 'Free' ? '#e3f2fd'
+                            : intern.status === 'Pending' ? '#fff9db'
+                            : intern.status === 'Incomplete' ? '#ffe3e0'
+                            : intern.status === 'In Progress' ? '#e3f2fd'
+                            : intern.status === 'Yet to Join' ? '#fff9db'
+                            : intern.status === 'Hold and Wait' ? '#ffe3e0'
+                            : intern.status === 'Discontinued' ? '#ffe3e0'
+                            : intern.status === 'Deleted' ? '#f5f5f5'
+                            : '#f5f5f5',
                           color:
-                            intern.status === 'InProgress' ? 'primary.main' :
-                              intern.status === 'Completed' ? 'success.main' : 'error.main',
-                          fontWeight: 500
+                            intern.status === 'Completed' ? '#009688'
+                            : intern.status === 'Free' ? '#1976d2'
+                            : intern.status === 'Pending' ? '#ffa000'
+                            : intern.status === 'Incomplete' ? '#d32f2f'
+                            : intern.status === 'In Progress' ? '#1976d2'
+                            : intern.status === 'Yet to Join' ? '#ffa000'
+                            : intern.status === 'Hold and Wait' ? '#d32f2f'
+                            : intern.status === 'Discontinued' ? '#d32f2f'
+                            : intern.status === 'Deleted' ? '#616161'
+                            : '#757575',
                         }}
                       />
                     </TableCell>
-
-                    <TableCell align="center">
-  <IconButton onClick={(e) => handleMenuOpen(e, intern.id)}>
-    <MoreVertIcon />
-  </IconButton>
-
-<Menu
-  anchorEl={anchorEl}
-  open={Boolean(anchorEl) && selectedInternId === intern.id}
-  onClose={handleMenuClose}
->
-  {(intern.user_status + "").toLowerCase() === "deleted" ? [
-    <MenuItem
-      key="undo"
-      onClick={() => {
-        handleUndoDelete(intern.id);
-        handleMenuClose();
-      }}
-    >
-      <UndoIcon fontSize="small" style={{ marginRight: 8 }} />
-      Undo
-    </MenuItem>
-  ] : (intern.user_status + "").toLowerCase() === "discontinued" ? [
-    <MenuItem
-      key="edit"
-      onClick={() => {
-        navigate('/EditedForm', { state: { internData: intern } });
-        handleMenuClose();
-      }}
-    >
-      <EditIcon fontSize="small" style={{ marginRight: 8 }} />
-      Edit
-    </MenuItem>,
-    <MenuItem
-      key="delete"
-      onClick={() => {
-        handleDeleteIntern(intern.id);
-        handleMenuClose();
-      }}
-    >
-      <DeleteIcon fontSize="small" style={{ marginRight: 8 }} />
-      Delete
-    </MenuItem>,
-    <MenuItem
-      key="undo-discontinued"
-      onClick={() => {
-        handleUndoDelete(intern.id);
-        handleMenuClose();
-      }}
-    >
-      <UndoIcon fontSize="small" style={{ marginRight: 8 }} />
-      Undo
-    </MenuItem>
-  ] : [
-    <MenuItem
-      key="edit-active"
-      onClick={() => {
-        navigate('/EditedForm', { state: { internData: intern } });
-        handleMenuClose();
-      }}
-    >
-      <EditIcon fontSize="small" style={{ marginRight: 8 }} />
-      Edit
-    </MenuItem>,
-    <MenuItem
-      key="delete-active"
-      onClick={() => {
-        handleDeleteIntern(intern.id);
-        handleMenuClose();
-      }}
-    >
-      <DeleteIcon fontSize="small" style={{ marginRight: 8 }} />
-      Delete
-    </MenuItem>,
-    <MenuItem
-      key="discontinue"
-      onClick={() => {
-        handleDiscontinueIntern(intern.id);
-        handleMenuClose();
-      }}
-    >
-      <CancelIcon fontSize="small" style={{ marginRight: 8 }} />
-      Discontinue
-    </MenuItem>
-  ]}
-</Menu>
-
-
-
-  {intern.status === "Completed" && (
-    <MenuItem
-      key="certificate"
-      onClick={() => {
-        generateCompletedCertificate(intern.id, intern.firstName);
-        handleMenuClose();
-      }}
-    >
-      <PictureAsPdf fontSize="small" style={{ marginRight: 8 }} />
-      Download Certificate
-    </MenuItem>
-  )}
-</TableCell>
-
-
-
-
+                    <TableCell>
+                      <IconButton onClick={(e) => handleMenuOpen(e, intern.id)}>
+                        <MoreVertIcon />
+                      </IconButton>
+                      <Menu
+                        anchorEl={anchorEl}
+                        open={selectedInternId === intern.id}
+                        onClose={handleMenuClose}
+                      >
+                        <MenuItem onClick={() => { setSelectedEditData(intern); setShowEditedForm(true); handleMenuClose(); }}>
+                          <EditIcon fontSize="small" style={{ marginRight: 8 }} /> Edit
+                        </MenuItem>
+                        <MenuItem onClick={() => { handleDeleteIntern(intern.id); handleMenuClose(); }}>
+                          <DeleteIcon fontSize="small" style={{ marginRight: 8 }} /> Delete
+                        </MenuItem>
+                        <MenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActionSubMenuAnchorEl(e.currentTarget);
+                          }}
+                        >
+                          Actions
+                        </MenuItem>
+                      </Menu>
+                      <Menu
+                        anchorEl={actionSubMenuAnchorEl}
+                        open={Boolean(actionSubMenuAnchorEl) && selectedInternId === intern.id}
+                        onClose={() => setActionSubMenuAnchorEl(null)}
+                        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+                        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                      >
+                        <MenuItem onClick={() => { handleSetStatus(intern.id, 'In Progress'); setActionSubMenuAnchorEl(null); handleMenuClose(); }}>In Progress</MenuItem>
+                        <MenuItem onClick={() => { handleSetStatus(intern.id, 'Completed'); setActionSubMenuAnchorEl(null); handleMenuClose(); }}>Completed</MenuItem>
+                        <MenuItem onClick={() => { handleSetStatus(intern.id, 'Yet to Join'); setActionSubMenuAnchorEl(null); handleMenuClose(); }}>Yet to Join</MenuItem>
+                        <MenuItem onClick={() => { handleSetStatus(intern.id, 'Hold and Wait'); setActionSubMenuAnchorEl(null); handleMenuClose(); }}>Hold and Wait</MenuItem>
+                        <MenuItem onClick={() => { handleSetStatus(intern.id, 'Discontinued'); setActionSubMenuAnchorEl(null); handleMenuClose(); }}>Discontinued</MenuItem>
+                      </Menu>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

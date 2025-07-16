@@ -1,5 +1,7 @@
+
 import React from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import Dash from "./pages/Dash";
 import InternHomePage from "./pages/InternHomePage";
 import LoginPage from "./pages/LoginPage";
@@ -32,6 +34,37 @@ import StaffList from "./pages/StaffList";
 import AssetLists from './pages/AssetLists'; // adjust the path as needed
 import LeaveList from "./pages/LeaveList";
 import EditedForm from "./components/EditedForm";
+
+// ...existing code...
+
+function ProtectedRoute({ children }) {
+  const [isValid, setIsValid] = useState(null);
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setIsValid(false);
+      return;
+    }
+    // Test token validity with a lightweight API call
+    fetch("http://localhost:8000/Sims/user-data/", {
+      headers: { Authorization: `Token ${token}` },
+    })
+      .then((res) => {
+        if (res.status === 401 || res.status === 403) {
+          localStorage.removeItem("token");
+          setIsValid(false);
+        } else {
+          setIsValid(true);
+        }
+      })
+      .catch(() => {
+        localStorage.removeItem("token");
+        setIsValid(false);
+      });
+  }, []);
+  if (isValid === null) return null; // or a loading spinner
+  return isValid ? children : <Navigate to="/loginpage" replace />;
+}
 function App() {
   return (
     <Router>
@@ -44,7 +77,11 @@ function App() {
         <Route path="/Reset" element={<Reset />} />
         <Route path="/Recovery" element={<Recovery />} />
         <Route path="/Dash" element={<Dash />} />
-        <Route path="/AdminDashboard" element={<AdminDashboard />} />
+        <Route path="/AdminDashboard" element={
+          <ProtectedRoute>
+            <AdminDashboard />
+          </ProtectedRoute>
+        } />
         <Route path="/Intern-profile" element={<InternProfile />} />
         <Route path="/LeaveManagement" element={<LeaveManagement />} />
         <Route path="/Tasks" element={<Tasks />} />
