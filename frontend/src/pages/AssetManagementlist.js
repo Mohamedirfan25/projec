@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     Box,
     Button,
@@ -23,12 +23,12 @@ import {
     Checkbox,
     IconButton,
     Chip,
-    Pagination,
     Paper,
     InputAdornment,
     Modal,
     CircularProgress,
-    Divider
+    Skeleton,
+    TablePagination
 } from '@mui/material';
 import {
     Add as AddIcon,
@@ -39,37 +39,145 @@ import {
     MoreVert as MoreVertIcon
 } from '@mui/icons-material';
 
+// Shimmer loading component
+const ShimmerRow = ({ columns = 9 }) => (
+    <TableRow>
+        <TableCell padding="checkbox">
+            <Skeleton variant="rectangular" width={20} height={20} />
+        </TableCell>
+        {Array(columns - 1).fill(0).map((_, index) => (
+            <TableCell key={index}>
+                <Skeleton variant="text" width="80%" height={24} />
+            </TableCell>
+        ))}
+    </TableRow>
+);
+
 const AssetManagement = () => {
+    // State management
     const [assets, setAssets] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
     const [typeFilter, setTypeFilter] = useState('');
     const [expanded, setExpanded] = useState(false);
     const [selectedAssets, setSelectedAssets] = useState([]);
-    const [page, setPage] = useState(1);
+    const [page, setPage] = useState(0);
+    const [rowsPerPage, setRowsPerPage] = useState(10);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    
+    // Modal and form states
     const [openModal, setOpenModal] = useState(false);
     const [currentAsset, setCurrentAsset] = useState(null);
-    const [loading, setLoading] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+    
+    // Asset assignment states
     const [users, setUsers] = useState([]);
     const [departments, setDepartments] = useState([]);
+    const [internList, setInternList] = useState([]);
     const [availableInterns, setAvailableInterns] = useState([]);
     const [selectedDepartment, setSelectedDepartment] = useState('');
     const [selectedIntern, setSelectedIntern] = useState('');
+    const [selectedAssetType, setSelectedAssetType] = useState('');
+    
+    // History modal states
     const [historyModalOpen, setHistoryModalOpen] = useState(false);
     const [historyData, setHistoryData] = useState([]);
     const [selectedAssetId, setSelectedAssetId] = useState('');
-    const [submitting, setSubmitting] = useState(false);
-    const [internList, setInternList] = useState([]);
-    const [selectedAssetType, setSelectedAssetType] = useState('');
-    const rowsPerPage = 5;
 
-    useEffect(() => {
-        fetchAssets();
+    // Fetch assets data
+    const fetchAssets = useCallback(async () => {
+        const token = localStorage.getItem("token");
+        if (!token) {
+            console.error("No authentication token found");
+            setError(new Error("Authentication required"));
+            return [];
+        }
+
+        try {
+            // Fetch assets and users in parallel
+            const [assetResponse, userResponse] = await Promise.all([
+                fetch("http://localhost:8000/Sims/assert-stock/", {
+                    headers: {
+                        "Authorization": `Token ${token}`,
+                        "Content-Type": "application/json"
+                    }
+                }),
+                fetch("http://localhost:8000/Sims/user-data/", {
+                    headers: {
+                        "Authorization": `Token ${token}`,
+                        "Content-Type": "application/json"
+                    }
+                })
+            ]);
+    
+            if (!assetResponse.ok) throw new Error("Failed to fetch asset data");
+            if (!userResponse.ok) throw new Error("Failed to fetch user data");
+            
+            const [assetsData, usersData] = await Promise.all([
+                assetResponse.json(),
+                userResponse.json()
+            ]);
+            
+            setUsers(usersData);
+            
+            // Process and return the formatted assets
+            return assetsData.map(asset => ({
+                id: asset.assert_id,
+                asset: asset.assert_model,
+                type: asset.allocated_type,
+                assignedTo: !asset.inhand ? 
+                    (() => {
+                        const assignedUser = usersData.find(user => user.id === asset.user);
+                        return assignedUser?.username 
+                            ? `${assignedUser.username} (ID: ${assignedUser.temp?.emp_id || asset.emp_id})`
+                            : asset.emp_id || 'Unassigned';
+                    })() 
+                    : 'Unassigned',
+                status: !asset.inhand ? "Assigned" : "Available",
+                createdDate: asset.created_date,
+                updatedDate: asset.updated_date,
+                inhand: asset.inhand,
+                configuration: asset.configuration,
+                department: asset.department,
+                empId: asset.emp_id,
+                userId: asset.user
+            }));
+        } catch (error) {
+            console.error("Error fetching assets:", error);
+            setError(error);
+            return [];
+        }
     }, []);
 
-    const fetchInternList = async () => {
-        const token = typeof window !== "undefined" ? localStorage.getItem("token"): null;
-        try{
+    // Fetch departments
+    const fetchDepartments = useCallback(async () => {
+        const token = localStorage.getItem("token");
+        try {
+            const response = await fetch("http://localhost:8000/Sims/departments/", {
+                headers: {
+                    "Authorization": `Token ${token}`,
+                    "Content-Type": "application/json"
+                }
+            });
+            
+            if (!response.ok) throw new Error("Failed to fetch departments");
+            const data = await response.json();
+            setDepartments(data);
+            return data;
+        } catch (error) {
+            console.error("Error fetching departments:", error);
+            setError(error);
+            return [];
+        }
+    }, []);
+
+    // Fetch intern list
+    const fetchInternList = useCallback(async () => {
+        const token = localStorage.getItem("token");
+        if (!token) return [];
+
+        try {
             // Fetch both temps and user data to get department info
             const [tempsResponse, userDataResponse] = await Promise.all([
                 fetch("http://localhost:8000/Sims/temps/", {
@@ -87,7 +195,7 @@ const AssetManagement = () => {
             ]);
             
             if (!tempsResponse.ok || !userDataResponse.ok) {
-                throw new Error("Failed to fetch data");
+                throw new Error("Failed to fetch intern data");
             }
             
             const tempsData = await tempsResponse.json();
@@ -98,7 +206,6 @@ const AssetManagement = () => {
                 .filter(temp => temp.role === 'intern')
                 .map(temp => {
                     const userData = userDataList.find(ud => ud.emp_id === temp.emp_id);
-                    console.log('UserData for', temp.emp_id, ':', userData);
                     return {
                         ...temp,
                         department: userData?.department?.department || userData?.department
@@ -106,148 +213,103 @@ const AssetManagement = () => {
                 });
             
             setInternList(internsWithDept);
+            return internsWithDept;
         } catch (error) {
-          console.error("Error fetching intern list:", error);
-          setInternList([]);
+            console.error("Error fetching intern list:", error);
+            setError(error);
+            return [];
         }
-    };
+    }, []);
 
+    // Initial data fetch
     useEffect(() => {
-       fetchInternList(); // ✅ also include in useEffect
-}, []);
-
-
-    
-    const fetchAssets = async () => {
-        const token = localStorage.getItem("token");
-        try {
-            setLoading(true);
-            
-            // Fetch assets
-            const assetResponse = await fetch("http://localhost:8000/Sims/assert-stock/", {
-                headers: {
-                    "Authorization": `Token ${token}`,
-                    "Content-Type": "application/json"
-                }
-            });
-    
-            if (!assetResponse.ok) throw new Error("Failed to fetch asset data");
-            const assetsData = await assetResponse.json();
-    
-            // Fetch users
-            const userResponse = await fetch("http://localhost:8000/Sims/user-data/", {
-                headers: {
-                    "Authorization": `Token ${token}`,
-                    "Content-Type": "application/json"
-                }
-            });
-    
-            if (!userResponse.ok) throw new Error("Failed to fetch user data");
-            const usersData = await userResponse.json();
-            setUsers(usersData);
-
-            const formattedAssets = assetsData.map(asset => {
-                const isAssigned = !asset.inhand;
-                let assignedToDisplay = 'Unassigned';
-            
-                if (isAssigned) {
-                    // If user field is valid and exists in usersData
-                    const assignedUser = usersData.find(user => user.id === asset.user);
-                    if (assignedUser && assignedUser.username) {
-                        assignedToDisplay = `${assignedUser.username} (ID: ${assignedUser.temp?.emp_id || asset.emp_id})`;
-                    } else if (asset.emp_id) {
-                        // Fallback to just emp_id if user data is missing
-                        assignedToDisplay = asset.emp_id;
-                    }
-                }
-            
-                return {
-                    id: asset.assert_id,
-                    asset: asset.assert_model,
-                    type: asset.allocated_type,
-                    assignedTo: assignedToDisplay,
-                    status: isAssigned ? "Assigned" : "Available",
-                    createdDate: asset.created_date,
-                    updatedDate: asset.updated_date,
-                    inhand: asset.inhand,
-                    configuration: asset.configuration,
-                    department: asset.department,
-                    empId: asset.emp_id,
-                    userId: asset.user
-                };
-            });
+        const fetchData = async () => {
+            try {
+                setLoading(true);
+                setError(null);
                 
-            setAssets(formattedAssets);
+                // Fetch all data in parallel
+                const [assetsData] = await Promise.all([
+                    fetchAssets(),
+                    fetchDepartments(),
+                    fetchInternList()
+                ]);
+                
+                // Update assets if we got valid data
+                if (Array.isArray(assetsData)) {
+                    setAssets(assetsData);
+                } else {
+                    console.error("Invalid assets data received:", assetsData);
+                    setError(new Error("Failed to load asset data"));
+                }
+            } catch (err) {
+                console.error("Error in initial data fetch:", err);
+                setError(err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchData();
+    }, [fetchAssets, fetchDepartments, fetchInternList]);
+
+    const fetchAssetHistory = async (assetId) => {
+        if (!assetId) {
+            console.error("No asset ID provided for history");
+            return;
+        }
+        
+        const token = localStorage.getItem("token");
+        if (!token) {
+            setError(new Error("Authentication required"));
+            return;
+        }
+        
+        try {
+            const response = await fetch(`http://localhost:8000/Sims/asserthistory/?asset_id=${assetId}`, {
+                headers: {
+                    "Authorization": `Token ${token}`,
+                    "Content-Type": "application/json"
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Failed to fetch asset history: ${response.status} ${response.statusText}`);
+            }
+            
+            const data = await response.json();
+            if (!Array.isArray(data)) {
+                throw new Error("Invalid history data format received");
+            }
+            
+            setHistoryData(data);
+            setSelectedAssetId(assetId);
+            setHistoryModalOpen(true);
         } catch (error) {
-            console.error("Error fetching data:", error);
-        } finally {
-            setLoading(false);
+            console.error("Error fetching asset history:", error);
+            setError(error instanceof Error ? error : new Error(String(error)));
         }
     };
-    const handleAssetClick = async (assetId) => {
-        const token = localStorage.getItem("token");
-        try {
-          const response = await fetch("http://localhost:8000/Sims/asserthistory/", {
-            headers: {
-              "Authorization": `Token ${token}`,
-              "Content-Type": "application/json"
-            }
-          });
-      
-          if (!response.ok) throw new Error("Failed to fetch asset history");
-      
-          const allHistory = await response.json();
-          const filteredHistory = allHistory.filter(entry => entry.asset === assetId);
-      
-          setSelectedAssetId(assetId);
-          setHistoryData(filteredHistory);
-          setHistoryModalOpen(true);
-        } catch (error) {
-          console.error("Error fetching asset history:", error);
-        }
-      };
-      
-   // Add this function to fetch departments from the backend
-const fetchDepartments = async () => {
-    const token = localStorage.getItem("token");
-    try {
-        const response = await fetch("http://localhost:8000/Sims/departments/", {
-            headers: {
-                "Authorization": `Token ${token}`,
-                "Content-Type": "application/json"
-            }
-        });
-        
-        if (!response.ok) throw new Error("Failed to fetch departments");
-        const data = await response.json();
-        setDepartments(data);
-    } catch (error) {
-        console.error("Error fetching departments:", error);
-        setDepartments([]);
-    }
-};
 
-// Update the useEffect to call fetchDepartments
-useEffect(() => {
-    fetchAssets();
-    fetchDepartments();
-}, []);
+    const handleAssetClick = (assetId) => {
+        fetchAssetHistory(assetId);
+    };
 
-// Update the fetchAvailableInterns function to correctly use the API endpoint
-const fetchAvailableInterns = (department) => {
-    const available = assets
-        .filter(asset => 
-            asset.inhand &&  // Changed to filter inhand: true
-            asset.department === department && 
-            asset.empId
-        )
-        .map(asset => asset.empId);
+    // Update the fetchAvailableInterns function to correctly use the API endpoint
+    const fetchAvailableInterns = useCallback((department) => {
+        const available = assets
+            .filter(asset => 
+                asset.inhand &&  // Changed to filter inhand: true
+                asset.department === department && 
+                asset.empId
+            )
+            .map(asset => asset.empId);
 
-    const uniqueEmpIds = [...new Set(available)];
-    setAvailableInterns(uniqueEmpIds);
-};
+        const uniqueEmpIds = [...new Set(available)];
+        setAvailableInterns(uniqueEmpIds);
+    }, [assets]);
 
-    const handleDepartmentChange = (e) => {
+    const handleDepartmentChange = useCallback((e) => {
         const department = e.target.value;
         setSelectedDepartment(department);
         setSelectedIntern(''); // Reset intern selection when department changes
@@ -256,15 +318,15 @@ const fetchAvailableInterns = (department) => {
         } else {
             setAvailableInterns([]);
         }
-    };
+    }, [fetchAvailableInterns]);
 
-    const handleInternChange = (e) => {
+    const handleInternChange = useCallback((e) => {
         setSelectedIntern(e.target.value);
-    };
+    }, []);
 
-    const handleAssetTypeChange = (e) => {
+    const handleAssetTypeChange = useCallback((e) => {
         setSelectedAssetType(e.target.value);
-    };
+    }, []);
 
     const handleExpandClick = () => {
         setExpanded(!expanded);
@@ -285,31 +347,6 @@ const fetchAvailableInterns = (department) => {
         }
     };
 
-    const fetchAssetHistory = async (assetId) => {
-        const token = localStorage.getItem("token");
-      
-        try {
-          const response = await fetch("http://localhost:8000/Sims/asserthistory/", {
-            headers: {
-              "Authorization": `Token ${token}`,
-              "Content-Type": "application/json"
-            }
-          });
-      
-          if (!response.ok) throw new Error("Failed to fetch asset history");
-      
-          const data = await response.json();
-          const filtered = data.filter(entry => entry.asset === assetId);
-      
-          setHistoryData(filtered);
-          setSelectedAssetId(assetId);
-          setHistoryModalOpen(true);
-        } catch (error) {
-          console.error("Error fetching asset history:", error);
-          alert("Failed to fetch asset history");
-        }
-      };
-      
     const handleBulkDelete = async () => {
         const token = localStorage.getItem("token");
         try {
@@ -349,8 +386,28 @@ const fetchAvailableInterns = (department) => {
         });
     };
 
-    const filteredAssets = getFilteredAssets();
-    const paginatedAssets = filteredAssets.slice((page - 1) * rowsPerPage, page * rowsPerPage);
+    const filteredAssets = React.useMemo(() => {
+        return assets.filter(asset => {
+            if (!asset) return false;
+            
+            const searchLower = searchTerm.toLowerCase();
+            const assetName = asset.asset ? asset.asset.toLowerCase() : '';
+            const assetId = asset.id ? asset.id.toString().toLowerCase() : '';
+            
+            const searchMatch = assetName.includes(searchLower) || 
+                              assetId.includes(searchLower);
+            const statusMatch = !statusFilter || (asset.status && asset.status === statusFilter);
+            const typeMatch = !typeFilter || (asset.type && asset.type === typeFilter);
+
+            return searchMatch && statusMatch && typeMatch;
+        });
+    }, [assets, searchTerm, statusFilter, typeFilter]);
+
+    const paginatedAssets = React.useMemo(() => {
+        if (!Array.isArray(filteredAssets)) return [];
+        const startIndex = page * rowsPerPage;
+        return filteredAssets.slice(startIndex, startIndex + rowsPerPage);
+    }, [filteredAssets, page, rowsPerPage]);
 
     const handleOpenModal = (asset = null) => {
         setCurrentAsset(asset);
@@ -666,9 +723,24 @@ const fetchAvailableInterns = (department) => {
                         </TableHead>
                         <TableBody>
                             {loading ? (
+                                // Show shimmer effect while loading
+                                Array(5).fill(0).map((_, index) => (
+                                    <ShimmerRow key={`shimmer-${index}`} columns={9} />
+                                ))
+                            ) : error ? (
                                 <TableRow>
                                     <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
-                                        <CircularProgress />
+                                        <Typography color="error">
+                                            Error loading assets: {error.message}
+                                        </Typography>
+                                        <Button 
+                                            variant="contained" 
+                                            color="primary" 
+                                            onClick={() => window.location.reload()}
+                                            sx={{ mt: 2 }}
+                                        >
+                                            Retry
+                                        </Button>
                                     </TableCell>
                                 </TableRow>
                             ) : paginatedAssets.length > 0 ? (
@@ -737,18 +809,48 @@ const fetchAvailableInterns = (department) => {
                     </Table>
                 </TableContainer>
 
-                <Box display="flex" justifyContent="space-between" alignItems="center" mt={3}>
-                    <Typography color="textSecondary">
-                        Showing {paginatedAssets.length} of {filteredAssets.length} assets
-                    </Typography>
-                    <Pagination
-                        count={Math.ceil(filteredAssets.length / rowsPerPage)}
+                {filteredAssets.length > 0 ? (
+                    <TablePagination
+                        rowsPerPageOptions={[5, 10, 25]}
+                        component="div"
+                        count={filteredAssets.length}
+                        rowsPerPage={rowsPerPage}
                         page={page}
-                        onChange={handlePageChange}
-                        color="primary"
-                        shape="rounded"
+                        onPageChange={(e, newPage) => setPage(newPage)}
+                        onRowsPerPageChange={(e) => {
+                            setRowsPerPage(parseInt(e.target.value, 10));
+                            setPage(0);
+                        }}
+                        labelRowsPerPage="Rows per page:"
+                        labelDisplayedRows={({ from, to, count }) => 
+                            `${from}-${to} of ${count !== -1 ? count : `more than ${to}`}`
+                        }
+                        sx={{ mt: 2 }}
                     />
-                </Box>
+                ) : !loading && (
+                    <Box mt={2} textAlign="center">
+                        <SearchIcon sx={{ fontSize: 60, color: 'text.disabled', mb: 1 }} />
+                        <Typography variant="body1" color="textSecondary">
+                            {assets.length === 0 
+                                ? 'No assets found. Add your first asset using the "Add Asset" button.'
+                                : 'No assets match your current filters'
+                            }
+                        </Typography>
+                        {assets.length > 0 && (
+                            <Button
+                                variant="text"
+                                onClick={() => {
+                                    setStatusFilter("");
+                                    setTypeFilter("");
+                                    setSearchTerm("");
+                                }}
+                                sx={{ mt: 1 }}
+                            >
+                                Clear all filters
+                            </Button>
+                        )}
+                    </Box>
+                )}
             </CardContent>
         </Card>
     );

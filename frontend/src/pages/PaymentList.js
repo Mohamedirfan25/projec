@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Autocomplete } from "@mui/material";
-//import { useNavigate } from "react-router-dom";
-
-
-import {
+import { 
+  Autocomplete,
   Box,
   Typography,
   Button,
@@ -38,12 +35,37 @@ import {
   Person,
   FindInPage,
   Badge,
-  Search,
+  Search as SearchIcon,
   Payment,
   FilterList,
   Close,
 } from "@mui/icons-material";
 import AddIcon from '@mui/icons-material/Add';
+// import { useNavigate } from "react-router-dom";
+
+// Shimmer Row Component
+const ShimmerRow = () => (
+  <TableRow>
+    {[...Array(9)].map((_, i) => (
+      <TableCell key={i}>
+        <Box
+          sx={{
+            height: 20,
+            width: i % 2 === 0 ? '80%' : '60%',
+            backgroundColor: '#f0f0f0',
+            borderRadius: 1,
+            animation: 'pulse 1.5s ease-in-out infinite',
+            '@keyframes pulse': {
+              '0%': { opacity: 0.6 },
+              '50%': { opacity: 0.3 },
+              '100%': { opacity: 0.6 }
+            }
+          }}
+        />
+      </TableCell>
+    ))}
+  </TableRow>
+);
 
 const Status = ({ status }) => {
   const statusStyles = {
@@ -138,14 +160,14 @@ const PaymentList = () => {
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(
-  `http://localhost:8000/Sims/fees/${paymentId}/`,
-  {
-    method: "DELETE",
-    headers: {
-      Authorization: `Token ${token}`,
-    },
-  }
-);
+        `http://localhost:8000/Sims/fees/${paymentId}/`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Token ${token}`,
+          },
+        }
+      );
 
       if (!response.ok) {
         throw new Error("Failed to delete payment");
@@ -183,8 +205,8 @@ const PaymentList = () => {
 
 
       const user = userData.find(
-  (u) => String(u.emp_id).trim() === String(addPaymentData.employee_id).trim()
-);
+        (u) => String(u.emp_id).trim() === String(addPaymentData.employee_id).trim()
+      );
 
       if (!user) {
         throw new Error("Selected employee not found");
@@ -211,26 +233,26 @@ const PaymentList = () => {
       });
 
       if (!response.ok) {
-         let errorMessage = "Failed to add payment";
-         try {
-            const errorText = await response.text();  // Always works
-            console.error("🔍 Raw backend error response:", errorText);
+        let errorMessage = "Failed to add payment";
+        try {
+          const errorText = await response.text();  // Always works
+          console.error("🔍 Raw backend error response:", errorText);
 
-             try {
-               const json = JSON.parse(errorText);
-              errorMessage = json.error || json.message || errorMessage;
-            } catch {
-             // leave errorMessage as-is
-            }
+          try {
+            const json = JSON.parse(errorText);
+            errorMessage = json.error || json.message || errorMessage;
+          } catch {
+            // leave errorMessage as-is
+          }
 
-            throw new Error(errorMessage);
-          } catch (err) {
-            console.error("Error:", err);
-            setError(err.message);
-            setSnackBarOpen(true);
-            return;
-  }
-}
+          throw new Error(errorMessage);
+        } catch (err) {
+          console.error("Error:", err);
+          setError(err.message);
+          setSnackBarOpen(true);
+          return;
+        }
+      }
 
       const data = await response.json();
       console.log("Payment added successfully:", data);
@@ -278,85 +300,68 @@ const PaymentList = () => {
     }
   };
   const fetchPayments = async () => {
-      try {
-        const token = localStorage.getItem("token");
+    try {
+      const token = localStorage.getItem("token");
 
-        // Fetch user data
-        const userDataResponse = await fetch(
-          "http://localhost:8000/Sims/user-data/",
-          {
-            headers: { Authorization: `Token ${token}` },
-          }
-        );
+      // Fetch data in parallel
+      const [userDataResponse, paymentResponse] = await Promise.all([
+        fetch("http://localhost:8000/Sims/user-data/", {
+          headers: { Authorization: `Token ${token}` },
+        }),
+        fetch("http://localhost:8000/Sims/fees/", {
+          headers: { Authorization: `Token ${token}` },
+        })
+      ]);
 
-        if (!userDataResponse.ok) throw new Error("Failed to fetch user data");
-        const userData = await userDataResponse.json();
-        setUserData(userData);
+      if (!userDataResponse.ok) throw new Error("Failed to fetch user data");
+      if (!paymentResponse.ok) throw new Error("Failed to fetch payment data");
 
-        // Fetch payment data
-        const paymentResponse = await fetch(
-          "http://localhost:8000/Sims/fees/",
-          {
-            headers: { Authorization: `Token ${token}` },
-          }
-        );
+      const [userData, paymentData] = await Promise.all([
+        userDataResponse.json(),
+        paymentResponse.json()
+      ]);
 
-        if (!paymentResponse.ok) throw new Error("Failed to fetch payment data");
-        const paymentData = await paymentResponse.json();
+      setUserData(userData);
 
-        // Map and combine data from userData and paymentData
-       const transformedPayments = paymentData.map((payment) => {
-  const user = userData.find((u) => u.emp_id === payment.employee_id);
-  const totalPaid = parseFloat(payment.summary?.total_paid || 0);
-  const totalAmount = parseFloat(payment.summary?.total_fee_amount || 0);
-  const balance = totalAmount - totalPaid;
-  const currentDate = new Date();
-  const endDate = new Date(user?.end_date || "");
+      const transformedPayments = paymentData.map((payment) => {
+        const user = userData.find((u) => u.emp_id === payment.employee_id);
+        const totalPaid = parseFloat(payment.summary?.total_paid || 0);
+        const totalAmount = parseFloat(payment.summary?.total_fee_amount || 0);
+        const balance = totalAmount - totalPaid;
+        const currentDate = new Date();
+        const endDate = new Date(user?.end_date || "");
 
-  let status;
-  if (totalAmount === 0) status = "FREE";
-  else if (totalPaid >= totalAmount) status = "COMPLETED";
-  else if (currentDate > endDate && balance > 0) status = "INCOMPLETE";
-  else status = "PENDING";
+        let status;
+        if (totalAmount === 0) status = "FREE";
+        else if (totalPaid >= totalAmount) status = "COMPLETED";
+        else if (currentDate > endDate && balance > 0) status = "INCOMPLETE";
+        else status = "PENDING";
 
-  // ✅ Use summary directly — no details array
-  if (!payment.summary) {
-    console.warn("⚠️ No summary for:", payment.employee_id);
-  }
+        return {
+          id: Number(payment.id),
+          internId: payment.employee_id,
+          name: payment.employee_name || "Unknown",
+          start_date: user?.start_date || "N/A",
+          end_date: user?.end_date || "N/A",
+          totalAmount,
+          paid: totalPaid,
+          balance,
+          status,
+          logs: payment.summary?.logs || [],
+        };
+      });
 
-  return {
-    id: Number(payment.id), // or use a unique ID
-    internId: payment.employee_id,
-    name: payment.employee_name || "Unknown",
-    start_date: user?.start_date || "N/A",
-    end_date: user?.end_date || "N/A",
-    totalAmount,
-    paid: totalPaid,
-    balance,
-    status,
-    logs: payment.summary?.logs || [], // <-- only if you have logs
+      setPayments(transformedPayments);
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      setError(error.message);
+      setSnackBarOpen(true);
+    } finally {
+      setLoading(false);
+    }
   };
-});
-
-transformedPayments.forEach(p => {
-  if (!p.id) console.warn("🚨 Missing ID for payment:", p);
-});
-
-console.log("✅ Raw backend data:", paymentData);              // Add this
-console.log("✅ Transformed Payments:", transformedPayments);
-console.log("✅ Transformed payment IDs:", transformedPayments.map(p => p.id));
-
-        setPayments(transformedPayments);
-      } catch (error) {
-        console.error("Error fetching details:", error.message);
-        setError(error.message);
-      } finally {
-        setLoading(false);
-      }
-    };
 
   useEffect(() => {
-    
     fetchPayments();
   }, []);
 
@@ -494,7 +499,6 @@ console.log("✅ Transformed payment IDs:", transformedPayments.map(p => p.id));
   };
 
   const handleOpenAddDialog = () => {
-    
     setIsAddingFromTable(false);
     setAddPaymentData({
       employee_id: "",
@@ -512,12 +516,35 @@ console.log("✅ Transformed payment IDs:", transformedPayments.map(p => p.id));
 
   if (loading) {
     return (
-      <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
-        <CircularProgress />
+      <Box sx={{ padding: 4, bgcolor: "white", color: "black" }}>
+        <Box sx={{ display: "flex", alignItems: "center", marginBottom: 3 }}>
+          <Payment sx={{ marginRight: 1, fontSize: 40 }} />
+          <Typography variant="h4" gutterBottom>
+            Payment List
+          </Typography>
+        </Box>
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead sx={{ backgroundColor: "#f5f5f5" }}>
+              <TableRow>
+                {["Intern ID", "Name", "Start Date", "End Date", "Total Amount", "Paid", "Balance", "Status", "Actions"].map((header) => (
+                  <TableCell key={header} sx={{ fontWeight: "bold", color: "black" }}>
+                    {header}
+                  </TableCell>
+                ))}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {[...Array(5)].map((_, i) => (
+                <ShimmerRow key={i} />
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
       </Box>
     );
   }
-  
+
   if (error) {
     return (
       <Box sx={{ p: 4, color: "error.main" }}>
@@ -561,7 +588,7 @@ console.log("✅ Transformed payment IDs:", transformedPayments.map(p => p.id));
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
-                  <Search />
+                  <SearchIcon />
                 </InputAdornment>
               ),
             }}
@@ -619,7 +646,8 @@ console.log("✅ Transformed payment IDs:", transformedPayments.map(p => p.id));
             </TableRow>
           </TableHead>
           <TableBody>
-            {paginatedPayments.map((payment) => (
+            {paginatedPayments.length > 0 ? (
+              paginatedPayments.map((payment) => (
               <TableRow
                 key={payment.id}
                 hover
@@ -705,7 +733,22 @@ console.log("✅ Transformed payment IDs:", transformedPayments.map(p => p.id));
                   </Menu>
                 </TableCell>
               </TableRow>
-            ))}
+            )))
+            : (
+              <TableRow>
+                <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <FindInPage sx={{ fontSize: 60, color: '#e0e0e0', mb: 2 }} />
+                    <Typography variant="h6" color="textSecondary">
+                      No payment records found
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+                      {filter || statusFilter ? 'Try adjusting your search or filters' : 'Add a new payment to get started'}
+                    </Typography>
+                  </Box>
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </TableContainer>
