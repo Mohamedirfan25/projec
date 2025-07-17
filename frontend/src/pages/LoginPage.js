@@ -19,7 +19,7 @@ import axios from 'axios';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 
 const LoginPage = () => {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -31,7 +31,7 @@ const LoginPage = () => {
     setLoading(true);
     setError('');
 
-    if (!email || !password) {
+    if (!username || !password) {
       setError('Both fields are required');
       setLoading(false);
       return;
@@ -39,13 +39,14 @@ const LoginPage = () => {
 
     try {
       const response = await axios.post('http://localhost:8000/Sims/login/', {
-        username: email,
+        username,
         password,
       });
 
       if (response.data?.token) {
         localStorage.setItem('token', response.data.token);
         const token = localStorage.getItem('token');
+        console.log(token);
         try {
           const responseUser = await axios.get(
             'http://localhost:8000/Sims/temps/',
@@ -58,13 +59,13 @@ const LoginPage = () => {
           );
       
           const usersArray = Array.isArray(responseUser.data) ? responseUser.data : [];
-          const matchingUsers = usersArray.filter(user => user.username === email);
+          const matchingUsers = usersArray.filter(user => user.username === username);
       
           if (matchingUsers.length > 0) {
             const userRoles = matchingUsers.map(user => user.role.toLowerCase());
       
             // 👇 store access flags for dashboard visibility
-            const currentUserData = responseUserData.data.find(user => user.username === email);
+            const currentUserData = responseUserData.data.find(user => user.username === username);
             if (currentUserData) {
               localStorage.setItem("access_rights", JSON.stringify({
                 is_attendance_access: currentUserData.is_attendance_access,
@@ -100,7 +101,7 @@ const LoginPage = () => {
           );
 
           const usersArray = Array.isArray(responseUser.data) ? responseUser.data : [];
-          const matchingUsers = usersArray.filter(user => user.username === email);
+          const matchingUsers = usersArray.filter(user => user.username === username);
 
           if (matchingUsers.length > 0) {
             const userRoles = matchingUsers.map(user => user.role.toLowerCase());
@@ -162,8 +163,8 @@ const LoginPage = () => {
                     variant="outlined"
                     margin="normal"
                     required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
                     error={!!error}
                   />
                   <TextField

@@ -41,6 +41,18 @@ class StaffUserDataAccessPermission(BaseStaffAccessPermission):
 class StaffAssertAccessPermission(BaseStaffAccessPermission):
     access_field = 'is_assert_access'
 
-
 class StaffPayRollPermission(BaseStaffAccessPermission):
     access_field='is_payroll_access'
+
+class IsAdminOrStaff(BasePermission):
+    """
+    Allows access only to users with role 'admin' or 'staff'.
+    """
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        try:
+            temp = Temp.objects.get(user=request.user)
+            return temp.role.lower() in ['admin', 'staff']
+        except Temp.DoesNotExist:
+            return False

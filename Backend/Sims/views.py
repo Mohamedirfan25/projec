@@ -6,7 +6,7 @@ from .serializers import *
 from django.contrib.auth import authenticate, get_user_model
 from rest_framework.authtoken.models import Token
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from .permissions import IsAdmin
+from .permissions import IsAdmin, IsAdminOrStaff
 from rest_framework.authentication import TokenAuthentication
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
@@ -302,12 +302,8 @@ class TempView(APIView):
 
 
 
-
-
-
-
 class UserDataView(APIView):
-    permission_classes = [IsAuthenticated, IsAdmin]
+    permission_classes = [IsAuthenticated, IsAdminOrStaff]
     def check_user_role(self, username, role_type):
         if not User.objects.filter(username=username).exists():
             return False, Response({"error": f"Reporting {role_type} not found"}, status=status.HTTP_400_BAD_REQUEST)
