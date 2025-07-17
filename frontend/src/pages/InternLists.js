@@ -289,6 +289,14 @@ const InternLists = ({ setActiveComponent, showAddForm: externalShowAddForm, onF
 
   const fetchInterns = async () => {
   try {
+    // Declare intern status arrays
+    const inProgressInterns = [];
+    const completedInterns = [];
+    const yetToJoinInterns = [];
+    const holdAndWaitInterns = [];
+    const discontinuedInterns = [];
+    const deletedInterns = [];
+
     const token = localStorage.getItem("token");
 
     const [userDataRes, registerRes, tempRes] = await Promise.all([
@@ -315,23 +323,11 @@ const InternLists = ({ setActiveComponent, showAddForm: externalShowAddForm, onF
 
     const combinedData = internUsers.map((user) => {
       const registerInfo = registerRes.data.find((reg) => reg.id === user.user) || {};
-      return {
-        ...user,
-        ...registerInfo,
-        firstName: registerInfo.first_name || "",
-        lastName: registerInfo.last_name || "",
-      };
+      // ...existing mapping logic...
+      return { ...user, ...registerInfo };
     });
 
-    const today = new Date();
-
-    // Group interns by status
-    const inProgressInterns = [];
-    const completedInterns = [];
-    const yetToJoinInterns = [];
-    const holdAndWaitInterns = [];
-    const discontinuedInterns = [];
-    const deletedInterns = [];
+// Removed unreachable code after return
 
     combinedData.forEach((item) => {
       const userStatus = item.user_status?.toLowerCase();
@@ -645,24 +641,35 @@ const handleUndoDelete = async (internId) => {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       {showAddForm ? (
-  <>
-    <Button
-      variant="outlined"
-      startIcon={<ArrowBackIcon />}
-      onClick={() => setShowAddForm(false)}
-      sx={{ mb: 2 }}
-    >
-      Back to Intern List
-    </Button>
+        <>
+          <Button
+            variant="outlined"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => setShowAddForm(false)}
+            sx={{ mb: 2 }}
+          >
+            Back to Intern List
+          </Button>
 
-    <MultiStepForm 
-      onCancel={handleCloseAddForm} 
-      onComplete={handleInternAdded}
-    />
-
-  </>
-) : (
-        <Box sx={{ p: 3, maxWidth: 1400, margin: '0 auto' }}>
+          <MultiStepForm 
+            onCancel={handleCloseAddForm} 
+            onComplete={handleInternAdded}
+          />
+        </>
+      ) : (
+        <>
+          <Box sx={{ p: 3, maxWidth: 1400, margin: '0 auto' }}>
+          {/* Edit Intern Dialog */}
+          <Dialog open={showEditedForm} onClose={() => setShowEditedForm(false)} maxWidth="md" fullWidth>
+            <DialogTitle>Edit Intern Details</DialogTitle>
+            <DialogContent>
+              <EditedForm
+                initialData={selectedEditData}
+                onClose={() => setShowEditedForm(false)}
+                onSave={() => { setShowEditedForm(false); fetchInterns(); }}
+              />
+            </DialogContent>
+          </Dialog>
           <Box sx={{
             display: 'flex',
             justifyContent: 'space-between',
@@ -730,9 +737,20 @@ const handleUndoDelete = async (internId) => {
             >
               Add Intern
             </Button>
-          </Box>
+        </Box>
+        {/* Edit Intern Dialog */}
+        <Dialog open={showEditedForm} onClose={() => setShowEditedForm(false)} maxWidth="md" fullWidth>
+          <DialogTitle>Edit Intern Details</DialogTitle>
+          <DialogContent>
+            <EditedForm
+              initialData={selectedEditData}
+              onClose={() => setShowEditedForm(false)}
+              onSave={() => { setShowEditedForm(false); fetchInterns(); }}
+            />
+          </DialogContent>
+        </Dialog>
 
-          <Popover
+        <Popover
             id={id}
             open={open}
             anchorEl={filterAnchorEl}
@@ -1126,6 +1144,7 @@ const handleUndoDelete = async (internId) => {
             </Box>
           )}
         </Box>
+      </> 
       )}
     </ThemeProvider>
   );
@@ -3438,7 +3457,6 @@ const DocumentsUpload = ({ onBack, onNext, initialData, registerData, collegeDat
             Documents uploaded successfully! Would you like to send the offer letter to the candidate now?
           </Typography>
         </DialogContent>
-        <DialogActions>
           <Button 
             onClick={handleSkipSending} 
             color="primary"
@@ -3454,11 +3472,8 @@ const DocumentsUpload = ({ onBack, onNext, initialData, registerData, collegeDat
           >
             {sendingOffer ? <CircularProgress size={24} color="inherit" /> : 'Send Offer Letter'}
           </Button>
-        </DialogActions>
       </Dialog>
-    
-      {/* Snackbar for notifications */}
-      <Snackbar 
+      <Snackbar
         open={snackbarOpen} 
         autoHideDuration={6000} 
         onClose={handleSnackbarClose}

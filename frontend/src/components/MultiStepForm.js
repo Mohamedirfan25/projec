@@ -756,6 +756,7 @@ const RegisterPage = ({ onNext, initialData, isReturning }) => {
               color="secondary"
               size="large"
               startIcon={<CancelIcon />}
+              onClick={props.onClose}
             >
               Cancel
             </Button>

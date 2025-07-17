@@ -25,7 +25,7 @@ import {
   MoreHoriz as OtherIcon,
   CreditCard as AadharIcon,
   School as GraduateIcon,
-  Cancel as CancelIcon,
+  // ...existing code...
   Save as SaveIcon,
   ArrowForward as NextIcon,
   CloudUpload as UploadIcon,
@@ -164,7 +164,7 @@ const theme = createTheme({
   },
 });
 
-const PersonalDetailsForm = ({ onNext, initialData, isReturning }) => {
+const PersonalDetailsForm = ({ onNext, initialData, isReturning, onClose }) => {
   const [formData, setFormData] = useState({
     email: initialData?.email || "",
     first_name: initialData?.first_name || "",
@@ -667,8 +667,7 @@ const PersonalDetailsForm = ({ onNext, initialData, isReturning }) => {
               variant="outlined"
               color="secondary"
               size="large"
-              startIcon={<CancelIcon />}
-              onClick={() => window.history.back()}
+              onClick={onClose}
             >
               Cancel
             </Button>
@@ -1673,7 +1672,7 @@ const CompanyDetailsForm = ({ onBack, onNext, initialData }) => {
   );
 };
 
-const DocumentsUpload = ({ onBack, initialData }) => {
+const DocumentsUpload = ({ onBack, initialData, onClose }) => {
   const [files, setFiles] = useState({
     adhaarCard: initialData?.adhaarCard || null,
     bonafideCertificate: initialData?.bonafideCertificate || null,
@@ -1753,6 +1752,9 @@ const DocumentsUpload = ({ onBack, initialData }) => {
       // Simulate form submission
       await new Promise(resolve => setTimeout(resolve, 2000));
       showSnackbar('All information saved successfully!', 'success', 'submit');
+      if (typeof onClose === 'function') {
+        setTimeout(() => onClose(), 700); // Give user a moment to see the success message
+      }
     } catch (error) {
       console.error("Error:", error);
       showSnackbar('Submission failed. Please try again.', 'error', 'submit');
@@ -2074,7 +2076,7 @@ const DocumentsUpload = ({ onBack, initialData }) => {
   );
 };
 
-const MultiStepForm = ({ internData }) => {
+const MultiStepForm = ({ internData, onClose }) => {
   const [step, setStep] = useState(0);
   const [formData, setFormData] = useState({
     personalData: internData ? {
@@ -2146,13 +2148,13 @@ const MultiStepForm = ({ internData }) => {
   const getStepContent = (stepIndex) => {
     switch (stepIndex) {
       case 0:
-        return <PersonalDetailsForm onNext={handleNext} initialData={formData.personalData} isReturning={Object.keys(formData.personalData).length > 0} />;
+        return <PersonalDetailsForm onNext={handleNext} initialData={formData.personalData} isReturning={Object.keys(formData.personalData).length > 0} onClose={onClose} />;
       case 1:
         return <CollegeInfoForm onBack={handleBack} onNext={handleNext} initialData={formData.collegeData} />;
       case 2:
         return <CompanyDetailsForm onBack={handleBack} onNext={handleNext} initialData={formData.companyData} />;
       case 3:
-        return <DocumentsUpload onBack={handleBack} initialData={formData.documentsData} />;
+        return <DocumentsUpload onBack={handleBack} initialData={formData.documentsData} onClose={onClose} />;
       default:
         return null;
     }
@@ -2184,97 +2186,63 @@ const MultiStepForm = ({ internData }) => {
   );
 };
 
-const EditedForm = () => {
-  const location = useLocation();
+const EditedForm = ({ initialData, onClose, onSave }) => {
   const navigate = useNavigate();
-  const internData = location.state?.internData;
-  const [fullInternData, setFullInternData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const internData = initialData;
+  // Use initialData immediately for fast dialog open
+  const [fullInternData, setFullInternData] = useState(internData);
+  const [loading, setLoading] = useState(false);
 
+  // Optionally, fetch extra details only if a key field is missing
   useEffect(() => {
     if (!internData) {
-      navigate('/InternLists');
+      if (onClose) onClose();
       return;
     }
+    // Example: if you want to fetch more only if collegeName is missing
+    if (!internData.collegeName) {
+      setLoading(true);
+      const fetchFullInternData = async () => {
+        try {
+          const token = localStorage.getItem("token");
+          const [collegeRes] = await Promise.all([
+            fetch(`http://localhost:8000/Sims/college-details/`, {
+              headers: { Authorization: `Token ${token}` }
+            })
+          ]);
+          const collegeData = await collegeRes.json();
+          const collegeRecord = collegeData.find(data => data.emp_id === internData.id);
+          setFullInternData({ ...internData, collegeName: collegeRecord?.college_name || '' });
+        } catch (error) {
+          setFullInternData(internData);
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchFullInternData();
+    } else {
+      setFullInternData(internData);
+    }
+  }, [internData, onClose]);
 
-    const fetchFullInternData = async () => {
-      try {
-        const token = localStorage.getItem("token");
-        const [registerRes, userDataRes, personalDataRes, collegeRes] = await Promise.all([
-          fetch(`http://localhost:8000/Sims/register/`, {
-            headers: { Authorization: `Token ${token}` }
-          }),
-          fetch(`http://localhost:8000/Sims/user-data/`, {
-            headers: { Authorization: `Token ${token}` }
-          }),
-          fetch(`http://localhost:8000/Sims/personal-data/`, {
-            headers: { Authorization: `Token ${token}` }
-          }),
-          fetch(`http://localhost:8000/Sims/college-details/`, {
-            headers: { Authorization: `Token ${token}` }
-          })
-        ]);
-        
-        const registerData = await registerRes.json();
-        const userData = await userDataRes.json();
-        const personalData = await personalDataRes.json();
-        const collegeData = await collegeRes.json();
-        
-        const userRecord = registerData.find(user => user.username === internData.name);
-        const userDataRecord = userData.find(data => data.emp_id === internData.id);
-        const personalDataRecord = personalData.find(data => data.emp_id === internData.id);
-        const collegeRecord = collegeData.find(data => data.emp_id === internData.id);
-        
-        console.log('College Data:', collegeData);
-        console.log('College Record:', collegeRecord);
-        
-        const combinedData = {
-          ...internData,
-          ...userRecord,
-          ...userDataRecord,
-          mobile: personalDataRecord?.phone_no || '',
-          address1: personalDataRecord?.address1 || '',
-          address2: personalDataRecord?.address2 || '',
-          pincode: personalDataRecord?.pincode || '',
-          dob: personalDataRecord?.date_of_birth || '',
-          gender: personalDataRecord?.gender === 'M' ? 'male' : personalDataRecord?.gender === 'F' ? 'female' : '',
-          aadharNumber: personalDataRecord?.aadhar_number || '',
-          collegeName: collegeRecord?.college_name || '',
-          collegeAddress: collegeRecord?.college_address || '',
-          collegeEmail: collegeRecord?.college_email_id || '',
-          degreeType: collegeRecord?.degree_type || 'UG',
-          degree: collegeRecord?.degree || '',
-          collegeDepartment: collegeRecord?.college_department || '',
-          yearOfPassing: collegeRecord?.year_of_passing || '',
-          cgpa: collegeRecord?.cgpa || '',
-          facultyNumber: collegeRecord?.college_faculty_phonenumber || ''
-        };
-        
-        setFullInternData(combinedData);
-      } catch (error) {
-        console.error('Error fetching intern data:', error);
-        setFullInternData(internData);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchFullInternData();
-  }, [internData, navigate]);
-
-  if (!internData || loading) {
-    return <CircularProgress />;
+  if (!internData) {
+    return null;
   }
 
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Container maxWidth="lg" sx={{ py: 4 }}>
+        {loading && (
+          <LinearProgress />
+        )}
         <Box sx={{ mb: 3 }}>
           <Button
             variant="outlined"
             startIcon={<BackIcon />}
-            onClick={() => navigate('/InternLists')}
+            onClick={() => {
+              if (onClose) onClose();
+            }}
           >
             Back to Intern List
           </Button>
@@ -2282,7 +2250,7 @@ const EditedForm = () => {
         <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold', mb: 4 }}>
           Edit Intern: {internData.name}
         </Typography>
-        <MultiStepForm internData={fullInternData} />
+        <MultiStepForm internData={fullInternData} onClose={onClose} />
       </Container>
     </ThemeProvider>
   );
