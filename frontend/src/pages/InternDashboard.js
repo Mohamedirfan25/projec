@@ -273,10 +273,8 @@ const InternDashboard = () => {
   // Fetch all necessary data on component mount
   useEffect(() => {
     const token = localStorage.getItem("token");
-    if (!token) {
-      window.location.href = "/login";
-      return;
-    }
+    console.log(token);
+
 
     fetchUsers();
     fetchActiveInternCount();
@@ -400,7 +398,7 @@ const InternDashboard = () => {
       console.error("Error fetching domain data:", error);
       if (error.response && error.response.status === 401) {
         localStorage.removeItem("token");
-        window.location.href = "/login";
+        navigate('/LoginPage');
       }
     }
   };
