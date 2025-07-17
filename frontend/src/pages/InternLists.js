@@ -254,6 +254,7 @@ const generateCompletedCertificate = async (empId, firstName) => {
 };
 
 const InternLists = ({ setActiveComponent, showAddForm: externalShowAddForm, onFormComplete, onFormCancel }) => {
+  const [isLoading, setIsLoading] = useState(true);
 
   const navigate = useNavigate();
   // Set default tab to 'In Progress' (matches tab value, not 'InProgress')
@@ -288,7 +289,8 @@ const InternLists = ({ setActiveComponent, showAddForm: externalShowAddForm, onF
   const [actionSubMenuAnchorEl, setActionSubMenuAnchorEl] = useState(null);
 
   const fetchInterns = async () => {
-  try {
+    try {
+      setIsLoading(true);
     // Declare intern status arrays
     const inProgressInterns = [];
     const completedInterns = [];
@@ -398,6 +400,8 @@ const InternLists = ({ setActiveComponent, showAddForm: externalShowAddForm, onF
     setDeletedInterns(deletedInterns);
   } catch (error) {
     console.error("Failed to fetch interns:", error);
+  } finally {
+    setIsLoading(false);
   }
 };
 
@@ -934,152 +938,203 @@ const handleUndoDelete = async (internId) => {
               borderRadius: 3,
               boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
               border: '1px solid',
-              borderColor: 'divider'
+              borderColor: 'divider',
+              mt: 3,
+              minHeight: '400px',
+              position: 'relative',
+              overflow: 'hidden',
             }}
           >
-            <Table>
-              <TableHead sx={{ backgroundColor: 'background.default' }}>
-                <TableRow>
-                  {columns.map((column) => (
-                    <TableCell
-                      key={column}
-                      sx={{
-                        fontWeight: 600,
-                        color: 'text.secondary',
-                        py: 2,
-                        borderBottom: '1px solid',
-                        borderColor: 'divider'
-                      }}
-                    >
-                      {column}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {paginatedInterns.map((intern) => (
-                  <TableRow
-                    key={intern.id}
-                    hover
-                    sx={{
-                      '&:last-child td': { borderBottom: 0 },
-                      '&:hover': {
-                        backgroundColor: 'action.hover'
-                      }
-                    }}
-                  >
-                    <TableCell>{intern.id}</TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <Avatar
-                          sx={{
-                            width: 36,
-                            height: 36,
-                            mr: 2,
-                            bgcolor: 'primary.main',
-                            color: 'common.white'
-                          }}
-                        >
-                          {intern.name[0]}
-                        </Avatar>
-                        <Box>
-                          <Typography variant="body2" fontWeight={500}>
-                            {intern.name}
-                          </Typography>
-                        </Box>
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" color="text.secondary">
-                        {intern.email}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>{intern.department}</TableCell>
-                    <TableCell>{intern.scheme}</TableCell>
-                    <TableCell>{intern.domain}</TableCell>
-                    <TableCell>{intern.startDate}</TableCell>
-                    <TableCell>{intern.endDate}</TableCell>
-                    <TableCell>
-                      <Chip
-                        label={intern.status}
-                        sx={{
-                          fontWeight: 700,
-                          fontSize: '1em',
-                          px: 2,
-                          py: 0.5,
-                          borderRadius: 1,
-                          minWidth: 110,
-                          textAlign: 'center',
-                          bgcolor:
-                            intern.status === 'Completed' ? '#d0f5e8'
-                            : intern.status === 'Free' ? '#e3f2fd'
-                            : intern.status === 'Pending' ? '#fff9db'
-                            : intern.status === 'Incomplete' ? '#ffe3e0'
-                            : intern.status === 'In Progress' ? '#e3f2fd'
-                            : intern.status === 'Yet to Join' ? '#fff9db'
-                            : intern.status === 'Hold and Wait' ? '#ffe3e0'
-                            : intern.status === 'Discontinued' ? '#ffe3e0'
-                            : intern.status === 'Deleted' ? '#f5f5f5'
-                            : '#f5f5f5',
-                          color:
-                            intern.status === 'Completed' ? '#009688'
-                            : intern.status === 'Free' ? '#1976d2'
-                            : intern.status === 'Pending' ? '#ffa000'
-                            : intern.status === 'Incomplete' ? '#d32f2f'
-                            : intern.status === 'In Progress' ? '#1976d2'
-                            : intern.status === 'Yet to Join' ? '#ffa000'
-                            : intern.status === 'Hold and Wait' ? '#d32f2f'
-                            : intern.status === 'Discontinued' ? '#d32f2f'
-                            : intern.status === 'Deleted' ? '#616161'
-                            : '#757575',
-                        }}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <IconButton onClick={(e) => handleMenuOpen(e, intern.id)}>
-                        <MoreVertIcon />
-                      </IconButton>
-                      <Menu
-                        anchorEl={anchorEl}
-                        open={selectedInternId === intern.id}
-                        onClose={handleMenuClose}
-                      >
-                        <MenuItem onClick={() => { setSelectedEditData(intern); setShowEditedForm(true); handleMenuClose(); }}>
-                          <EditIcon fontSize="small" style={{ marginRight: 8 }} /> Edit
-                        </MenuItem>
-                        <MenuItem onClick={() => { handleDeleteIntern(intern.id); handleMenuClose(); }}>
-                          <DeleteIcon fontSize="small" style={{ marginRight: 8 }} /> Delete
-                        </MenuItem>
-                        <MenuItem
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActionSubMenuAnchorEl(e.currentTarget);
-                          }}
-                        >
-                          Actions
-                        </MenuItem>
-                      </Menu>
-                      <Menu
-                        anchorEl={actionSubMenuAnchorEl}
-                        open={Boolean(actionSubMenuAnchorEl) && selectedInternId === intern.id}
-                        onClose={() => setActionSubMenuAnchorEl(null)}
-                        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-                        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-                      >
-                        <MenuItem onClick={() => { handleSetStatus(intern.id, 'In Progress'); setActionSubMenuAnchorEl(null); handleMenuClose(); }}>In Progress</MenuItem>
-                        <MenuItem onClick={() => { handleSetStatus(intern.id, 'Completed'); setActionSubMenuAnchorEl(null); handleMenuClose(); }}>Completed</MenuItem>
-                        <MenuItem onClick={() => { handleSetStatus(intern.id, 'Yet to Join'); setActionSubMenuAnchorEl(null); handleMenuClose(); }}>Yet to Join</MenuItem>
-                        <MenuItem onClick={() => { handleSetStatus(intern.id, 'Hold and Wait'); setActionSubMenuAnchorEl(null); handleMenuClose(); }}>Hold and Wait</MenuItem>
-                        <MenuItem onClick={() => { handleSetStatus(intern.id, 'Discontinued'); setActionSubMenuAnchorEl(null); handleMenuClose(); }}>Discontinued</MenuItem>
-                      </Menu>
-                    </TableCell>
+            {isLoading ? (
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  background: 'linear-gradient(110deg, #f5f7fa 8%, #f0f2f5 18%, #f5f7fa 33%)',
+                  backgroundSize: '200% 100%',
+                  animation: 'shimmer 1.5s infinite linear',
+                  zIndex: 1,
+                  '& .MuiTableRow-root': {
+                    backgroundColor: 'transparent',
+                  }
+                }}
+              >
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      {columns.map((column) => (
+                        <TableCell key={column} sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                          {column}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {Array(5).fill(0).map((_, index) => (
+                      <TableRow key={`loading-${index}`}>
+                        {columns.map((_, colIndex) => (
+                          <TableCell key={colIndex} sx={{ py: 2 }}>
+                            <Box 
+                              sx={{ 
+                                height: '24px', 
+                                bgcolor: 'rgba(0, 0, 0, 0.04)',
+                                borderRadius: 1
+                              }} 
+                            />
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Box>
+            ) : (
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    {columns.map((column) => (
+                      <TableCell key={column} sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                        {column}
+                      </TableCell>
+                    ))}
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHead>
+                <TableBody>
+                  {!isLoading && filteredInterns.length > 0 ? (
+                    paginatedInterns.map((intern) => (
+                      <TableRow
+                        key={intern.id}
+                        hover
+                        sx={{
+                          '&:last-child td': { borderBottom: 0 },
+                          '&:hover': {
+                            backgroundColor: 'action.hover'
+                          }
+                        }}
+                      >
+                        <TableCell>{intern.id}</TableCell>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <Avatar
+                              sx={{
+                                width: 36,
+                                height: 36,
+                                mr: 2,
+                                bgcolor: 'primary.main',
+                                color: 'common.white'
+                              }}
+                            >
+                              {intern.name[0]}
+                            </Avatar>
+                            <Box>
+                              <Typography variant="body2" fontWeight={500}>
+                                {intern.name}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" color="text.secondary">
+                            {intern.email}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>{intern.department}</TableCell>
+                        <TableCell>{intern.scheme}</TableCell>
+                        <TableCell>{intern.domain}</TableCell>
+                        <TableCell>{intern.startDate}</TableCell>
+                        <TableCell>{intern.endDate}</TableCell>
+                        <TableCell>
+                          <Chip
+                            label={intern.status}
+                            sx={{
+                              fontWeight: 700,
+                              fontSize: '1em',
+                              px: 2,
+                              py: 0.5,
+                              borderRadius: 1,
+                              minWidth: 110,
+                              textAlign: 'center',
+                              bgcolor:
+                                intern.status === 'Completed' ? '#d0f5e8'
+                                : intern.status === 'Free' ? '#e3f2fd'
+                                : intern.status === 'Pending' ? '#fff9db'
+                                : intern.status === 'Incomplete' ? '#ffe3e0'
+                                : intern.status === 'In Progress' ? '#e3f2fd'
+                                : intern.status === 'Yet to Join' ? '#fff9db'
+                                : intern.status === 'Hold and Wait' ? '#ffe3e0'
+                                : intern.status === 'Discontinued' ? '#ffe3e0'
+                                : intern.status === 'Deleted' ? '#f5f5f5'
+                                : '#f5f5f5',
+                              color:
+                                intern.status === 'Completed' ? '#009688'
+                                : intern.status === 'Free' ? '#1976d2'
+                                : intern.status === 'Pending' ? '#ffa000'
+                                : intern.status === 'Incomplete' ? '#d32f2f'
+                                : intern.status === 'In Progress' ? '#1976d2'
+                                : intern.status === 'Yet to Join' ? '#ffa000'
+                                : intern.status === 'Hold and Wait' ? '#d32f2f'
+                                : intern.status === 'Discontinued' ? '#d32f2f'
+                                : intern.status === 'Deleted' ? '#616161'
+                                : '#757575',
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <IconButton onClick={(e) => handleMenuOpen(e, intern.id)}>
+                            <MoreVertIcon />
+                          </IconButton>
+                          <Menu
+                            anchorEl={anchorEl}
+                            open={selectedInternId === intern.id}
+                            onClose={handleMenuClose}
+                          >
+                            <MenuItem onClick={() => { setSelectedEditData(intern); setShowEditedForm(true); handleMenuClose(); }}>
+                              <EditIcon fontSize="small" style={{ marginRight: 8 }} /> Edit
+                            </MenuItem>
+                            <MenuItem onClick={() => { handleDeleteIntern(intern.id); handleMenuClose(); }}>
+                              <DeleteIcon fontSize="small" style={{ marginRight: 8 }} /> Delete
+                            </MenuItem>
+                            <MenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActionSubMenuAnchorEl(e.currentTarget);
+                              }}
+                            >
+                              Actions
+                            </MenuItem>
+                          </Menu>
+                          <Menu
+                            anchorEl={actionSubMenuAnchorEl}
+                            open={Boolean(actionSubMenuAnchorEl) && selectedInternId === intern.id}
+                            onClose={() => setActionSubMenuAnchorEl(null)}
+                            anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+                            transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                          >
+                            <MenuItem onClick={() => { handleSetStatus(intern.id, 'In Progress'); setActionSubMenuAnchorEl(null); handleMenuClose(); }}>In Progress</MenuItem>
+                            <MenuItem onClick={() => { handleSetStatus(intern.id, 'Completed'); setActionSubMenuAnchorEl(null); handleMenuClose(); }}>Completed</MenuItem>
+                            <MenuItem onClick={() => { handleSetStatus(intern.id, 'Yet to Join'); setActionSubMenuAnchorEl(null); handleMenuClose(); }}>Yet to Join</MenuItem>
+                            <MenuItem onClick={() => { handleSetStatus(intern.id, 'Hold and Wait'); setActionSubMenuAnchorEl(null); handleMenuClose(); }}>Hold and Wait</MenuItem>
+                            <MenuItem onClick={() => { handleSetStatus(intern.id, 'Discontinued'); setActionSubMenuAnchorEl(null); handleMenuClose(); }}>Discontinued</MenuItem>
+                          </Menu>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : !isLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={columns.length} align="center" sx={{ py: 4 }}>
+                        <Typography>No interns found</Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </TableBody>
+              </Table>
+            )}
           </TableContainer>
 
-          {filteredInterns.length === 0 ? (
+          {!isLoading && filteredInterns.length === 0 ? (
             <Box sx={{
               textAlign: 'center',
               p: 5,
@@ -1095,7 +1150,7 @@ const handleUndoDelete = async (internId) => {
                 Try adjusting your search or filter criteria
               </Typography>
             </Box>
-          ) : (
+          ) : !isLoading && (
             <Box sx={{
               display: 'flex',
               justifyContent: 'space-between',

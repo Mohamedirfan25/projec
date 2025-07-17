@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     Box,
     Paper,
@@ -19,7 +19,9 @@ import {
     FormControl,
     Select,
     InputLabel,
-    Button
+    Button,
+    styled,
+    keyframes
 } from '@mui/material';
 import {
     Edit as EditIcon,
@@ -31,25 +33,29 @@ import StaffRegistrationForm from '../components/StaffRegistrationForm';
 import axios from 'axios';
 import StaffCreationForm from "../components/StaffCreationForm";
 
-const staffData = [
-    {
-        id: 'EMP001',
-        name: 'John Smith',
-        dept: 'Engineering',
-        role: 'Full Stack',
-        domain: 'Web Development',
-        status: 'Working'
-    },
-    // ... (keep all other staff data entries unchanged)
-];
+const shimmer = keyframes`
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+`;
 
-const roles = ['Payroll', 'Intern Management', 'Asset Management', 'Attendance Management'];
-const domains = ['Full Stack', 'Machine Learning', 'Data Analysis', 'DevOps', 'UI/UX'];
-const statuses = ['Working', 'Resigned'];
-const rowsPerPageOptions = [5, 10, 25, 50];
+const ShimmerRow = styled(TableRow)(({ theme }) => ({
+  '& td': {
+    padding: '12px 16px',
+  },
+}));
+
+const ShimmerCell = styled(Box)(({ theme }) => ({
+  height: '24px',
+  background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+  backgroundSize: '200% 100%',
+  animation: `${shimmer} 1.5s infinite linear`,
+  borderRadius: '4px',
+  margin: '4px 0',
+}));
 
 const StaffList = () => {
     const [staff, setStaff] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [filters, setFilters] = useState({
         role: '',
@@ -58,8 +64,41 @@ const StaffList = () => {
     });
     const [page, setPage] = useState(1);
     const [rowsPerPage, setRowsPerPage] = useState(5);
-    const [formMode, setFormMode] = useState(null); // 'add' or 'edit'
+    const [formMode, setFormMode] = useState(null);
     const [editStaffId, setEditStaffId] = useState(null);
+
+    const fetchStaffData = useCallback(async () => {
+        setIsLoading(true);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.get("http://localhost:8000/Sims/user-data/", {
+                headers: { Authorization: `Token ${token}` },
+                timeout: 10000
+            });
+
+            const userData = response.data;
+            const formattedData = userData
+                .filter(item => item.temp_details?.role !== 'intern')
+                .map(item => ({
+                    id: item.temp_details.emp_id,
+                    name: item.username,
+                    dept: item.department || 'N/A',
+                    role: item.temp_details.role || 'N/A',
+                    domain: item.domain_name || 'N/A',
+                    status: item.user_status === 'active' ? 'Working' : 'Resigned'
+                }));
+
+            setStaff(formattedData);
+        } catch (error) {
+            console.error("Error fetching staff data:", error);
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchStaffData();
+    }, [fetchStaffData]);
 
     const handleSearch = (e) => {
         setSearchTerm(e.target.value);
@@ -67,7 +106,7 @@ const StaffList = () => {
     };
 
     const handleFilterChange = (filterType, value) => {
-        setFilters({ ...filters, [filterType]: value });
+        setFilters(prev => ({ ...prev, [filterType]: value }));
         setPage(1);
     };
 
@@ -78,18 +117,12 @@ const StaffList = () => {
 
     const handleReset = () => {
         setSearchTerm('');
-        setFilters({
-            role: '',
-            domain: '',
-            status: '',
-        });
+        setFilters({ role: '', domain: '', status: '' });
         setPage(1);
     };
 
-    const handleAddStaff = () => {
-        setFormMode('add');
-    };
-
+    const handleAddStaff = () => setFormMode('add');
+    
     const handleEditStaff = (id) => {
         setEditStaffId(id);
         setFormMode('edit');
@@ -98,17 +131,18 @@ const StaffList = () => {
     const handleCloseForm = () => {
         setFormMode(null);
         setEditStaffId(null);
+        fetchStaffData();
     };
 
     const filteredStaff = staff.filter((employee) => {
         const matchesSearch =
-            employee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            employee.id.toLowerCase().includes(searchTerm.toLowerCase());
+            employee.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            employee.id?.toLowerCase().includes(searchTerm.toLowerCase());
 
         const matchesFilters =
-            (filters.role === '' || employee.role === filters.role) &&
-            (filters.domain === '' || employee.domain === filters.domain) &&
-            (filters.status === '' || employee.status === filters.status);
+            (!filters.role || employee.role === filters.role) &&
+            (!filters.domain || employee.domain === filters.domain) &&
+            (!filters.status || employee.status === filters.status);
 
         return matchesSearch && matchesFilters;
     });
@@ -118,39 +152,7 @@ const StaffList = () => {
         page * rowsPerPage
     );
 
-    useEffect(() => {
-        const fetchStaffData = async () => {
-            try {
-                const token = localStorage.getItem('token');
-                const response = await axios.get("http://localhost:8000/Sims/user-data/", {
-                    headers: {
-                        Authorization: `Token ${token}`
-                    }
-                });
-
-                const userData = response.data;
-
-                const formattedData = userData
-                    .filter(item => item.temp_details?.role !== 'intern')  // Filter out interns
-                    .map(item => ({
-                        id: item.temp_details.emp_id,
-                        name: item.username,
-                        dept: item.department || 'N/A',
-                        role: item.temp_details.role || 'N/A',
-                        domain: item.domain_name || 'N/A',
-                        status: item.user_status === 'active' ? 'Working' : 'Resigned'
-                    }));
-
-                setStaff(formattedData);
-            } catch (error) {
-                console.error("Error fetching staff data:", error);
-            }
-        };
-
-        fetchStaffData();
-    }, []);
-
-    const totalPages = Math.ceil(filteredStaff.length / rowsPerPage);
+    const totalPages = Math.ceil(filteredStaff.length / rowsPerPage) || 1;
 
     if (formMode) {
         return (
@@ -170,14 +172,13 @@ const StaffList = () => {
                     />
                 ) : (
                     <StaffCreationForm 
-                    switchToRegister={() => setFormMode('add')}
-                    formData={{
-                      staffId: editStaffId,
-                      workUndertaken: [], // Add default empty array
-                      // Add other necessary default values
-                      ...staff.find(e => e.id === editStaffId) // Spread existing staff data
-                    }}
-                  />
+                        switchToRegister={() => setFormMode('add')}
+                        formData={{
+                            staffId: editStaffId,
+                            workUndertaken: [],
+                            ...staff.find(e => e.id === editStaffId)
+                        }}
+                    />
                 )}
             </Box>
         );
@@ -186,7 +187,7 @@ const StaffList = () => {
     return (
         <Box sx={{ p: 3 }}>
             <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-                <Typography variant="h4" component="h1" sx={{ fontWeight: 600, color: 'text.primary' }}>
+                <Typography variant="h4" component="h1" sx={{ fontWeight: 600 }}>
                     Staff Management
                 </Typography>
                 <Button 
@@ -223,9 +224,7 @@ const StaffList = () => {
                                         <SearchIcon color="action" />
                                     </InputAdornment>
                                 ),
-                                sx: { color: 'text.primary' }
                             }}
-                            InputLabelProps={{ sx: { color: 'text.primary' } }}
                         />
                         <Button variant="outlined" onClick={handleReset}>
                             Reset
@@ -234,16 +233,15 @@ const StaffList = () => {
 
                     <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
                         <FormControl variant="outlined" size="small" sx={{ minWidth: 180 }}>
-                            <InputLabel sx={{ color: 'text.primary' }}>Role</InputLabel>
+                            <InputLabel>Role</InputLabel>
                             <Select
                                 value={filters.role}
                                 onChange={(e) => handleFilterChange('role', e.target.value)}
                                 label="Role"
-                                sx={{ color: 'text.primary' }}
                             >
-                                <MenuItem value="" sx={{ color: 'text.primary' }}>All Roles</MenuItem>
-                                {roles.map((role) => (
-                                    <MenuItem key={role} value={role} sx={{ color: 'text.primary' }}>
+                                <MenuItem value="">All Roles</MenuItem>
+                                {Array.from(new Set(staff.map(s => s.role))).map((role) => (
+                                    <MenuItem key={role} value={role}>
                                         {role}
                                     </MenuItem>
                                 ))}
@@ -251,16 +249,15 @@ const StaffList = () => {
                         </FormControl>
 
                         <FormControl variant="outlined" size="small" sx={{ minWidth: 180 }}>
-                            <InputLabel sx={{ color: 'text.primary' }}>Domain</InputLabel>
+                            <InputLabel>Domain</InputLabel>
                             <Select
                                 value={filters.domain}
                                 onChange={(e) => handleFilterChange('domain', e.target.value)}
                                 label="Domain"
-                                sx={{ color: 'text.primary' }}
                             >
-                                <MenuItem value="" sx={{ color: 'text.primary' }}>All Domains</MenuItem>
-                                {domains.map((domain) => (
-                                    <MenuItem key={domain} value={domain} sx={{ color: 'text.primary' }}>
+                                <MenuItem value="">All Domains</MenuItem>
+                                {Array.from(new Set(staff.map(s => s.domain))).map((domain) => (
+                                    <MenuItem key={domain} value={domain}>
                                         {domain}
                                     </MenuItem>
                                 ))}
@@ -268,46 +265,78 @@ const StaffList = () => {
                         </FormControl>
 
                         <FormControl variant="outlined" size="small" sx={{ minWidth: 120 }}>
-                            <InputLabel sx={{ color: 'text.primary' }}>Status</InputLabel>
+                            <InputLabel>Status</InputLabel>
                             <Select
                                 value={filters.status}
                                 onChange={(e) => handleFilterChange('status', e.target.value)}
                                 label="Status"
-                                sx={{ color: 'text.primary' }}
                             >
-                                <MenuItem value="" sx={{ color: 'text.primary' }}>All Statuses</MenuItem>
-                                {statuses.map((status) => (
-                                    <MenuItem key={status} value={status} sx={{ color: 'text.primary' }}>
-                                        {status}
-                                    </MenuItem>
-                                ))}
+                                <MenuItem value="">All Statuses</MenuItem>
+                                <MenuItem value="Working">Working</MenuItem>
+                                <MenuItem value="Resigned">Resigned</MenuItem>
                             </Select>
                         </FormControl>
                     </Stack>
                 </Stack>
 
-                <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 4 }}>
-                    <Table sx={{ minWidth: 650 }} aria-label="staff table">
+                <TableContainer 
+                    component={Paper} 
+                    elevation={0} 
+                    sx={{ 
+                        borderRadius: 4,
+                        minHeight: 400,
+                        position: 'relative',
+                        overflow: 'hidden',
+                        '&:after': {
+                            content: '""',
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            background: 'linear-gradient(110deg, #f5f7fa 8%, #f0f2f5 18%, #f5f7fa 33%)',
+                            backgroundSize: '200% 100%',
+                            animation: isLoading ? `${shimmer} 1.5s infinite linear` : 'none',
+                            opacity: isLoading ? 0.6 : 0,
+                            transition: 'opacity 0.3s ease',
+                            pointerEvents: 'none',
+                            zIndex: 1,
+                        },
+                    }}
+                >
+                    <Table sx={{ minWidth: 650, position: 'relative', zIndex: 2 }}>
                         <TableHead sx={{ bgcolor: 'grey.100' }}>
                             <TableRow>
-                                <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Emp ID</TableCell>
-                                <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Emp Name</TableCell>
-                                <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Department</TableCell>
-                                <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Role</TableCell>
-                                <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Domain</TableCell>
-                                <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Status</TableCell>
-                                <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Action</TableCell>
+                                <TableCell sx={{ fontWeight: 600 }}>Emp ID</TableCell>
+                                <TableCell sx={{ fontWeight: 600 }}>Emp Name</TableCell>
+                                <TableCell sx={{ fontWeight: 600 }}>Department</TableCell>
+                                <TableCell sx={{ fontWeight: 600 }}>Role</TableCell>
+                                <TableCell sx={{ fontWeight: 600 }}>Domain</TableCell>
+                                <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
+                                <TableCell sx={{ fontWeight: 600 }}>Action</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {paginatedStaff.length > 0 ? (
+                            {isLoading ? (
+                                Array(5).fill(0).map((_, index) => (
+                                    <ShimmerRow key={`shimmer-${index}`}>
+                                        <TableCell><ShimmerCell width="60%" /></TableCell>
+                                        <TableCell><ShimmerCell width="70%" /></TableCell>
+                                        <TableCell><ShimmerCell width="50%" /></TableCell>
+                                        <TableCell><ShimmerCell width="40%" /></TableCell>
+                                        <TableCell><ShimmerCell width="50%" /></TableCell>
+                                        <TableCell><ShimmerCell width="40%" /></TableCell>
+                                        <TableCell><ShimmerCell width="30%" /></TableCell>
+                                    </ShimmerRow>
+                                ))
+                            ) : filteredStaff.length > 0 ? (
                                 paginatedStaff.map((employee) => (
                                     <TableRow key={employee.id} hover>
-                                        <TableCell sx={{ color: 'text.primary' }}>{employee.id}</TableCell>
-                                        <TableCell sx={{ color: 'text.primary' }}>{employee.name}</TableCell>
-                                        <TableCell sx={{ color: 'text.primary' }}>{employee.dept}</TableCell>
-                                        <TableCell sx={{ color: 'text.primary' }}>{employee.role}</TableCell>
-                                        <TableCell sx={{ color: 'text.primary' }}>{employee.domain}</TableCell>
+                                        <TableCell>{employee.id}</TableCell>
+                                        <TableCell>{employee.name}</TableCell>
+                                        <TableCell>{employee.dept}</TableCell>
+                                        <TableCell>{employee.role}</TableCell>
+                                        <TableCell>{employee.domain}</TableCell>
                                         <TableCell>
                                             <Chip
                                                 label={employee.status}
@@ -331,13 +360,12 @@ const StaffList = () => {
                                             </IconButton>
                                         </TableCell>
                                     </TableRow>
-                                    
                                 ))
-                            ) : (
+                            ) : !isLoading && (
                                 <TableRow>
                                     <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
-                                        <Typography variant="body1" sx={{ color: 'text.primary' }}>
-                                            No employees found matching your criteria
+                                        <Typography color="text.secondary">
+                                            No staff members found
                                         </Typography>
                                     </TableCell>
                                 </TableRow>
@@ -346,18 +374,17 @@ const StaffList = () => {
                     </Table>
                 </TableContainer>
 
-                {filteredStaff.length > 0 && (
+                {!isLoading && filteredStaff.length > 0 && (
                     <Stack direction="row" justifyContent="space-between" alignItems="center" mt={3}>
                         <FormControl variant="standard" sx={{ minWidth: 120 }}>
-                            <InputLabel sx={{ color: 'text.primary' }}>Rows per page</InputLabel>
+                            <InputLabel>Rows per page</InputLabel>
                             <Select
                                 value={rowsPerPage}
                                 onChange={handleRowsPerPageChange}
                                 label="Rows per page"
-                                sx={{ color: 'text.primary' }}
                             >
-                                {rowsPerPageOptions.map((option) => (
-                                    <MenuItem key={option} value={option} sx={{ color: 'text.primary' }}>
+                                {[5, 10, 25, 50].map((option) => (
+                                    <MenuItem key={option} value={option}>
                                         {option}
                                     </MenuItem>
                                 ))}
@@ -372,7 +399,6 @@ const StaffList = () => {
                             color="primary"
                             showFirstButton
                             showLastButton
-                            sx={{ '& .MuiPaginationItem-root': { color: 'text.primary' } }}
                         />
                     </Stack>
                 )}

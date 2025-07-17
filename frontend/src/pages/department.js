@@ -218,8 +218,8 @@ const ColorOption = styled(Box)(({ color }) => ({
 
 const DepartmentManagement = () => {
   const theme = useTheme();
-  const [departments, setDepartments] = useState([]);
-  const [domains, setDomains] = useState([]);
+  const [departments, setDepartments] = useState(null); // null indicates initial loading
+  const [domains, setDomains] = useState(null);
   const [openDialog, setOpenDialog] = useState(false);
   const [openDomainDialog, setOpenDomainDialog] = useState(false);
   const [openStaffDialog, setOpenStaffDialog] = useState(false);
@@ -330,44 +330,17 @@ const DepartmentManagement = () => {
       };
 
       try {
-        // Fetch departments
-        const deptResponse = await axios.get(
-          "http://localhost:8000/Sims/departments/",
-          config
-        );
-        const departmentsData = deptResponse.data.map((dept, i) => ({
-          ...dept,
-          id: dept.id,
-          name: dept.department,
-          color: colorOptions[i % colorOptions.length].value,
-          icon: iconOptions[i % iconOptions.length],
-          staffCount: 0,
-          internCount: 0,
-        }));
-        setDepartments(departmentsData);
+        // Fetch all data in parallel
+        const [deptResponse, domainResponse, userResponse] = await Promise.all([
+          axios.get("http://localhost:8000/Sims/departments/", config),
+          axios.get("http://localhost:8000/Sims/domains/", config),
+          axios.get("http://localhost:8000/Sims/user-data/", config)
+        ]);
 
-        // Fetch domains
-        const domainResponse = await axios.get(
-          "http://localhost:8000/Sims/domains/",
-          config
-        );
-        const domainsData = domainResponse.data.map((domain, i) => ({
-          ...domain,
-          color: colorOptions[(i + 2) % colorOptions.length].value,
-          icon: domainIconOptions[i % domainIconOptions.length],
-          internCount: 0,
-        }));
-        setDomains(domainsData);
-
-        // Fetch user data for counts
-        const userResponse = await axios.get(
-          "http://localhost:8000/Sims/user-data/",
-          config
-        );
         const users = userResponse.data;
 
-        // Update department counts
-        const updatedDepartments = departmentsData.map((dept) => {
+        // Process departments with counts
+        const departmentsData = deptResponse.data.map((dept, i) => {
           const deptUsers = users.filter(
             (user) => user.department === dept.department
           );
@@ -380,14 +353,17 @@ const DepartmentManagement = () => {
 
           return {
             ...dept,
+            id: dept.id,
+            name: dept.department,
+            color: colorOptions[i % colorOptions.length].value,
+            icon: iconOptions[i % iconOptions.length],
             staffCount,
             internCount,
           };
         });
-        setDepartments(updatedDepartments);
 
-        // Update domain counts
-        const updatedDomains = domainsData.map((domain) => {
+        // Process domains with counts
+        const domainsData = domainResponse.data.map((domain, i) => {
           const domainInterns = users.filter(
             (user) =>
               user.domain === domain.domain &&
@@ -395,10 +371,15 @@ const DepartmentManagement = () => {
           );
           return {
             ...domain,
+            color: colorOptions[(i + 2) % colorOptions.length].value,
+            icon: domainIconOptions[i % domainIconOptions.length],
             internCount: domainInterns.length,
           };
         });
-        setDomains(updatedDomains);
+
+        // Update both states at once
+        setDepartments(departmentsData);
+        setDomains(domainsData);
       } catch (err) {
         console.error("Error fetching data:", err);
         setSnackbar({
@@ -804,296 +785,308 @@ const DepartmentManagement = () => {
     setSnackbar({ ...snackbar, open: false });
   };
 
-  // Render departments view
-  const renderDepartmentsView = () => (
-    <>
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          mb: 4,
-          flexWrap: "wrap",
-          gap: 2,
-        }}
-      >
-        <Box>
-          <Typography
-            variant="h4"
-            component="h1"
-            fontWeight="bold"
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: 2,
-              mb: 1,
-            }}
-          >
-            <BusinessIcon
-              sx={{ fontSize: 40, color: theme.palette.primary.main }}
-            />
-            Department Management
-          </Typography>
-          <Typography variant="subtitle1" color="text.secondary">
-            Manage your organization's departments, staff, and interns
-          </Typography>
+  // Show loading state while data is being fetched
+  if (departments === null || domains === null) {
+    return (
+      <Box sx={{ 
+        p: { xs: 2, sm: 3, md: 4 }, 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        minHeight: '60vh' 
+      }}>
+        <Box sx={{ textAlign: 'center' }}>
+          <CircularProgress size={60} thickness={4} />
+          <Typography variant="h6" sx={{ mt: 2 }}>Loading department data...</Typography>
         </Box>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={handleOpenAddDepartment}
-          sx={{ 
-            height: "fit-content",
-            borderRadius: "8px",
-            px: 3,
-            py: 1.5,
-            fontSize: "0.875rem",
+      </Box>
+    );
+  }
+
+  // Render departments view
+  const renderDepartmentsView = () => {
+    return (
+      <Box sx={{ p: { xs: 2, sm: 3, md: 4 } }}>
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: { xs: "column", md: "row" },
+            justifyContent: "space-between",
+            alignItems: { xs: "stretch", md: "center" },
+            mb: 4,
+            gap: 2,
           }}
         >
-          New Department
-        </Button>
-      </Box>
+          <Box>
+            <Typography variant="h4" fontWeight="bold" gutterBottom>
+              Department Management
+            </Typography>
+            <Typography variant="body1" color="text.secondary">
+              Manage departments, domains, and team members
+            </Typography>
+          </Box>
 
-      {loading && departments.length === 0 ? (
-        <Box sx={{ display: "flex", justifyContent: "center", my: 4 }}>
-          <CircularProgress size={60} thickness={4} />
+          <Box sx={{ display: "flex", gap: 2 }}>
+            <Button
+              variant={viewMode === "departments" ? "contained" : "outlined"}
+              onClick={() => setViewMode("departments")}
+              startIcon={<BusinessIcon />}
+              sx={{ textTransform: "none" }}
+            >
+              Departments
+            </Button>
+            <Button
+              variant={viewMode === "domains" ? "contained" : "outlined"}
+              onClick={() => setViewMode("domains")}
+              startIcon={<DomainIcon />}
+              sx={{ textTransform: "none" }}
+            >
+              Domains
+            </Button>
+          </Box>
         </Box>
-      ) : (
-        <Grid container spacing={3}>
-          {departments.map((dept) => (
-            <Grid item xs={12} sm={6} md={4} lg={3} key={dept.id}>
-              <DepartmentCard color={dept.color}>
-                <CardContent sx={{ position: "relative", flexGrow: 1 }}>
-                  <Box
-                    sx={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "flex-start",
-                      mb: 2,
-                    }}
-                  >
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-                      <Avatar
-                        sx={{
-                          bgcolor: `${dept.color}20`,
-                          color: dept.color,
-                          width: 48,
-                          height: 48,
-                          fontSize: 24,
-                        }}
-                      >
-                        {dept.icon}
-                      </Avatar>
-                      <Box>
-                        <Typography variant="h6" fontWeight="bold">
-                          {dept.department}
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          sx={{ mt: 0.5 }}
-                        >
-                          {dept.description || "No description"}
-                        </Typography>
-                      </Box>
-                    </Box>
+
+        {loading && departments.length === 0 ? (
+          <Box sx={{ display: "flex", justifyContent: "center", my: 4 }}>
+            <CircularProgress size={60} thickness={4} />
+          </Box>
+        ) : (
+          <Grid container spacing={3}>
+            {departments.map((dept) => (
+              <Grid item xs={12} sm={6} md={4} lg={3} key={dept.id}>
+                <DepartmentCard color={dept.color}>
+                  <CardContent sx={{ position: "relative", flexGrow: 1 }}>
                     <Box
-                      className="department-actions"
                       sx={{
-                        opacity: { xs: 1, sm: 0 },
-                        transition: "opacity 0.2s",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                        mb: 2,
                       }}
                     >
-                      <Tooltip title="More options">
-                        <IconButton size="small">
-                          <MoreVertIcon />
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                        <Avatar
+                          sx={{
+                            bgcolor: `${dept.color}20`,
+                            color: dept.color,
+                            width: 48,
+                            height: 48,
+                            fontSize: 24,
+                          }}
+                        >
+                          {dept.icon}
+                        </Avatar>
+                        <Box>
+                          <Typography variant="h6" fontWeight="bold">
+                            {dept.department}
+                          </Typography>
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ mt: 0.5 }}
+                          >
+                            {dept.description || "No description"}
+                          </Typography>
+                        </Box>
+                      </Box>
+                      <Box
+                        className="department-actions"
+                        sx={{
+                          opacity: { xs: 1, sm: 0 },
+                          transition: "opacity 0.2s",
+                        }}
+                      >
+                        <Tooltip title="More options">
+                          <IconButton size="small">
+                            <MoreVertIcon />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+                    </Box>
+
+                    <Box
+                      sx={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(2, 1fr)",
+                        gap: 1.5,
+                        mt: 3,
+                        mb: 3,
+                      }}
+                    >
+                      <CountBadge
+                        value={dept.staffCount}
+                        label="Staff Members"
+                        color={dept.color}
+                        icon={<PeopleIcon />}
+                      />
+                      <CountBadge
+                        value={dept.internCount}
+                        label="Interns"
+                        color={dept.color}
+                        icon={<SchoolIcon />}
+                      />
+                    </Box>
+
+                    <Box
+                      sx={{
+                        display: "flex",
+                        gap: 1,
+                        pt: 1,
+                        borderTop: `1px solid ${theme.palette.divider}`,
+                        mt: "auto",
+                        flexDirection: "column",
+                      }}
+                    >
+                      <Box sx={{ display: "flex", gap: 1 }}>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          fullWidth
+                          startIcon={<PeopleIcon />}
+                          onClick={() => handleOpenAddStaff(dept.id)}
+                          sx={{
+                            color: dept.color,
+                            borderColor: `${dept.color}50`,
+                            "&:hover": {
+                              borderColor: dept.color,
+                              backgroundColor: `${dept.color}10`,
+                            },
+                          }}
+                        >
+                          Add Staff
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          fullWidth
+                          startIcon={<SchoolIcon />}
+                          onClick={() => handleOpenAddIntern(dept.id)}
+                          sx={{
+                            color: dept.color,
+                            borderColor: `${dept.color}50`,
+                            "&:hover": {
+                              borderColor: dept.color,
+                              backgroundColor: `${dept.color}10`,
+                            },
+                          }}
+                        >
+                          Add Intern
+                        </Button>
+                      </Box>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        fullWidth
+                        startIcon={<DomainIcon />}
+                        onClick={() => handleViewDomains(dept)}
+                        sx={{
+                          backgroundColor: `${dept.color}`,
+                          "&:hover": {
+                            backgroundColor: `${dept.color}cc`,
+                          },
+                        }}
+                      >
+                        View Domains
+                      </Button>
+                    </Box>
+
+                    <Box
+                      sx={{
+                        position: "absolute",
+                        top: 16,
+                        right: 16,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 1,
+                      }}
+                    >
+                      <Tooltip title="Edit department">
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenEditDepartment(dept);
+                          }}
+                          sx={{
+                            backgroundColor: `${dept.color}20`,
+                            color: dept.color,
+                            "&:hover": {
+                              backgroundColor: `${dept.color}30`,
+                            },
+                          }}
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Delete department">
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteDepartment(dept.id);
+                          }}
+                          sx={{
+                            backgroundColor: `${theme.palette.error.light}20`,
+                            color: theme.palette.error.main,
+                            "&:hover": {
+                              backgroundColor: `${theme.palette.error.light}30`,
+                            },
+                          }}
+                        >
+                          <DeleteIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
                     </Box>
-                  </Box>
-
-                  <Box
-                    sx={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(2, 1fr)",
-                      gap: 1.5,
-                      mt: 3,
-                      mb: 3,
-                    }}
-                  >
-                    <CountBadge
-                      value={dept.staffCount}
-                      label="Staff Members"
-                      color={dept.color}
-                      icon={<PeopleIcon />}
-                    />
-                    <CountBadge
-                      value={dept.internCount}
-                      label="Interns"
-                      color={dept.color}
-                      icon={<SchoolIcon />}
-                    />
-                  </Box>
-
-                  <Box
-                    sx={{
-                      display: "flex",
-                      gap: 1,
-                      pt: 1,
-                      borderTop: `1px solid ${theme.palette.divider}`,
-                      mt: "auto",
-                      flexDirection: "column",
-                    }}
-                  >
-                    <Box sx={{ display: "flex", gap: 1 }}>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        fullWidth
-                        startIcon={<PeopleIcon />}
-                        onClick={() => handleOpenAddStaff(dept.id)}
-                        sx={{
-                          color: dept.color,
-                          borderColor: `${dept.color}50`,
-                          "&:hover": {
-                            borderColor: dept.color,
-                            backgroundColor: `${dept.color}10`,
-                          },
-                        }}
-                      >
-                        Add Staff
-                      </Button>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        fullWidth
-                        startIcon={<SchoolIcon />}
-                        onClick={() => handleOpenAddIntern(dept.id)}
-                        sx={{
-                          color: dept.color,
-                          borderColor: `${dept.color}50`,
-                          "&:hover": {
-                            borderColor: dept.color,
-                            backgroundColor: `${dept.color}10`,
-                          },
-                        }}
-                      >
-                        Add Intern
-                      </Button>
-                    </Box>
-                    <Button
-                      size="small"
-                      variant="contained"
-                      fullWidth
-                      startIcon={<DomainIcon />}
-                      onClick={() => handleViewDomains(dept)}
-                      sx={{
-                        backgroundColor: `${dept.color}`,
-                        "&:hover": {
-                          backgroundColor: `${dept.color}cc`,
-                        },
-                      }}
-                    >
-                      View Domains
-                    </Button>
-                  </Box>
-
-                  <Box
-                    sx={{
-                      position: "absolute",
-                      top: 16,
-                      right: 16,
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 1,
-                    }}
-                  >
-                    <Tooltip title="Edit department">
-                      <IconButton
-                        size="small"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleOpenEditDepartment(dept);
-                        }}
-                        sx={{
-                          backgroundColor: `${dept.color}20`,
-                          color: dept.color,
-                          "&:hover": {
-                            backgroundColor: `${dept.color}30`,
-                          },
-                        }}
-                      >
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Delete department">
-                      <IconButton
-                        size="small"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteDepartment(dept.id);
-                        }}
-                        sx={{
-                          backgroundColor: `${theme.palette.error.light}20`,
-                          color: theme.palette.error.main,
-                          "&:hover": {
-                            backgroundColor: `${theme.palette.error.light}30`,
-                          },
-                        }}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </Box>
-                </CardContent>
-              </DepartmentCard>
-            </Grid>
-          ))}
-          <Grid item xs={12} sm={6} md={4} lg={3}>
-            <AddDepartmentCard onClick={handleOpenAddDepartment}>
-              <Box
-                sx={{
-                  textAlign: "center",
-                  p: 2,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: 1,
-                }}
-              >
-                <AddIcon
-                  className="add-icon"
-                  color="action"
-                  fontSize="large"
+                  </CardContent>
+                </DepartmentCard>
+              </Grid>
+            ))}
+            <Grid item xs={12} sm={6} md={4} lg={3}>
+              <AddDepartmentCard onClick={handleOpenAddDepartment}>
+                <Box
                   sx={{
-                    transition: "all 0.3s ease",
-                    fontSize: 40,
+                    textAlign: "center",
+                    p: 2,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: 1,
                   }}
-                />
-                <Typography variant="subtitle1" fontWeight="medium">
-                  Create New Department
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Add a new team or division
-                </Typography>
-              </Box>
-            </AddDepartmentCard>
+                >
+                  <AddIcon
+                    className="add-icon"
+                    color="action"
+                    fontSize="large"
+                    sx={{
+                      transition: "all 0.3s ease",
+                      fontSize: 40,
+                    }}
+                  />
+                  <Typography variant="subtitle1" fontWeight="medium">
+                    Create New Department
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Add a new team or division
+                  </Typography>
+                </Box>
+              </AddDepartmentCard>
+            </Grid>
           </Grid>
-        </Grid>
-      )}
-    </>
-  );
+        )}
+      </Box>
+    );
+  };
 
   // Render domains view
   const renderDomainsView = () => (
-    <>
+    <Box sx={{ p: { xs: 2, sm: 3, md: 4 } }}>
       <Box
         sx={{
           display: "flex",
+          flexDirection: { xs: "column", sm: "row" },
           justifyContent: "space-between",
-          alignItems: "center",
+          alignItems: { xs: "flex-start", sm: "center" },
           mb: 4,
-          flexWrap: "wrap",
           gap: 2,
         }}
       >
@@ -1101,27 +1094,18 @@ const DepartmentManagement = () => {
           <Button
             startIcon={<ArrowBackIcon />}
             onClick={handleBackToDepartments}
-            sx={{ mr: 2 }}
+            sx={{ mb: 2 }}
           >
             Back to Departments
           </Button>
-          <Typography
-            variant="h4"
-            component="h1"
-            fontWeight="bold"
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: 2,
-              mb: 1,
-              mt: 2,
-            }}
-          >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
             <DomainIcon sx={{ fontSize: 40, color: theme.palette.primary.main }} />
-            {filteredDepartment
-              ? `${filteredDepartment.department} Domains`
-              : "All Domains"}
-          </Typography>
+            <Typography variant="h4" component="h1" fontWeight="bold">
+              {filteredDepartment
+                ? `${filteredDepartment.department} Domains`
+                : "All Domains"}
+            </Typography>
+          </Box>
           <Typography variant="subtitle1" color="text.secondary">
             Manage domains and associated interns
           </Typography>
@@ -1136,6 +1120,7 @@ const DepartmentManagement = () => {
             px: 3,
             py: 1.5,
             fontSize: "0.875rem",
+            mt: { xs: 2, sm: 0 },
           }}
         >
           New Domain
@@ -1154,7 +1139,6 @@ const DepartmentManagement = () => {
                 ? domain.department === filteredDepartment.department
                 : true
             )
-            
             .map((domain) => (
               <Grid item xs={12} sm={6} md={4} lg={3} key={domain.id}>
                 <DomainCard color={domain.color}>
@@ -1167,9 +1151,7 @@ const DepartmentManagement = () => {
                         mb: 2,
                       }}
                     >
-                      <Box
-                        sx={{ display: "flex", alignItems: "center", gap: 1.5 }}
-                      >
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
                         <Avatar
                           sx={{
                             bgcolor: `${domain.color}20`,
@@ -1315,6 +1297,8 @@ const DepartmentManagement = () => {
                   flexDirection: "column",
                   alignItems: "center",
                   gap: 1,
+                  height: "100%",
+                  justifyContent: "center",
                 }}
               >
                 <AddIcon
@@ -1337,9 +1321,10 @@ const DepartmentManagement = () => {
           </Grid>
         </Grid>
       )}
-    </>
+    </Box>
   );
 
+  // Main component return
   return (
     <Box sx={{ p: { xs: 2, sm: 3, md: 4 } }}>
       {viewMode === "departments" ? renderDepartmentsView() : renderDomainsView()}
