@@ -102,8 +102,12 @@ class UserData(models.Model):
     is_deleted = models.BooleanField(default=False)
     USER_STATUS_CHOICES = [
         ('active', 'Active'),
+        ('inprogress', 'In Progress'),
         ('completed', 'Completed'),
+        ('yettojoin', 'Yet to Join'),
+        ('holdandwait', 'Hold and Wait'),
         ('discontinued', 'Discontinued'),
+        ('deleted', 'Deleted'),
     ]
     SCHEME_CHOICES = [
         ('FREE', 'Free'),

@@ -3159,36 +3159,45 @@ const DocumentsUpload = ({ onBack, onNext, initialData, registerData, collegeDat
   
   
   return (
-    <Paper elevation={3} sx={{ p: 4, borderRadius: 4 }}>
-      <Box sx={{ 
+    <Paper elevation={3} sx={{ p: { xs: 2, md: 3 }, borderRadius: 4, width: '100%', overflowX: 'hidden', boxSizing: 'border-box' }}>
+      <Box sx={{
         display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        mb: 4
+        flexDirection: { xs: 'column', md: 'row' },
+        alignItems: { xs: 'flex-start', md: 'center' },
+        justifyContent: 'space-between',
+        mb: 2,
+        gap: 2,
+        width: '100%',
+        boxSizing: 'border-box',
+        overflowX: 'auto',
+        maxWidth: '100vw',
       }}>
-        <Avatar sx={{ 
-          bgcolor: 'primary.main', 
-          width: 56, 
-          height: 56,
-          mb: 2
-        }}>
-          <Description fontSize="large" />
-        </Avatar>
-        <Typography 
-          variant="h4" 
-          align="center" 
-          gutterBottom
-          sx={{ 
-            fontWeight: 'bold',
-            color: 'text.primary'
-          }}
-        >
-          Documents Upload
-        </Typography>
-        <Typography variant="body1" color="text.secondary" align="center">
-          Please upload the required documents below
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, minWidth: 0 }}>
+          <Avatar sx={{ bgcolor: 'primary.main', width: 40, height: 40 }}>
+            <Description fontSize="large" />
+          </Avatar>
+          <Typography
+            variant="h6"
+            sx={{ fontWeight: 'bold', color: 'text.primary', mb: 0, whiteSpace: 'nowrap', minWidth: 0 }}
+          >
+            Intern Management
+          </Typography>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', minWidth: 0, width: { xs: '100%', md: 'auto' }, maxWidth: { xs: '100%', md: 500 } }}>
+          <TextField
+            variant="outlined"
+            size="small"
+            placeholder="Search by name, ID, department..."
+            sx={{ minWidth: 180, maxWidth: 300, flexGrow: 1, width: '100%' }}
+          />
+          <IconButton color="primary" sx={{ ml: 1 }}>
+            <FilterListIcon />
+          </IconButton>
+        </Box>
       </Box>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2, ml: 1 }}>
+        Please upload the required documents below
+      </Typography>
     
       <Grid container spacing={3}>
         <Grid item xs={12} md={6}>
