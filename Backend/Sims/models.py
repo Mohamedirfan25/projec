@@ -547,7 +547,36 @@ class Document(models.Model):
     description = models.TextField()
     uploader = models.ForeignKey(Temp, on_delete=models.CASCADE, related_name='uploaded_documents')  # Required field
     receiver = models.ForeignKey(Temp, on_delete=models.SET_NULL, null=True, blank=True, related_name='received_documents')
-    file = models.FileField(upload_to='documents/%Y/%m/%d/',null=True)
+    # Place this function outside of any class, at the top level of the file
+
+def document_upload_path(instance, filename):
+    emp_id = instance.uploader.emp_id if instance.uploader else 'unknown'
+    return f'documents/expecting/{emp_id}/{filename}'
+
+class Document(models.Model):
+    STATUS_CHOICES = [
+        ('DRAFT', 'Draft'),
+        ('SUBMITTED', 'Submitted'),
+        ('APPROVED', 'Approved'),
+        ('REJECTED', 'Rejected'),
+    ]
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='DRAFT')
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    is_deleted = models.BooleanField(default=False)
+    declaration_number = models.CharField(max_length=50, unique=True, editable=False)
+    title = models.CharField(max_length=255,null=True)
+    description = models.TextField()
+    uploader = models.ForeignKey('Temp', on_delete=models.CASCADE, related_name='uploaded_documents')
+    receiver = models.ForeignKey('Temp', on_delete=models.SET_NULL, null=True, blank=True, related_name='received_documents')
+    file = models.FileField(upload_to=document_upload_path, null=True)
+    created_at = models.DateTimeField(auto_now_add=True,null=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        if not self.declaration_number:
+            self.declaration_number = f"DOC-{uuid.uuid4().hex[:8].upper()}"
+        super().save(*args, **kwargs)
+
     created_at = models.DateTimeField(auto_now_add=True,null=True)
     updated_at = models.DateTimeField(auto_now=True)
 

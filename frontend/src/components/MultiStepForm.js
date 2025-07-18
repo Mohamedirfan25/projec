@@ -1895,6 +1895,9 @@ const DocumentsUpload = ({ onBack, onNext, initialData, allFormData }) => {
       });
 
       const emp_id = registerResponse.data.emp_id;
+      // console.log("emp_id", emp_id);
+      // console.log("allFormData", allFormData);
+      
       
       // Step 2: Save personal data with photo
       const personalFormData = new FormData();

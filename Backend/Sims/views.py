@@ -4649,7 +4649,9 @@ class DocumentView(APIView):
 
         uploaded_docs = []
         for file in files:
-            doc_serializer = DocumentSerializer(data=request_data, context={'request': request})
+            request_data_with_file = request_data.copy()
+            request_data_with_file['file'] = file
+            doc_serializer = DocumentSerializer(data=request_data_with_file, context={'request': request})
             if not doc_serializer.is_valid():
                 return Response(doc_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
             document = doc_serializer.save()
@@ -4788,7 +4790,7 @@ def generate_offer_letter_api(request):
             return Response({"error": "Only staff/admin/hr can generate offer letters"}, status=status.HTTP_403_FORBIDDEN)
 
         # ✅ Required intern_emp_id
-        intern_emp_id = request.data.get("intern_emp_id")
+        intern_emp_id = request.data.get("emp_id")
         if not intern_emp_id:
             return Response({"error": "Intern emp_id is required"}, status=status.HTTP_400_BAD_REQUEST)
 
