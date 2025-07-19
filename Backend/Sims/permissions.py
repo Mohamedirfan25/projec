@@ -44,15 +44,16 @@ class StaffAssertAccessPermission(BaseStaffAccessPermission):
 class StaffPayRollPermission(BaseStaffAccessPermission):
     access_field='is_payroll_access'
 
-class IsAdminOrStaff(BasePermission):
+class IsStaff(BasePermission):
     """
     Allows access only to users with role 'admin' or 'staff'.
+    Use this for endpoints that both admin and staff should access (e.g., /intern, /attendance, /asset, /payroll for staff).
     """
     def has_permission(self, request, view):
         if not request.user.is_authenticated:
             return False
         try:
             temp = Temp.objects.get(user=request.user)
-            return temp.role.lower() in ['admin', 'staff']
+            return temp.role.lower() in ['staff', 'admin']
         except Temp.DoesNotExist:
             return False

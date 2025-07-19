@@ -6,7 +6,7 @@ from .serializers import *
 from django.contrib.auth import authenticate, get_user_model
 from rest_framework.authtoken.models import Token
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from .permissions import IsAdmin, IsAdminOrStaff
+from .permissions import IsAdmin, IsStaff
 from rest_framework.authentication import TokenAuthentication
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
@@ -303,7 +303,7 @@ class TempView(APIView):
 
 
 class UserDataView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminOrStaff]
+    permission_classes = [IsAuthenticated, IsStaff]
     def check_user_role(self, username, role_type):
         if not User.objects.filter(username=username).exists():
             return False, Response({"error": f"Reporting {role_type} not found"}, status=status.HTTP_400_BAD_REQUEST)
@@ -2828,6 +2828,16 @@ class RegisterView(APIView):
                         emp_id=temp_obj,
                         user=user,
                         department=department
+                    )
+                elif requested_role == "staff":
+                    # By default, grant all staff access fields
+                    UserData.objects.create(
+                        emp_id=temp_obj,
+                        user=user,
+                        is_internmanagement_access=True,
+                        is_attendance_access=True,
+                        is_assert_access=True,
+                        is_payroll_access=True
                     )
                 
                 # Generate auth token
