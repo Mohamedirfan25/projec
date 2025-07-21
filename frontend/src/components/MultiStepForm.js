@@ -1895,6 +1895,9 @@ const DocumentsUpload = ({ onBack, onNext, initialData, allFormData }) => {
       });
 
       const emp_id = registerResponse.data.emp_id;
+      // console.log("emp_id", emp_id);
+      // console.log("allFormData", allFormData);
+      
       
       // Step 2: Save personal data with photo
       const personalFormData = new FormData();
@@ -1939,6 +1942,7 @@ const DocumentsUpload = ({ onBack, onNext, initialData, allFormData }) => {
           }
         });
       }
+      
 
       // Step 4: Save company/user details
       if (allFormData.companyData && Object.keys(allFormData.companyData).length > 0) {
@@ -1983,6 +1987,7 @@ const DocumentsUpload = ({ onBack, onNext, initialData, allFormData }) => {
           }
         });
       }
+      console.log(documentsFormData.emp_id)
      
       showSnackbar('All data saved and submitted successfully!', 'success', 'submit');
      
