@@ -411,6 +411,16 @@ class LeaveApprovalSerializer(serializers.ModelSerializer):
 
 #-----------------------------------New Changes----------------------------------------------------#
 class DocumentSerializer(serializers.ModelSerializer):
+    def create(self, validated_data):
+        file = validated_data.pop('file', None)
+        validated_data.pop('declaration_number', None)
+        instance = Document(**validated_data)
+        instance.save()
+        if file:
+            instance.file = file
+            instance.save()
+        return instance
+
     uploader = serializers.SlugRelatedField(
         slug_field='emp_id',  # Use 'emp_id' to identify the Temp instance
         queryset=Temp.objects.all()

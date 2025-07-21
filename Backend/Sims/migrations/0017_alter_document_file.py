@@ -14,6 +14,6 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='document',
             name='file',
-            field=models.FileField(null=True, upload_to=Sims.models.document_upload_path),
+            field=models.FileField(null=True, upload_to='Sims.models.document_upload_path'),
         ),
     ]

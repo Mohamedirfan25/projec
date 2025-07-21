@@ -3117,6 +3117,35 @@ const DocumentsUpload = ({ onBack, onNext, initialData, registerData, collegeDat
       headers: { Authorization: `Token ${token}` }
     });
 
+    // STEP 5.5: Upload required documents
+    const documentKeys = ['adhaarCard', 'bonafideCertificate', 'collegeId', 'resume'];
+    for (const key of documentKeys) {
+      const file = files[key];
+      if (file) {
+        console.log('Uploading', documentNames[key], 'with emp_id:', emp_id); // DEBUG LOG
+        const docFormData = new FormData();
+        docFormData.append('files', file); // FIX: use 'files' as key
+        docFormData.append('title', documentNames[key]);
+        docFormData.append('uploader', emp_id); // Backend expects emp_id as uploader
+        docFormData.append('receiver', emp_id); // Add receiver for backend requirement
+        docFormData.append('description', `${documentNames[key]} for intern ${emp_id}`);
+        try {
+          await axios.post('http://localhost:8000/Sims/documents/', docFormData, {
+            headers: {
+              Authorization: `Token ${token}`,
+              'Content-Type': 'multipart/form-data',
+            },
+          });
+          showSnackbar(`${documentNames[key]} uploaded successfully!`, 'success', key);
+        } catch (uploadError) {
+          console.error(`${documentNames[key]} upload failed:`, uploadError, uploadError.response?.data);
+          showSnackbar(`${documentNames[key]} upload failed. Please try again.`, 'error', key);
+          setLoading(false);
+          return;
+        }
+      }
+    }
+
     // STEP 6: Create college details entry
     const collegePayload = {
       emp_id: emp_id,

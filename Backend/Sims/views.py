@@ -4651,6 +4651,8 @@ class DocumentView(APIView):
         for file in files:
             request_data_with_file = request_data.copy()
             request_data_with_file['file'] = file
+
+            # Duplicate restriction removed: allow multiple documents with same title, uploader, and receiver
             doc_serializer = DocumentSerializer(data=request_data_with_file, context={'request': request})
             if not doc_serializer.is_valid():
                 return Response(doc_serializer.errors, status=status.HTTP_400_BAD_REQUEST)

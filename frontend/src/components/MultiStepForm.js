@@ -1942,6 +1942,7 @@ const DocumentsUpload = ({ onBack, onNext, initialData, allFormData }) => {
           }
         });
       }
+      
 
       // Step 4: Save company/user details
       if (allFormData.companyData && Object.keys(allFormData.companyData).length > 0) {
@@ -1986,6 +1987,7 @@ const DocumentsUpload = ({ onBack, onNext, initialData, allFormData }) => {
           }
         });
       }
+      console.log(documentsFormData.emp_id)
      
       showSnackbar('All data saved and submitted successfully!', 'success', 'submit');
      

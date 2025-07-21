@@ -532,26 +532,45 @@ class LeaveRequest(models.Model):
 
 #-----------------------------------------------New Documents------------------------------------------------#
 
-class Document(models.Model):
-    STATUS_CHOICES = [
-        ('DRAFT', 'Draft'),
-        ('SUBMITTED', 'Submitted'),
-        ('APPROVED', 'Approved'),
-        ('REJECTED', 'Rejected'),
-    ]
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='DRAFT')
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    is_deleted = models.BooleanField(default=False)
-    declaration_number = models.CharField(max_length=50, unique=True, editable=False)
-    title = models.CharField(max_length=255,null=True)
-    description = models.TextField()
-    uploader = models.ForeignKey(Temp, on_delete=models.CASCADE, related_name='uploaded_documents')  # Required field
-    receiver = models.ForeignKey(Temp, on_delete=models.SET_NULL, null=True, blank=True, related_name='received_documents')
-    # Place this function outside of any class, at the top level of the file
-
 def document_upload_path(instance, filename):
-    emp_id = instance.uploader.emp_id if instance.uploader else 'unknown'
-    return f'documents/expecting/{emp_id}/{filename}'
+    import os
+    from Sims.models import UserData, Domain, Department
+
+    # Identify the intern (uploader or receiver)
+    temp_obj = instance.receiver if getattr(instance, 'receiver', None) else instance.uploader
+    # Defaults
+    department_folder = 'UnknownDepartment'
+    domain_folder = 'UnknownDomain'
+    folder_name = 'unknown_intern'
+    first_name = last_name = emp_id = ''
+
+    if temp_obj:
+        user = getattr(temp_obj, 'user', None)
+        first_name = getattr(user, 'first_name', '').strip().lower().replace(' ', '') if user else ''
+        last_name = getattr(user, 'last_name', '').strip().lower().replace(' ', '') if user else ''
+        emp_id = temp_obj.emp_id
+        parts = [name for name in [first_name, last_name, emp_id] if name]
+        folder_name = '_'.join(parts) if parts else emp_id or 'unknown_intern'
+
+        # Try to get department and domain from UserData
+        try:
+            user_data = UserData.objects.get(emp_id=temp_obj)
+            if user_data.department:
+                department_folder = str(user_data.department).strip()
+            if user_data.domain:
+                domain_folder = str(user_data.domain).strip()
+        except Exception:
+            pass
+
+    # Determine the field name from instance.title
+    field_name = getattr(instance, 'title', '')
+    field_name = str(field_name).strip().lower().replace(' ', '_').replace(',', '_') if field_name else 'document'
+    # Get file extension
+    ext = os.path.splitext(filename)[1]
+    # New filename: <firstname>_<lastname>_<empid>_<fieldname>.<ext>
+    new_filename = f"{first_name}_{last_name}_{emp_id}_{field_name}{ext}"
+    # Full path: documents/<Department>/<Domain>/<intern>/<filename>
+    return f'documents/{department_folder}/{domain_folder}/{folder_name}/{new_filename}'
 
 class Document(models.Model):
     STATUS_CHOICES = [
@@ -566,28 +585,28 @@ class Document(models.Model):
     declaration_number = models.CharField(max_length=50, unique=True, editable=False)
     title = models.CharField(max_length=255,null=True)
     description = models.TextField()
-    uploader = models.ForeignKey('Temp', on_delete=models.CASCADE, related_name='uploaded_documents')
+    uploader = models.ForeignKey('Temp', on_delete=models.CASCADE, related_name='uploaded_documents')  # Required field
     receiver = models.ForeignKey('Temp', on_delete=models.SET_NULL, null=True, blank=True, related_name='received_documents')
     file = models.FileField(upload_to=document_upload_path, null=True)
     created_at = models.DateTimeField(auto_now_add=True,null=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def save(self, *args, **kwargs):
-        if not self.declaration_number:
-            self.declaration_number = f"DOC-{uuid.uuid4().hex[:8].upper()}"
-        super().save(*args, **kwargs)
-
-    created_at = models.DateTimeField(auto_now_add=True,null=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def save(self, *args, **kwargs):
-        if not self.declaration_number:
-            self.declaration_number = f"DOC-{uuid.uuid4().hex[:8].upper()}"
-        super().save(*args, **kwargs)
-    
-    def save(self, *args, **kwargs):
-        if not self.declaration_number:
-            self.declaration_number = f"DOC-{uuid.uuid4().hex[:8].upper()}"
+        import uuid
+        from Sims.models import Document
+        # Always generate a unique declaration_number if not set or if duplicate
+        if not self.declaration_number or Document.objects.filter(declaration_number=self.declaration_number).exclude(pk=self.pk).exists():
+            while True:
+                new_decl = f"DOC-{uuid.uuid4().hex[:8].upper()}"
+                if not Document.objects.filter(declaration_number=new_decl).exists():
+                    self.declaration_number = new_decl
+                    break
+        # Prevent duplicate file creation: if file exists, don't change filename on further saves
+        if self.pk is not None:
+            old = Document.objects.filter(pk=self.pk).first()
+            if old and old.file and self.file and old.file.name != self.file.name:
+                # Don't overwrite the file if it already exists
+                self.file = old.file
         super().save(*args, **kwargs)
 
     def __str__(self):
