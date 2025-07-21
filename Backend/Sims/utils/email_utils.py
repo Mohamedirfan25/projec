@@ -5,6 +5,7 @@ from reportlab.lib.pagesizes import A4
 from datetime import datetime
 import os
 from django.conf import settings
+from dateutil import parser
 
 def send_offer_letter_reportlab(user, emp_id, college_name, start_date, end_date,
                                 position_title="FullStack Intern",
@@ -14,6 +15,12 @@ def send_offer_letter_reportlab(user, emp_id, college_name, start_date, end_date
                                 work_location="VDart, Global Capability Center, Mannarpuram",
                                 reporting_to="Derrick Alex"):
     try:
+        # Convert ISO string dates to datetime if needed
+        if isinstance(start_date, str):
+            start_date = parser.parse(start_date).strftime("%d-%b-%Y")
+        if isinstance(end_date, str):
+            end_date = parser.parse(end_date).strftime("%d-%b-%Y")
+
         buffer = BytesIO()
         p = canvas.Canvas(buffer, pagesize=A4)
         width, height = A4
@@ -25,12 +32,12 @@ def send_offer_letter_reportlab(user, emp_id, college_name, start_date, end_date
                 return height - 50
             return y
 
-        # ✅ VDart Logo
+        # VDart Logo
         logo_path = os.path.join(settings.BASE_DIR, 'Sims', 'static', 'images', 'vdart.png')
         if os.path.exists(logo_path):
             p.drawImage(logo_path, 40, height - 100, width=120, height=50)
 
-        # ✅ Address
+        # Address
         p.setFont("Helvetica", 10)
         address = [
             "40, First Floor, 4th Cross,",
@@ -44,11 +51,11 @@ def send_offer_letter_reportlab(user, emp_id, college_name, start_date, end_date
             y -= 13
         p.drawRightString(width - 40, y - 5, datetime.now().strftime("%d-%b-%Y"))
 
-        # ✅ Title
+        # Title
         p.setFont("Helvetica-Bold", 16)
         p.drawCentredString(width / 2, y - 60, "Internship Offer Letter")
 
-        # ✅ Candidate Details
+        # Candidate Details
         p.setFont("Helvetica", 12)
         y = y - 90
         p.drawString(40, y, f"Ms. {user.first_name} {user.last_name} ({emp_id}),")
@@ -56,7 +63,7 @@ def send_offer_letter_reportlab(user, emp_id, college_name, start_date, end_date
         p.drawString(40, y - 15, college_name)
         y = y - 50
 
-        # ✅ Body
+        # Body
         text = [
             f"Dear {user.first_name} {user.last_name},",
             "",
@@ -74,7 +81,7 @@ def send_offer_letter_reportlab(user, emp_id, college_name, start_date, end_date
             y -= 18
             y = check_page(y)
 
-        # ✅ Internship Details
+        # Internship Details
         details = [
             ("Position Title", position_title),
             ("Domain", domain),
@@ -91,7 +98,7 @@ def send_offer_letter_reportlab(user, emp_id, college_name, start_date, end_date
             y -= 16
             y = check_page(y)
 
-        # ✅ Notes
+        # Notes
         notes = [
             "",
             "Note: Details of your reporting relationship/supervisor, project, responsibilities, etc. will be shared",
@@ -105,7 +112,7 @@ def send_offer_letter_reportlab(user, emp_id, college_name, start_date, end_date
             y -= 15
             y = check_page(y)
 
-        # ✅ Signature
+        # Signature
         signature_path = os.path.join(settings.BASE_DIR, 'Sims', 'static', 'images', 'signature.png')
         if os.path.exists(signature_path):
             if y - 100 < 0:
@@ -115,7 +122,7 @@ def send_offer_letter_reportlab(user, emp_id, college_name, start_date, end_date
         p.drawString(40, y - 75, "Authorized Signatory")
         p.drawString(40, y - 90, "VDart Group")
 
-        # ✅ Acknowledgement
+        # Acknowledgement
         y = y - 120
         y = check_page(y)
         p.drawString(40, y, "Please acknowledge this email and bring a signed copy of this letter on your start date.")
@@ -125,12 +132,12 @@ def send_offer_letter_reportlab(user, emp_id, college_name, start_date, end_date
         y -= 25
         p.drawString(40, y, "Date: ____________________")
 
-        # ✅ Finalize
+        # Finalize
         p.showPage()
         p.save()
         buffer.seek(0)
 
-        # ✅ Email Attachment
+        # Email Attachment
         email = EmailMessage(
             subject="Your Internship Offer Letter from VDart Group",
             body="Please find attached your internship offer letter.",
