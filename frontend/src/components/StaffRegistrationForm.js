@@ -229,7 +229,6 @@ const StaffRegistrationForm = ({ switchToUpdate, setFormDataForUpdate }) => {
         first_name: formData.first_name,
         last_name: formData.last_name,
         role: formData.role,
-        department: formData.department,
       };
 
       const registerResponse = await axios.post(apiUrl, postData, {
@@ -238,8 +237,10 @@ const StaffRegistrationForm = ({ switchToUpdate, setFormDataForUpdate }) => {
           Authorization: `Token ${token}`,
         },
       });
+      console.log("registerResponse", registerResponse.data);
 
       const staffPayload = {
+
         team_name: formData.teamName,
         shift_timing: formData.staffTiming,
         domain: formData.staffDomain,
@@ -257,10 +258,11 @@ const StaffRegistrationForm = ({ switchToUpdate, setFormDataForUpdate }) => {
         is_payroll_access: formData.workUndertaken.includes("Payroll"),
         is_internmanagement_access: formData.workUndertaken.includes("Intern Management"),
         is_assert_access: formData.workUndertaken.includes("Assets"),
+        certicate_sent: "false",
       };
 
       await axios.patch(
-        `http://localhost:8000/Sims/user-data/${formData.staffId}/`,
+        `http://localhost:8000/Sims/user-data/${registerResponse.data.emp_id}/`,
         staffPayload,
         {
           headers: {
