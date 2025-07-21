@@ -46,10 +46,16 @@ class UserProfile(models.Model):
             return False
 
 class Temp(models.Model):
+    USER_ROLES = (
+        ('admin', 'admin'),
+        ('staff', 'staff'),
+        ('intern', 'intern'),
+        ('hr','hr'),
+    )
     is_deleted = models.BooleanField(default=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     emp_id = models.CharField(max_length=10, primary_key=True)  # Now a string, e.g., ACA001, STAFF001
-    role = models.CharField(max_length=20, choices=UserProfile.USER_ROLES, default="intern")
+    role = models.CharField(max_length=20, choices=USER_ROLES, default="intern")
     created_date = models.DateField(auto_now_add=True)
     updated_date = models.DateField(auto_now=True)
     def __str__(self):
@@ -140,7 +146,7 @@ class UserData(models.Model):
     is_payroll_access = models.BooleanField(default=True,null=True,blank=True)
     is_internmanagement_access = models.BooleanField(default=True,null=True,blank=True)
     is_assert_access = models.BooleanField(default=True,null=True,blank=True)
-
+    certicate_sent = models.BooleanField(default=False,null=True,blank=True)
 
     def __str__(self):
         return f"{self.user} - {self.emp_id.role} - {self.user_status}"

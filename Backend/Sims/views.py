@@ -141,7 +141,7 @@ class TempView(APIView):
 
         # Validate required fields
         username = request.data.get('user')
-        role = request.data.get('role', 'intern').lower()
+        role = request.data.get('role','intern').lower()
         department_name = request.data.get('department')
 
         if not username:
@@ -2849,6 +2849,7 @@ class RegisterView(APIView):
 
                 return Response({
                     "message": "User registered successfully.",
+                    "id": user.id,
                     "username": user.username,
                     "emp_id": emp_id,
                     "role": requested_role,

@@ -3015,7 +3015,9 @@ const DocumentsUpload = ({ onBack, onNext, initialData, registerData, collegeDat
       dob: registerData.dob,
       gender: registerData.gender,
       aadharNumber: registerData.aadharNumber || "",
-      isFirstGraduate: registerData.isFirstGraduate || false
+      isFirstGraduate: registerData.isFirstGraduate || false,
+      department: registerData.department,
+      role: registerData.role
     };
 
     const registerRes = await axios.post("http://localhost:8000/Sims/register/", registerPayload, {
@@ -3027,30 +3029,29 @@ const DocumentsUpload = ({ onBack, onNext, initialData, registerData, collegeDat
 
     console.log('Registration response:', registerRes.data);
     const userId = registerRes.data.id;
-    localStorage.setItem("internDepartment", registerData.department);
 
     // STEP 3: Create temp entry (skip if already exists)
     const tempPayload = {
       user: registerData.username,
-      role: "intern",
+      role: registerData.role || "intern",
       department: registerData.department
     };
     console.log('Creating temp entry with payload:', tempPayload);
     
-    let emp_id;
+    let emp_id; // Declare emp_id outside try-catch block
+    
     try {
-      await axios.post("http://localhost:8000/Sims/temps/", tempPayload, {
+      const tempCreateRes = await axios.post("http://localhost:8000/Sims/temps/", tempPayload, {
         headers: { 
           Authorization: `Token ${token}`,
           "Content-Type": "application/json"
         }
       });
-      // If successful, we need to get the emp_id from the temp response
-      const tempRes = await axios.get(`http://localhost:8000/Sims/temps/`, {
-        headers: { Authorization: `Token ${token}` }
-      });
-      const userTemp = tempRes.data.find(temp => temp.username === registerData.username);
-      emp_id = userTemp?.emp_id;
+      // If successful, get emp_id from the creation response
+      emp_id = tempCreateRes.data.emp_id;
+      console.log('Temp created successfully with emp_id:', emp_id);
+      // Store emp_id in localStorage for later use
+      localStorage.setItem('emp_id', emp_id);
     } catch (tempError) {
       console.error('Temp creation failed:', tempError.response?.data);
       // If user already has employee record, get the existing emp_id
@@ -3060,12 +3061,26 @@ const DocumentsUpload = ({ onBack, onNext, initialData, registerData, collegeDat
           const tempRes = await axios.get(`http://localhost:8000/Sims/temps/`, {
             headers: { Authorization: `Token ${token}` }
           });
-          const userTemp = tempRes.data.find(temp => temp.username === registerData.username);
-          emp_id = userTemp?.emp_id;
+          // Look for user by username or user field
+          const userTemp = tempRes.data.find(temp => 
+            temp.username === registerData.username || 
+            temp.user === registerData.username ||
+            (temp.user && typeof temp.user === 'object' && temp.user.username === registerData.username)
+          );
+          
+          if (userTemp) {
+            emp_id = userTemp.emp_id;
+            console.log('Found existing emp_id:', emp_id);
+            // Store emp_id in localStorage for later use
+            localStorage.setItem('emp_id', emp_id);
+          }
+          
           if (!emp_id) {
+            console.error('Available temp records:', tempRes.data);
             throw new Error('Could not find employee ID for existing user');
           }
         } catch (fetchError) {
+          console.error('Fetch error details:', fetchError);
           throw new Error('Failed to fetch existing employee record');
         }
       } else {
@@ -3199,33 +3214,47 @@ const DocumentsUpload = ({ onBack, onNext, initialData, registerData, collegeDat
   const handleGenerateOfferLetter = async () => {
     try {
       const token = localStorage.getItem("token");
+      
+      // Prepare the payload with proper field names from companyData and collegeData
+      const payload = {
+        college_name: collegeData?.collegeName || '',
+        start_date: companyData?.startDate || new Date().toISOString().split('T')[0],
+        end_date: companyData?.endDate || '',
+        position_title: companyData?.positionTitle || 'FullStack Intern',
+        domain: companyData?.domain || '',
+        work_location: "VDart, Global Capability Center, Mannarpuram",
+        reporting_to: companyData?.reportingManager || "Derrick Alex",
+        emp_id: emp_id,  // Changed from intern_emp_id to emp_id to match backend
+        shift_time: companyData?.shiftTiming || '9:00 AM to 6:00 PM',
+        shift_days: 'Monday to Friday'
+      };
+      
+      console.log('Sending payload to generate offer letter:', payload);
 
-      await axios.post(
+      console.log('Sending offer letter with payload:', payload);
+
+      const response = await axios.post(
         "http://localhost:8000/Sims/generate-offer-letter/",
-        { 
-          college: formData.collegeName,           // ✅ College Name from input
-  startDate: formData.startDate,           // ✅ Start Date from DatePicker
-  endDate: formData.endDate,               // ✅ End Date from DatePicker
-  position_title: "FullStack Intern",      // ✅ Fixed or from dropdown if you want
-  domain: formData.domain,                 // ✅ Selected Domain
-  shift_time: formData.shiftTiming,        // ✅ Selected Shift Timing
-  shift_days: formData.workingDays,        // ✅ Selected Working Days
-  work_location: "VDart, Global Capability Center, Mannarpuram", // ✅ Fixed
-  reporting_to: formData.reportingManager || "Derrick Alex",     // ✅ Optional/fixed
-  intern_emp_id: emp_id,   // ✅ intern_emp_id
-        },
+        payload,
         {
           headers: {
             Authorization: `Token ${token}`,
+            'Content-Type': 'application/json'
           }
         }
       );
 
-      showSnackbar('Offer letter sent successfully!', 'success');
+      console.log('Offer letter response:', response.data);
+      showSnackbar('Offer letter generated successfully!', 'success');
       return true;
     } catch (error) {
       console.error("Offer letter error:", error);
-      showSnackbar(error.response?.data?.error || "Failed to send offer letter", 'error');
+      const errorMessage = error.response?.data?.error || 
+                         error.response?.data?.detail || 
+                         error.message || 
+                         "Failed to generate offer letter";
+      console.error('Error details:', error.response?.data);
+      showSnackbar(errorMessage, 'error');
       return false;
     }
   };
