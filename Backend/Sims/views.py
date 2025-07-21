@@ -5603,6 +5603,10 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from datetime import datetime
 from django.contrib.auth import get_user_model
+from django.core.mail import EmailMessage
+from io import BytesIO
+
+
 
 User = get_user_model()
 
@@ -5618,8 +5622,8 @@ def generate_completed_certificate(request, emp_id):
         # 🔔 Filename → Example: Saranya_P_Internship_Certificate.pdf
         filename = f"{user.first_name}_{user.last_name}_Internship_Certificate.pdf"
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
-
-        p = canvas.Canvas(response, pagesize=A4)
+        buffer = BytesIO()
+        p = canvas.Canvas(buffer, pagesize=A4)
         width, height = A4
 
         # ===== Title =====
@@ -5676,6 +5680,15 @@ def generate_completed_certificate(request, emp_id):
 
         p.showPage()
         p.save()
+        buffer.seek(0)
+        email = EmailMessage(
+            subject="Your Internship Certificate from VDart Group",
+            body="Please find attached your internship certificate.",
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[user.email],
+        )
+        email.attach(f"VDart_certificate_{emp_id}.pdf", buffer.getvalue(), "application/pdf")
+        email.send(fail_silently=False)
         return response
 
     except Temp.DoesNotExist:

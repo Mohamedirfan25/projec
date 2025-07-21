@@ -113,7 +113,9 @@ import {
   SupervisorAccount as ManagerIcon,
   Person as SupervisorIcon,
   AddAPhoto as AddPhotoIcon,
-  Upload as UploadIcon
+  Upload as UploadIcon,
+  Send as SendIcon,
+  Warning as WarningIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -287,6 +289,11 @@ const InternLists = ({ setActiveComponent, showAddForm: externalShowAddForm, onF
   const [showEditedForm, setShowEditedForm] = useState(false);
   const [selectedEditData, setSelectedEditData] = useState(null); // optional, to pass data
   const [actionSubMenuAnchorEl, setActionSubMenuAnchorEl] = useState(null);
+
+  const [certificateModalOpen, setCertificateModalOpen] = useState(false);
+  const [selectedIntern, setSelectedIntern] = useState(null);
+  const [isSending, setIsSending] = useState(false);
+  const [certificateSentStatus, setCertificateSentStatus] = useState({});
 
   const fetchInterns = async () => {
     try {
@@ -485,7 +492,7 @@ const handleDiscontinueIntern = async (internId) => {
 
     console.log("Discontinue PATCH response:", response.data);
 
-    await fetchInterns(); // ✅ refresh UI with updated status
+    await fetchInterns(); // refresh UI with updated status
 
     setSnackbarMessage("Intern discontinued successfully");
     setSnackbarSeverity("success");
@@ -573,7 +580,8 @@ const handleUndoDelete = async (internId) => {
       );
 
   const columns = [
-    'Intern ID', 'Intern Name', 'Email ID', 'Department', 'Scheme', 'Domain', 'Start Date', 'End Date', 'Status', 'Action'
+    'Intern ID', 'Intern Name', 'Email ID', 'Department', 'Scheme', 'Domain', 'Start Date', 'End Date', 'Status',
+    ...(activeTab === 'Completed' ? ['Certificate'] : []), 'Action'
   ];
 
   const currentInternsArray = Array.isArray(interns[activeTab]) ? interns[activeTab] : [];
@@ -639,7 +647,60 @@ const handleUndoDelete = async (internId) => {
     setOpenSnackbar(true);
   };
 
+  const handleSendCertificateClick = (intern) => {
+    setSelectedIntern(intern);
+    setCertificateModalOpen(true);
+  };
 
+  const handlePreviewCertificate = async (intern) => {
+    try {
+      await generateCompletedCertificate(intern.id, intern.firstName);
+    } catch (error) {
+      console.error("Error previewing certificate:", error);
+      setSnackbarMessage("Failed to preview certificate");
+      setSnackbarSeverity("error");
+      setOpenSnackbar(true);
+    }
+  };
+
+  const handleConfirmSendCertificate = async () => {
+    if (!selectedIntern) return;
+    
+    try {
+      setIsSending(true);
+      // Generate and download the certificate
+      await generateCompletedCertificate(selectedIntern.id, selectedIntern.firstName);
+      
+      // Update certificate sent status in the database
+      const token = localStorage.getItem("token");
+      await axios.patch(
+        `http://localhost:8000/Sims/user-data/${selectedIntern.id}/`,
+        { certificate_sent: true },
+        { headers: { Authorization: `Token ${token}` } }
+      );
+      
+      // Update local state
+      setCertificateSentStatus(prev => ({
+        ...prev,
+        [selectedIntern.id]: true
+      }));
+      
+      setCertificateModalOpen(false);
+      setSnackbarMessage(`Certificate sent successfully to ${selectedIntern.name}`);
+      setSnackbarSeverity("success");
+      setOpenSnackbar(true);
+      
+      // Refresh intern data
+      await fetchInterns();
+    } catch (error) {
+      console.error("Error sending certificate:", error);
+      setSnackbarMessage("Failed to send certificate. Please try again.");
+      setSnackbarSeverity("error");
+      setOpenSnackbar(true);
+    } finally {
+      setIsSending(false);
+    }
+  };
 
   return (
     <ThemeProvider theme={theme}>
@@ -1082,6 +1143,42 @@ const handleUndoDelete = async (internId) => {
                             }}
                           />
                         </TableCell>
+                        {activeTab === 'Completed' && (
+                          <TableCell sx={{ width: '120px', minWidth: '120px' }}>
+                            <Tooltip 
+                              title={certificateSentStatus[intern.id] || intern.certificate_sent 
+                                ? 'Certificate already sent' 
+                                : 'Send Certificate'}
+                            >
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  color="primary"
+                                  onClick={() => handleSendCertificateClick(intern)}
+                                  disabled={certificateSentStatus[intern.id] || intern.certificate_sent}
+                                  sx={{
+                                    '&.Mui-disabled': {
+                                      color: 'success.main',
+                                      bgcolor: 'action.selected'
+                                    },
+                                    '&:hover': {
+                                      bgcolor: 'primary.light',
+                                      '&.Mui-disabled': {
+                                        bgcolor: 'transparent'
+                                      }
+                                    }
+                                  }}
+                                >
+                                  {certificateSentStatus[intern.id] || intern.certificate_sent ? (
+                                    <CheckCircle fontSize="small" />
+                                  ) : (
+                                    <SendIcon fontSize="small" />
+                                  )}
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          </TableCell>
+                        )}
                         <TableCell>
                           <IconButton onClick={(e) => handleMenuOpen(e, intern.id)}>
                             <MoreVertIcon />
@@ -1133,6 +1230,46 @@ const handleUndoDelete = async (internId) => {
               </Table>
             )}
           </TableContainer>
+
+          {/* Certificate Send Confirmation Modal */}
+          <Dialog
+            open={certificateModalOpen}
+            onClose={() => !isSending && setCertificateModalOpen(false)}
+            maxWidth="sm"
+            fullWidth
+          >
+            <DialogContent>
+              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', p: 2, textAlign: 'center' }}>
+                <WarningIcon color="warning" sx={{ fontSize: 60, mb: 2 }} />
+                <Typography variant="h6" gutterBottom>
+                  Are you sure you want to send the certificate?
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                  This will email the certificate to {selectedIntern?.name}'s registered email address.
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 2, mt: 2, width: '100%', justifyContent: 'center' }}>
+                  <Button
+                    variant="outlined"
+                    onClick={() => setCertificateModalOpen(false)}
+                    disabled={isSending}
+                    sx={{ minWidth: 120 }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    onClick={handleConfirmSendCertificate}
+                    disabled={isSending}
+                    startIcon={isSending ? <CircularProgress size={20} color="inherit" /> : null}
+                    sx={{ minWidth: 180 }}
+                  >
+                    {isSending ? 'Sending...' : 'Yes, Send Certificate'}
+                  </Button>
+                </Box>
+              </Box>
+            </DialogContent>
+          </Dialog>
 
           {!isLoading && filteredInterns.length === 0 ? (
             <Box sx={{
