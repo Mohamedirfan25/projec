@@ -15,6 +15,7 @@ import {
     MenuItem,
     Stack,
     Pagination,
+    TablePagination,
     InputAdornment,
     FormControl,
     Select,
@@ -296,8 +297,8 @@ const StaffList = () => {
                             bottom: 0,
                             background: 'linear-gradient(110deg, #f5f7fa 8%, #f0f2f5 18%, #f5f7fa 33%)',
                             backgroundSize: '200% 100%',
-                            animation: isLoading ? `${shimmer} 1.5s infinite linear` : 'none',
-                            opacity: isLoading ? 0.6 : 0,
+                            animation: (theme) => isLoading ? `${shimmer} 1.5s infinite linear` : 'none',
+                            opacity: (theme) => isLoading ? 0.6 : 0,
                             transition: 'opacity 0.3s ease',
                             pointerEvents: 'none',
                             zIndex: 1,
@@ -305,7 +306,9 @@ const StaffList = () => {
                     }}
                 >
                     <Table sx={{ minWidth: 650, position: 'relative', zIndex: 2 }}>
-                        <TableHead sx={{ bgcolor: 'grey.100' }}>
+                        <TableHead sx={{ 
+                            bgcolor: (theme) => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.100'
+                        }}>
                             <TableRow>
                                 <TableCell sx={{ fontWeight: 600 }}>Emp ID</TableCell>
                                 <TableCell sx={{ fontWeight: 600 }}>Emp Name</TableCell>
@@ -374,33 +377,32 @@ const StaffList = () => {
                     </Table>
                 </TableContainer>
 
-                {!isLoading && filteredStaff.length > 0 && (
-                    <Stack direction="row" justifyContent="space-between" alignItems="center" mt={3}>
-                        <FormControl variant="standard" sx={{ minWidth: 120 }}>
-                            <InputLabel>Rows per page</InputLabel>
-                            <Select
-                                value={rowsPerPage}
-                                onChange={handleRowsPerPageChange}
-                                label="Rows per page"
-                            >
-                                {[5, 10, 25, 50].map((option) => (
-                                    <MenuItem key={option} value={option}>
-                                        {option}
-                                    </MenuItem>
-                                ))}
-                            </Select>
-                        </FormControl>
-
-                        <Pagination
-                            count={totalPages}
-                            page={page}
-                            onChange={(event, value) => setPage(value)}
-                            shape="rounded"
-                            color="primary"
-                            showFirstButton
-                            showLastButton
-                        />
-                    </Stack>
+                {filteredStaff.length > 0 ? (
+                    <TablePagination
+                        rowsPerPageOptions={[5, 10, 25]}
+                        component="div"
+                        count={filteredStaff.length}
+                        rowsPerPage={rowsPerPage}
+                        page={page - 1}
+                        onPageChange={(e, newPage) => setPage(newPage + 1)}
+                        onRowsPerPageChange={(e) => {
+                            handleRowsPerPageChange(e);
+                        }}
+                        labelRowsPerPage="Rows per page:"
+                        labelDisplayedRows={({ from, to, count }) => 
+                            `${from}-${to} of ${count !== -1 ? count : `more than ${to}`}`
+                        }
+                        sx={{ mt: 2 }}
+                    />
+                ) : !isLoading && (
+                    <Box mt={2} textAlign="center">
+                        <Typography variant="body1" color="textSecondary">
+                            {staff.length === 0 
+                                ? 'No staff found. Add your first staff member using the "Add Staff" button.'
+                                : 'No staff match your current filters'
+                            }
+                        </Typography>
+                    </Box>
                 )}
             </Paper>
         </Box>

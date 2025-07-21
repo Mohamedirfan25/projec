@@ -19,6 +19,7 @@ import {
   InputAdornment,
   Avatar,
   Pagination,
+  TablePagination,
   Select,
   MenuItem,
   FormControl,
@@ -51,6 +52,7 @@ import {
   InputLabel,
   Card
 } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import {
   Search as SearchIcon,
   Work as WorkIcon,
@@ -254,6 +256,7 @@ const generateCompletedCertificate = async (empId, firstName) => {
 };
 
 const InternLists = ({ setActiveComponent, showAddForm: externalShowAddForm, onFormComplete, onFormCancel }) => {
+  const theme = useTheme();
   const [isLoading, setIsLoading] = useState(true);
 
   const navigate = useNavigate();
@@ -679,10 +682,12 @@ const handleUndoDelete = async (internId) => {
             justifyContent: 'space-between',
             alignItems: 'center',
             mb: 3,
-            backgroundColor: 'background.paper',
+            backgroundColor: theme.palette.mode === 'dark' ? theme.palette.grey[900] : 'background.paper',
             p: 3,
             borderRadius: 3,
-            boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+            boxShadow: theme.palette.mode === 'dark' 
+              ? '0 1px 3px rgba(255,255,255,0.1)' 
+              : '0 1px 3px rgba(0,0,0,0.1)'
           }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <Typography variant="h5" sx={{ fontWeight: 700, color: 'text.primary' }}>
@@ -936,13 +941,18 @@ const handleUndoDelete = async (internId) => {
             component={Paper}
             sx={{
               borderRadius: 3,
-              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+              boxShadow: theme.palette.mode === 'dark' 
+                ? '0 1px 3px rgba(255,255,255,0.1)' 
+                : '0 1px 3px rgba(0,0,0,0.1)',
               border: '1px solid',
               borderColor: 'divider',
               mt: 3,
               minHeight: '400px',
               position: 'relative',
               overflow: 'hidden',
+              backgroundColor: theme.palette.mode === 'dark' 
+                ? theme.palette.grey[900] 
+                : 'background.paper'
             }}
           >
             {isLoading ? (
@@ -1151,52 +1161,22 @@ const handleUndoDelete = async (internId) => {
               </Typography>
             </Box>
           ) : !isLoading && (
-            <Box sx={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              mt: 3,
-              p: 2,
-              backgroundColor: 'background.paper',
-              borderRadius: 3,
-              boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-            }}>
-              <Typography variant="body2" color="text.secondary">
-                Showing {paginatedInterns.length} of {filteredInterns.length} interns
-              </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <Typography variant="body2" sx={{ mr: 1 }} color="text.secondary">
-                  Rows per page:
-                </Typography>
-                <FormControl variant="standard" size="small">
-                  <Select
-                    value={rowsPerPage}
-                    onChange={handleChangeRowsPerPage}
-                    IconComponent={ArrowDropDownIcon}
-                    sx={{
-                      '& .MuiSelect-select': {
-                        py: 1,
-                        pl: 1.5,
-                        pr: 3
-                      }
-                    }}
-                  >
-                    {[5, 10, 25].map((option) => (
-                      <MenuItem key={option} value={option}>
-                        {option}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <Pagination
-                  count={count}
-                  page={page}
-                  onChange={handleChangePage}
-                  shape="rounded"
-                  sx={{ ml: 2 }}
-                />
-              </Box>
-            </Box>
+            <TablePagination
+              rowsPerPageOptions={[5, 10, 25]}
+              component="div"
+              count={filteredInterns.length}
+              rowsPerPage={rowsPerPage}
+              page={page - 1}
+              onPageChange={(e, newPage) => handleChangePage(e, newPage + 1)}
+              onRowsPerPageChange={(e) => {
+                handleChangeRowsPerPage(e);
+              }}
+              labelRowsPerPage="Rows per page:"
+              labelDisplayedRows={({ from, to, count }) => 
+                `${from}-${to} of ${count !== -1 ? count : `more than ${to}`}`
+              }
+              sx={{ mt: 2 }}
+            />
           )}
         </Box>
       </> 

@@ -25,9 +25,11 @@ import {
   FormControl,
   InputLabel,
   Pagination,
+  TablePagination,
   Snackbar,
   CircularProgress,
 } from "@mui/material";
+import { useTheme } from '@mui/material/styles';
 import {
   Delete as DeleteIcon,
   MoreVert,
@@ -95,6 +97,7 @@ const Status = ({ status }) => {
 };
 
 const PaymentList = () => {
+  const theme = useTheme();
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -516,7 +519,7 @@ const PaymentList = () => {
 
   if (loading) {
     return (
-      <Box sx={{ padding: 4, bgcolor: "white", color: "black" }}>
+      <Box sx={{ padding: 4, bgcolor: theme.palette.mode === 'dark' ? theme.palette.grey[900] : 'white', color: 'text.primary' }}>
         <Box sx={{ display: "flex", alignItems: "center", marginBottom: 3 }}>
           <Payment sx={{ marginRight: 1, fontSize: 40 }} />
           <Typography variant="h4" gutterBottom>
@@ -525,10 +528,10 @@ const PaymentList = () => {
         </Box>
         <TableContainer component={Paper}>
           <Table>
-            <TableHead sx={{ backgroundColor: "#f5f5f5" }}>
+            <TableHead sx={{ backgroundColor: theme.palette.mode === 'dark' ? theme.palette.grey[800] : '#f5f5f5' }}>
               <TableRow>
                 {["Intern ID", "Name", "Start Date", "End Date", "Total Amount", "Paid", "Balance", "Status", "Actions"].map((header) => (
-                  <TableCell key={header} sx={{ fontWeight: "bold", color: "black" }}>
+                  <TableCell key={header} sx={{ fontWeight: "bold", color: 'text.primary' }}>
                     {header}
                   </TableCell>
                 ))}
@@ -562,7 +565,7 @@ const PaymentList = () => {
   }
 
   return (
-    <Box sx={{ padding: 4, bgcolor: "white", color: "black" }}>
+    <Box sx={{ padding: 4, bgcolor: theme.palette.mode === 'dark' ? theme.palette.grey[900] : 'white', color: 'text.primary' }}>
       <Box sx={{ display: "flex", alignItems: "center", marginBottom: 3 }}>
         <Payment sx={{ marginRight: 1, fontSize: 40 }} />
         <Typography variant="h4" gutterBottom>
@@ -621,9 +624,20 @@ const PaymentList = () => {
         </Button>
       </Box>
 
-      <TableContainer component={Paper}>
+      <TableContainer 
+        component={Paper}
+        sx={{
+          backgroundColor: theme.palette.mode === 'dark' ? theme.palette.grey[900] : 'background.paper',
+          borderRadius: 2,
+          boxShadow: theme.palette.mode === 'dark' 
+            ? '0 1px 3px rgba(255,255,255,0.1)' 
+            : '0 1px 3px rgba(0,0,0,0.1)'
+        }}
+      >
         <Table>
-          <TableHead sx={{ backgroundColor: "#f5f5f5" }}>
+          <TableHead sx={{ 
+            backgroundColor: theme.palette.mode === 'dark' ? theme.palette.grey[800] : '#f5f5f5'
+          }}>
             <TableRow>
               {[
                 "Intern ID",
@@ -638,7 +652,7 @@ const PaymentList = () => {
               ].map((header) => (
                 <TableCell
                   key={header}
-                  sx={{ fontWeight: "bold", color: "black" }}
+                  sx={{ fontWeight: "bold", color: "text.primary" }}
                 >
                   {header}
                 </TableCell>
@@ -753,25 +767,34 @@ const PaymentList = () => {
         </Table>
       </TableContainer>
 
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          mt: 3,
-        }}
-      >
-        <Typography>
-          Showing {paginatedPayments.length} of {filteredPayments.length}{" "}
-          results
-        </Typography>
-        <Pagination
-          count={Math.ceil(filteredPayments.length / rowsPerPage)}
-          page={page}
-          onChange={(e, value) => setPage(value)}
-          color="primary"
+      {filteredPayments.length > 0 ? (
+        <TablePagination
+          rowsPerPageOptions={[5, 10, 25]}
+          component="div"
+          count={filteredPayments.length}
+          rowsPerPage={rowsPerPage}
+          page={page - 1}
+          onPageChange={(e, newPage) => setPage(newPage + 1)}
+          onRowsPerPageChange={(e) => {
+            setRowsPerPage(parseInt(e.target.value, 10));
+            setPage(1);
+          }}
+          labelRowsPerPage="Rows per page:"
+          labelDisplayedRows={({ from, to, count }) => 
+            `${from}-${to} of ${count !== -1 ? count : `more than ${to}`}`
+          }
+          sx={{ mt: 2 }}
         />
-      </Box>
+      ) : !loading && (
+        <Box mt={2} textAlign="center">
+          <Typography variant="body1" color="textSecondary">
+            {payments.length === 0 
+              ? 'No payments found. Add your first payment using the "Add Payment" button.'
+              : 'No payments match your current filters'
+            }
+          </Typography>
+        </Box>
+      )}
 
       <Dialog
         open={paymentDialogOpen}

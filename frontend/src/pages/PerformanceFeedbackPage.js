@@ -300,7 +300,17 @@ const PerformanceFeedbackPage = () => {
             p: 3, 
             height: '100%',
             borderRadius: 3,
-            boxShadow: '0 8px 16px rgba(0,0,0,0.4)'
+            boxShadow: theme.palette.mode === 'dark' 
+              ? '0 8px 16px rgba(255,255,255,0.1)' 
+              : '0 8px 16px rgba(0,0,0,0.4)',
+            backgroundColor: theme.palette.mode === 'dark' 
+              ? '#212121 !important' 
+              : 'background.paper',
+            '&.MuiPaper-root': {
+              backgroundColor: theme.palette.mode === 'dark' 
+                ? '#212121 !important' 
+                : 'background.paper'
+            }
           }}>
             <Typography 
               variant="h5" 
@@ -425,7 +435,17 @@ const PerformanceFeedbackPage = () => {
             display: 'flex', 
             flexDirection: 'column',
             borderRadius: 3,
-            boxShadow: '0 8px 16px rgba(0,0,0,0.4)'
+            boxShadow: theme.palette.mode === 'dark' 
+              ? '0 8px 16px rgba(255,255,255,0.1)' 
+              : '0 8px 16px rgba(0,0,0,0.4)',
+            backgroundColor: theme.palette.mode === 'dark' 
+              ? '#212121 !important' 
+              : 'background.paper',
+            '&.MuiPaper-root': {
+              backgroundColor: theme.palette.mode === 'dark' 
+                ? '#212121 !important' 
+                : 'background.paper'
+            }
           }}>
             <Typography 
               variant="h5" 
@@ -461,37 +481,37 @@ const PerformanceFeedbackPage = () => {
                     <TableCell sx={{ 
                       fontWeight: 'bold', 
                       color: 'text.primary', 
-                      backgroundColor: theme.palette.grey[300],
+                      backgroundColor: theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[300],
                       fontSize: 15
                     }}>Intern</TableCell>
                     <TableCell sx={{ 
                       fontWeight: 'bold', 
                       color: 'text.primary', 
-                      backgroundColor: theme.palette.grey[300],
+                      backgroundColor: theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[300],
                       fontSize: 15
                     }}>Rating</TableCell>
                     <TableCell sx={{ 
                       fontWeight: 'bold', 
                       color: 'text.primary', 
-                      backgroundColor: theme.palette.grey[300],
+                      backgroundColor: theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[300],
                       fontSize: 15
                     }}>Comments</TableCell>
                     <TableCell sx={{ 
                       fontWeight: 'bold', 
                       color: 'text.primary', 
-                      backgroundColor: theme.palette.grey[300],
+                      backgroundColor: theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[300],
                       fontSize: 15
                     }}>Date</TableCell>
                     <TableCell sx={{ 
                       fontWeight: 'bold', 
                       color: 'text.primary', 
-                      backgroundColor: theme.palette.grey[300],
+                      backgroundColor: theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[300],
                       fontSize: 15
                     }}>Status</TableCell>
                     <TableCell sx={{ 
                       fontWeight: 'bold', 
                       color: 'text.primary', 
-                      backgroundColor: theme.palette.grey[300],
+                      backgroundColor: theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[300],
                       fontSize: 15
                     }}>Actions</TableCell>
                   </TableRow>
@@ -672,51 +692,4 @@ const PerformanceFeedbackPage = () => {
   );
 };
 
-// Custom theme
-const theme = createTheme({
-  palette: {
-    primary: {
-      main: '#1976d2',
-      dark: '#0d47a1',
-      light: '#e3f2fd',
-    },
-    secondary: {
-      main: '#9c27b0',
-    },
-    background: {
-      default: '#f5f7fa',
-    },
-  },
-  typography: {
-    fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
-    h5: {
-      fontWeight: 600,
-    },
-  },
-  components: {
-    MuiButton: {
-      styleOverrides: {
-        root: {
-          textTransform: 'none',
-        },
-      },
-    },
-    MuiPaper: {
-      styleOverrides: {
-        root: {
-          transition: 'all 0.3s ease',
-        },
-      },
-    },
-  },
-});
-
-const App = () => {
-  return (
-    <ThemeProvider theme={theme}>
-      <PerformanceFeedbackPage />
-    </ThemeProvider>
-  );
-};
-
-export default App;
+export default PerformanceFeedbackPage;
