@@ -39,31 +39,49 @@ import EditedForm from "./components/EditedForm";
 
 function ProtectedRoute({ children }) {
   const [isValid, setIsValid] = useState(null);
+  
   useEffect(() => {
     const token = localStorage.getItem("token");
+    
+    // If no token, immediately set as invalid
     if (!token) {
       setIsValid(false);
       return;
     }
-    // Test token validity with a lightweight API call
+
+    // Verify token with the server
     fetch("http://localhost:8000/Sims/user-data/", {
-      headers: { Authorization: `Token ${token}` },
+      headers: { 
+        'Authorization': `Token ${token}`,
+        'Content-Type': 'application/json'
+      }
     })
-      .then((res) => {
-        if (res.status === 401 || res.status === 403) {
-          localStorage.removeItem("token");
-          setIsValid(false);
-        } else {
-          setIsValid(true);
-        }
-      })
-      .catch(() => {
+    .then(response => {
+      if (response.ok) {
+        setIsValid(true);
+      } else {
         localStorage.removeItem("token");
         setIsValid(false);
-      });
+      }
+    })
+    .catch(() => {
+      localStorage.removeItem("token");
+      setIsValid(false);
+    });
   }, []);
-  if (isValid === null) return null; // or a loading spinner
-  return isValid ? children : <Navigate to="/loginpage" replace />;
+
+  // Show nothing while checking
+  if (isValid === null) {
+    return null;
+  }
+
+  // If not valid, redirect to login
+  if (!isValid) {
+    return <Navigate to="/loginpage" replace />;
+  }
+
+  // If valid, render children
+  return children;
 }
 function App() {
   return (
@@ -76,44 +94,132 @@ function App() {
         <Route path="/loginpage" element={<LoginPage />} />
         <Route path="/Reset" element={<Reset />} />
         <Route path="/Recovery" element={<Recovery />} />
-        <Route path="/Dash" element={<Dash />} />
+        {/* Protected Routes */}
+        <Route path="/Dash" element={
+          <ProtectedRoute>
+            <Dash />
+          </ProtectedRoute>
+        } />
         <Route path="/AdminDashboard" element={
           <ProtectedRoute>
             <AdminDashboard />
           </ProtectedRoute>
         } />
-        <Route path="/Intern-profile" element={<InternProfile />} />
-        <Route path="/LeaveManagement" element={<LeaveManagement />} />
-        <Route path="/Tasks" element={<Tasks />} />
-        <Route path="/Create" element={<Create />} />
-        <Route path="/assets" element={<AssetLists />} />
-        <Route
-          path="/InternHoursCalculator"
-          element={<InternHoursCalculator />}
-        />
-        <Route path="/AssetReport" element={<AssetReport />} />
-        <Route path="/PerformancePage" element={<PerformancePage />} />
-        <Route path="/InternOnboarding" element={<InternOnboarding />} />
-        <Route path="/SimplePaymentPage" element={<SimplePaymentPage />} />
-        <Route path="/Intern" element={<InternDashboard />} />
-        <Route path="/asset" element={<AssetDashboard />} />
-        <Route path="/attendance" element={<AttendanceDashboard />} />
-        <Route path="/payroll" element={<PayrollDashboard />} />
-        <Route path="/documentsView" element={<DocumentsView />} />
-        <Route
-          path="/PerformanceFeedbackList"
-          element={<PerformanceFeedbackList />}
-        />
-        <Route
-          path="/PerformanceFeedbackPage"
-          element={<PerformanceFeedbackPage />}
-        />
-        <Route path="/InternManagement" element={<InternManagement />} />
-        <Route path="/register" element={<RegisterPage />} />
-        <Route path="/InternLists" element={<InternLists />} />
-        <Route path="/StaffList" element={<StaffList />} />
-        <Route path="/LeaveList" element={<LeaveList />} />
-        <Route path="/EditedForm" element={<EditedForm />} />
+        <Route path="/Intern-profile" element={
+          <ProtectedRoute>
+            <InternProfile />
+          </ProtectedRoute>
+        } />
+        <Route path="/LeaveManagement" element={
+          <ProtectedRoute>
+            <LeaveManagement />
+          </ProtectedRoute>
+        } />
+        <Route path="/Tasks" element={
+          <ProtectedRoute>
+            <Tasks />
+          </ProtectedRoute>
+        } />
+        <Route path="/Create" element={
+          <ProtectedRoute>
+            <Create />
+          </ProtectedRoute>
+        } />
+        <Route path="/assets" element={
+          <ProtectedRoute>
+            <AssetLists />
+          </ProtectedRoute>
+        } />
+        <Route path="/InternHoursCalculator" element={
+          <ProtectedRoute>
+            <InternHoursCalculator />
+          </ProtectedRoute>
+        } />
+        <Route path="/AssetReport" element={
+          <ProtectedRoute>
+            <AssetReport />
+          </ProtectedRoute>
+        } />
+        <Route path="/PerformancePage" element={
+          <ProtectedRoute>
+            <PerformancePage />
+          </ProtectedRoute>
+        } />
+        <Route path="/InternOnboarding" element={
+          <ProtectedRoute>
+            <InternOnboarding />
+          </ProtectedRoute>
+        } />
+        <Route path="/SimplePaymentPage" element={
+          <ProtectedRoute>
+            <SimplePaymentPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/Intern" element={
+          <ProtectedRoute>
+            <InternDashboard />
+          </ProtectedRoute>
+        } />
+        <Route path="/asset" element={
+          <ProtectedRoute>
+            <AssetDashboard />
+          </ProtectedRoute>
+        } />
+        <Route path="/attendance" element={
+          <ProtectedRoute>
+            <AttendanceDashboard />
+          </ProtectedRoute>
+        } />
+        <Route path="/payroll" element={
+          <ProtectedRoute>
+            <PayrollDashboard />
+          </ProtectedRoute>
+        } />
+        <Route path="/documentsView" element={
+          <ProtectedRoute>
+            <DocumentsView />
+          </ProtectedRoute>
+        } />
+        <Route path="/PerformanceFeedbackList" element={
+          <ProtectedRoute>
+            <PerformanceFeedbackList />
+          </ProtectedRoute>
+        } />
+        <Route path="/PerformanceFeedbackPage" element={
+          <ProtectedRoute>
+            <PerformanceFeedbackPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/InternManagement" element={
+          <ProtectedRoute>
+            <InternManagement />
+          </ProtectedRoute>
+        } />
+        <Route path="/register" element={
+          <ProtectedRoute>
+            <RegisterPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/InternLists" element={
+          <ProtectedRoute>
+            <InternLists />
+          </ProtectedRoute>
+        } />
+        <Route path="/StaffList" element={
+          <ProtectedRoute>
+            <StaffList />
+          </ProtectedRoute>
+        } />
+        <Route path="/LeaveList" element={
+          <ProtectedRoute>
+            <LeaveList />
+          </ProtectedRoute>
+        } />
+        <Route path="/EditedForm" element={
+          <ProtectedRoute>
+            <EditedForm />
+          </ProtectedRoute>
+        } />
       </Routes>
     </Router>
   );
