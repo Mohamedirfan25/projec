@@ -43,7 +43,90 @@ import {
   Cancel
 } from "@mui/icons-material";
 import axios from "axios";
-
+import { useColorMode } from '../index';
+import { CssBaseline } from '@mui/material';
+export const theme = createTheme({
+  palette: {
+    mode: 'light',
+    primary: {
+      main: '#1976d2',
+      dark: '#0d47a1',
+      light: '#e3f2fd',
+      contrastText: '#ffffff',
+    },
+    secondary: {
+      main: '#9c27b0',
+      dark: '#7b1fa2',
+      light: '#f3e5f5',
+      contrastText: '#ffffff',
+    },
+    background: {
+      default: '#f5f7fa',
+      paper: '#ffffff',
+      darkDefault: '#121212',
+      darkPaper: '#1e1e1e',
+    },
+    text: {
+      primary: '#212529',
+      secondary: '#6c757d',
+      darkPrimary: '#ffffff',
+      darkSecondary: '#e0e0e0',
+    },
+  },
+  typography: {
+    fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
+    h5: {
+      fontWeight: 600,
+    },
+  },
+  components: {
+    MuiButton: {
+      styleOverrides: {
+        root: ({ theme }) => ({
+          textTransform: 'none',
+          backgroundColor: theme.palette.mode === 'dark' 
+            ? theme.palette.primary.dark
+            : theme.palette.primary.main,
+        }),
+        contained: ({ theme }) => ({
+          '&:hover': {
+            backgroundColor: theme.palette.mode === 'dark' 
+              ? theme.palette.primary.dark
+              : '#1565c0',
+          },
+        }),
+      },
+    },
+    MuiPaper: {
+      styleOverrides: {
+        root: ({ theme }) => ({
+          transition: 'all 0.3s ease',
+          bgcolor: theme.palette.mode === 'dark' 
+            ? theme.palette.background.darkPaper
+            : theme.palette.background.paper,
+        }),
+      },
+    },
+    MuiTextField: {
+      styleOverrides: {
+        root: ({ theme }) => ({
+          '& .MuiOutlinedInput-root': {
+            '& fieldset': {
+              borderColor: theme.palette.mode === 'dark' 
+                ? 'rgba(255, 255, 255, 0.23)'
+                : 'rgba(0, 0, 0, 0.23)',
+            },
+            '&:hover fieldset': {
+              borderColor: theme.palette.mode === 'dark' 
+                ? theme.palette.primary.dark
+                : theme.palette.primary.main,
+            },
+          },
+        }),
+      },
+    },
+  },
+});
 // Styled components
 const StyledRating = styled(Rating)({
   '& .MuiRating-iconFilled': {
@@ -57,9 +140,16 @@ const StyledRating = styled(Rating)({
 const StatusChip = styled(Chip)(({ theme }) => ({
   fontWeight: 600,
   borderRadius: 4,
+  bgcolor: theme.palette.mode === 'dark' 
+    ? theme.palette.background.darkPaper
+    : theme.palette.background.paper,
+  color: theme.palette.mode === 'dark' 
+    ? theme.palette.text.darkPrimary
+    : theme.palette.text.primary,
 }));
 
 const PerformanceFeedbackPage = () => {
+  const { colorMode } = useColorMode();
   const theme = useTheme();
   const [feedback, setFeedback] = useState({
     emp_id: "",
@@ -148,7 +238,9 @@ const PerformanceFeedbackPage = () => {
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
-
+  useEffect(() => {
+    theme.palette.mode = colorMode;
+  }, [colorMode]);
   // Auto-fill student name when intern ID changes
   useEffect(() => {
     const fetchInternName = async () => {
@@ -292,29 +384,44 @@ const PerformanceFeedbackPage = () => {
   };
 
   return (
-    <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
-      <Grid container spacing={4}>
+<Container 
+  sx={{ 
+    bgcolor: theme.palette.mode === 'dark' 
+      ? theme.palette.background.darkDefault 
+      : theme.palette.background.default,
+    minHeight: '100vh',
+    color: theme.palette.mode === 'dark' 
+      ? theme.palette.text.darkPrimary 
+      : theme.palette.text.primary,
+    p: 3,
+  }}
+>      <Grid container spacing={4}>
         {/* Left Side: Feedback Form */}
         <Grid item xs={12} md={6}>
           <Paper elevation={3} sx={{ 
-            p: 3, 
-            height: '100%',
-            borderRadius: 3,
-            boxShadow: '0 8px 16px rgba(0,0,0,0.4)'
+            p: 3,
+            bgcolor: theme.palette.mode === 'dark' 
+              ? theme.palette.background.darkPaper
+              : theme.palette.background.paper,
+            borderRadius: 2,
+            boxShadow: theme.palette.mode === 'dark' 
+              ? '0 1px 3px rgba(255,255,255,0.1)'
+              : '0 1px 3px rgba(0,0,0,0.1)',
           }}>
-            <Typography 
-              variant="h5" 
-              gutterBottom 
-              align="center" 
-              sx={{ 
-                fontWeight: 'bold', 
-                color: theme.palette.primary.dark,
-                mb: 3,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-            >
+<Typography
+  variant="h5"
+  component="h1"
+  gutterBottom
+  sx={{
+    mb: 3,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: theme.palette.mode === 'dark' 
+      ? theme.palette.text.darkPrimary 
+      : theme.palette.text.primary,
+  }}
+>
               <Feedback sx={{ mr: 1, fontSize: 32 }} />
               Student Performance Feedback
             </Typography>
@@ -322,41 +429,63 @@ const PerformanceFeedbackPage = () => {
               <Grid container spacing={3}>
                 {/* Intern ID */}
                 <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    label="Intern ID"
-                    name="emp_id"
-                    value={feedback.emp_id}
-                    onChange={handleChange}
-                    error={!!errors.emp_id}
-                    helperText={errors.emp_id}
-                    variant="outlined"
-                    InputProps={{
-                      startAdornment: (
-                        <Search color="action" sx={{ mr: 1 }} />
-                      ),
-                    }}
-                  />
+                <TextField
+  fullWidth
+  label="Intern ID"
+  name="emp_id"
+  value={feedback.emp_id}
+  onChange={handleChange}
+  sx={{
+    '& .MuiOutlinedInput-root': {
+      '& fieldset': {
+        borderColor: theme.palette.mode === 'dark' 
+          ? 'rgba(255, 255, 255, 0.23)'
+          : 'rgba(0, 0, 0, 0.23)',
+      },
+      '&:hover fieldset': {
+        borderColor: theme.palette.mode === 'dark' 
+          ? theme.palette.primary.dark
+          : theme.palette.primary.main,
+      },
+    },
+  }}
+/>
                 </Grid>
 
                 {/* Student Name */}
                 <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    label="Student Name"
-                    name="studentName"
-                    value={feedback.studentName}
-                    onChange={handleChange}
+                <TextField
+  fullWidth
+  label="Student Name"
+  name="studentName"
+  value={feedback.studentName}
+  onChange={handleChange}
                     error={!!errors.studentName}
                     helperText={errors.studentName}
                     variant="outlined"
                     disabled
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        '& fieldset': {
+                          borderColor: theme.palette.mode === 'dark' 
+                            ? 'rgba(255, 255, 255, 0.23)'
+                            : 'rgba(0, 0, 0, 0.23)',
+                        },
+                        '&:hover fieldset': {
+                          borderColor: theme.palette.mode === 'dark' 
+                            ? theme.palette.primary.dark
+                            : theme.palette.primary.main,
+                        },
+                      },
+                    }}
                   />
                 </Grid>
 
                 {/* Rating */}
                 <Grid item xs={12}>
-                  <Typography variant="h6" gutterBottom sx={{ color: theme.palette.text.secondary }}>
+                  <Typography variant="h6" gutterBottom sx={{ color: theme.palette.mode === 'dark' 
+                  ? theme.palette.text.darkPrimary 
+                  : theme.palette.text.primary }}>
                     Overall Performance Rating:
                   </Typography>
                   <StyledRating
@@ -386,6 +515,20 @@ const PerformanceFeedbackPage = () => {
                     error={!!errors.comments}
                     helperText={errors.comments}
                     variant="outlined"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        '& fieldset': {
+                          borderColor: theme.palette.mode === 'dark' 
+                            ? 'rgba(255, 255, 255, 0.23)'
+                            : 'rgba(0, 0, 0, 0.23)',
+                        },
+                        '&:hover fieldset': {
+                          borderColor: theme.palette.mode === 'dark' 
+                            ? theme.palette.primary.dark
+                            : theme.palette.primary.main,
+                        },
+                      },
+                    }}
                   />
                 </Grid>
 
@@ -419,14 +562,18 @@ const PerformanceFeedbackPage = () => {
 
         {/* Right Side: Feedback History */}
         <Grid item xs={12} md={6}>
-          <Paper elevation={3} sx={{ 
-            p: 3, 
-            height: '100%', 
-            display: 'flex', 
-            flexDirection: 'column',
-            borderRadius: 3,
-            boxShadow: '0 8px 16px rgba(0,0,0,0.4)'
-          }}>
+        <Paper
+  sx={{
+    p: 3,
+    bgcolor: theme.palette.mode === 'dark' 
+      ? theme.palette.background.darkPaper
+      : theme.palette.background.paper,
+    borderRadius: 2,
+    boxShadow: theme.palette.mode === 'dark' 
+      ? '0 1px 3px rgba(255,255,255,0.1)'
+      : '0 1px 3px rgba(0,0,0,0.1)',
+  }}
+>
             <Typography 
               variant="h5" 
               gutterBottom 
@@ -672,48 +819,11 @@ const PerformanceFeedbackPage = () => {
   );
 };
 
-// Custom theme
-const theme = createTheme({
-  palette: {
-    primary: {
-      main: '#1976d2',
-      dark: '#0d47a1',
-      light: '#e3f2fd',
-    },
-    secondary: {
-      main: '#9c27b0',
-    },
-    background: {
-      default: '#f5f7fa',
-    },
-  },
-  typography: {
-    fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
-    h5: {
-      fontWeight: 600,
-    },
-  },
-  components: {
-    MuiButton: {
-      styleOverrides: {
-        root: {
-          textTransform: 'none',
-        },
-      },
-    },
-    MuiPaper: {
-      styleOverrides: {
-        root: {
-          transition: 'all 0.3s ease',
-        },
-      },
-    },
-  },
-});
 
 const App = () => {
   return (
     <ThemeProvider theme={theme}>
+      <CssBaseline />
       <PerformanceFeedbackPage />
     </ThemeProvider>
   );
