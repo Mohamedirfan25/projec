@@ -113,7 +113,9 @@ import {
   SupervisorAccount as ManagerIcon,
   Person as SupervisorIcon,
   AddAPhoto as AddPhotoIcon,
-  Upload as UploadIcon
+  Upload as UploadIcon,
+  Send as SendIcon,
+  Warning as WarningIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -288,6 +290,11 @@ const InternLists = ({ setActiveComponent, showAddForm: externalShowAddForm, onF
   const [selectedEditData, setSelectedEditData] = useState(null); // optional, to pass data
   const [actionSubMenuAnchorEl, setActionSubMenuAnchorEl] = useState(null);
 
+  const [certificateModalOpen, setCertificateModalOpen] = useState(false);
+  const [selectedIntern, setSelectedIntern] = useState(null);
+  const [isSending, setIsSending] = useState(false);
+  const [certificateSentStatus, setCertificateSentStatus] = useState({});
+
   const fetchInterns = async () => {
     try {
       setIsLoading(true);
@@ -298,6 +305,7 @@ const InternLists = ({ setActiveComponent, showAddForm: externalShowAddForm, onF
     const holdAndWaitInterns = [];
     const discontinuedInterns = [];
     const deletedInterns = [];
+    const certStatusMap = {};
 
     const token = localStorage.getItem("token");
 
@@ -325,9 +333,18 @@ const InternLists = ({ setActiveComponent, showAddForm: externalShowAddForm, onF
 
     const combinedData = internUsers.map((user) => {
       const registerInfo = registerRes.data.find((reg) => reg.id === user.user) || {};
-      // ...existing mapping logic...
+      // Map the certificate sent status from the backend
+      if (user.certicate_sent) {
+        certStatusMap[user.emp_id] = true;
+      }
       return { ...user, ...registerInfo };
     });
+    
+    // Update the certificate sent status state
+    setCertificateSentStatus(prev => ({
+      ...prev,
+      ...certStatusMap
+    }));
 
 // Removed unreachable code after return
 
@@ -418,27 +435,72 @@ useEffect(() => {
     try {
       const token = localStorage.getItem("token");
       
-      // Update status in backend (soft delete)
-      const response = await axios.patch(
-        `http://localhost:8000/Sims/user-data/${internId}/`,
-        { user_status: "deleted" },  // Changed from is_deleted to user_status
-        {
-          headers: { Authorization: `Token ${token}` },
-        }
-      );
-  
-      // Update frontend state
-      await fetchInterns();
-
-
-  
-      // Show success message
-      setSnackbarMessage("Intern deleted successfully");
-      setSnackbarSeverity("success");
-      setOpenSnackbar(true);
+      // Save the current state for potential rollback
+      const previousState = {
+        interns: JSON.parse(JSON.stringify(interns)),
+        deletedInterns: [...deletedInterns]
+      };
+      
+      // Find the intern being deleted for the undo functionality
+      const internToDelete = Object.values(interns)
+        .flat()
+        .find(intern => intern.id === internId);
+      
+      if (!internToDelete) {
+        throw new Error('Intern not found');
+      }
+      
+      try {
+        // Optimistically update the UI
+        setInterns(prevInterns => {
+          const updatedInterns = { ...prevInterns };
+          
+          // Remove the intern from all status arrays
+          Object.keys(updatedInterns).forEach(key => {
+            if (Array.isArray(updatedInterns[key])) {
+              updatedInterns[key] = updatedInterns[key].filter(intern => intern.id !== internId);
+            }
+          });
+          
+          return updatedInterns;
+        });
+        
+        // Add to deleted interns list
+        setDeletedInterns(prev => [
+          ...prev,
+          {
+            ...internToDelete,
+            status: 'Deleted',
+            user_status: 'deleted'
+          }
+        ]);
+        
+        // Make the API call
+        const response = await axios.patch(
+          `http://localhost:8000/Sims/user-data/${internId}/`,
+          { user_status: "deleted" },
+          { headers: { Authorization: `Token ${token}` }}
+        );
+        
+        // Show success message with undo option
+        setSnackbarMessage("Intern deleted successfully");
+        setSnackbarSeverity("success");
+        setOpenSnackbar(true);
+        
+      } catch (apiError) {
+        console.error("API Error:", apiError);
+        // Revert to previous state on error
+        setInterns(previousState.interns);
+        setDeletedInterns(previousState.deletedInterns);
+        
+        setSnackbarMessage("Failed to delete intern. Please try again.");
+        setSnackbarSeverity("error");
+        setOpenSnackbar(true);
+      }
+      
     } catch (error) {
-      console.error("Failed to delete intern:", error);
-      setSnackbarMessage("Failed to delete intern. Please try again.");
+      console.error("Error in handleDeleteIntern:", error);
+      setSnackbarMessage("An unexpected error occurred. Please try again.");
       setSnackbarSeverity("error");
       setOpenSnackbar(true);
     }
@@ -453,24 +515,109 @@ const handleSetStatus = async (internId, status) => {
       'Yet to Join': 'yettojoin',
       'Hold and Wait': 'holdandwait',
       'Discontinued': 'discontinued',
+      'Deleted': 'deleted'
     };
+    
     const backendStatus = statusMap[status] || status;
-    const response = await axios.patch(
-      `http://localhost:8000/Sims/user-data/${internId}/`,
-      { user_status: backendStatus },
-      { headers: { Authorization: `Token ${token}` } }
-    );
-    await fetchInterns();
-    setSnackbarMessage(`Intern status set to ${status}`);
-    setSnackbarSeverity("success");
-    setOpenSnackbar(true);
+    
+    // Save the current state for potential rollback
+    const previousState = {
+      interns: JSON.parse(JSON.stringify(interns)),
+      deletedInterns: [...deletedInterns]
+    };
+    
+    try {
+      // Make the API call first
+      const response = await axios.patch(
+        `http://localhost:8000/Sims/user-data/${internId}/`,
+        { user_status: backendStatus },
+        { headers: { Authorization: `Token ${token}` } }
+      );
+      
+      // Only update the UI after successful API call
+      setInterns(prevInterns => {
+        const updatedInterns = { ...prevInterns };
+        let movedIntern = null;
+        
+        // Find and remove the intern from all status arrays
+        Object.keys(updatedInterns).forEach(key => {
+          if (Array.isArray(updatedInterns[key])) {
+            const index = updatedInterns[key].findIndex(intern => intern.id === internId);
+            if (index !== -1) {
+              movedIntern = { ...updatedInterns[key][index] };
+              updatedInterns[key] = [
+                ...updatedInterns[key].slice(0, index),
+                ...updatedInterns[key].slice(index + 1)
+              ];
+            }
+          }
+        });
+        
+        // If we found the intern and status is not 'Deleted', add to new status
+        if (movedIntern && status !== 'Deleted') {
+          movedIntern = {
+            ...movedIntern,
+            status: status,
+            user_status: backendStatus
+          };
+          
+          updatedInterns[status] = [
+            ...(updatedInterns[status] || []),
+            movedIntern
+          ];
+        }
+        
+        return updatedInterns;
+      });
+      
+      // If status is 'Deleted', update deletedInterns state
+      if (status === 'Deleted') {
+        const deletedIntern = Object.values(previousState.interns)
+          .flat()
+          .find(intern => intern.id === internId);
+          
+        if (deletedIntern) {
+          setDeletedInterns(prev => [
+            ...prev,
+            {
+              ...deletedIntern,
+              status: 'Deleted',
+              user_status: 'deleted'
+            }
+          ]);
+        }
+      }
+      
+      // Show success message
+      setSnackbarMessage(`Intern status set to ${status}`);
+      setSnackbarSeverity("success");
+      setOpenSnackbar(true);
+      
+    } catch (apiError) {
+      console.error("API Error:", apiError);
+      // Revert to previous state on error
+      setInterns(previousState.interns);
+      setDeletedInterns(previousState.deletedInterns);
+      
+      setSnackbarMessage("Failed to update intern status. Please try again.");
+      setSnackbarSeverity("error");
+      setOpenSnackbar(true);
+    }
+    
   } catch (error) {
-    setSnackbarMessage("Failed to update intern status. Please try again.");
+    console.error("Error in handleSetStatus:", error);
+    setSnackbarMessage("An unexpected error occurred. Please try again.");
     setSnackbarSeverity("error");
     setOpenSnackbar(true);
   }
+  
+  // Always refresh data from server to ensure consistency
+  try {
+    await fetchInterns();
+  } catch (fetchError) {
+    console.error("Failed to refresh intern data:", fetchError);
+  }
 };
-
 const handleDiscontinueIntern = async (internId) => {
   try {
     const token = localStorage.getItem("token");
@@ -485,7 +632,7 @@ const handleDiscontinueIntern = async (internId) => {
 
     console.log("Discontinue PATCH response:", response.data);
 
-    await fetchInterns(); // ✅ refresh UI with updated status
+    await fetchInterns(); // refresh UI with updated status
 
     setSnackbarMessage("Intern discontinued successfully");
     setSnackbarSeverity("success");
@@ -573,7 +720,8 @@ const handleUndoDelete = async (internId) => {
       );
 
   const columns = [
-    'Intern ID', 'Intern Name', 'Email ID', 'Department', 'Scheme', 'Domain', 'Start Date', 'End Date', 'Status', 'Action'
+    'Intern ID', 'Intern Name', 'Email ID', 'Department', 'Scheme', 'Domain', 'Start Date', 'End Date', 'Status',
+    ...(activeTab === 'Completed' ? ['Certificate'] : []), 'Action'
   ];
 
   const currentInternsArray = Array.isArray(interns[activeTab]) ? interns[activeTab] : [];
@@ -639,7 +787,62 @@ const handleUndoDelete = async (internId) => {
     setOpenSnackbar(true);
   };
 
+  const handleSendCertificateClick = (intern) => {
+    setSelectedIntern(intern);
+    setCertificateModalOpen(true);
+  };
 
+  const handlePreviewCertificate = async (intern) => {
+    try {
+      await generateCompletedCertificate(intern.id, intern.firstName);
+    } catch (error) {
+      console.error("Error previewing certificate:", error);
+      setSnackbarMessage("Failed to preview certificate");
+      setSnackbarSeverity("error");
+      setOpenSnackbar(true);
+    }
+  };
+
+  const handleConfirmSendCertificate = async () => {
+    if (!selectedIntern) return;
+    
+    try {
+      setIsSending(true);
+      const token = localStorage.getItem("token");
+      
+      // Generate and download the certificate
+      await generateCompletedCertificate(selectedIntern.id, selectedIntern.firstName);
+      
+      // Update certificate sent status in the database
+      await axios.patch(
+        `http://localhost:8000/Sims/user-data/${selectedIntern.id}/`,
+        { certicate_sent: true },
+        { headers: { Authorization: `Token ${token}` } }
+      );
+      
+      // Update local state and refresh the intern list to get the latest data
+      setCertificateSentStatus(prev => ({
+        ...prev,
+        [selectedIntern.id]: true
+      }));
+      
+      // Refresh the intern list to ensure we have the latest data from the backend
+      await fetchInterns();
+      
+      setCertificateModalOpen(false);
+      setSnackbarMessage(`Certificate sent successfully to ${selectedIntern.name}`);
+      setSnackbarSeverity("success");
+      setOpenSnackbar(true);
+      
+    } catch (error) {
+      console.error("Error sending certificate:", error);
+      setSnackbarMessage("Failed to send certificate. Please try again.");
+      setSnackbarSeverity("error");
+      setOpenSnackbar(true);
+    } finally {
+      setIsSending(false);
+    }
+  };
 
   return (
     <ThemeProvider theme={theme}>
@@ -942,7 +1145,50 @@ const handleUndoDelete = async (internId) => {
               mt: 3,
               minHeight: '400px',
               position: 'relative',
-              overflow: 'hidden',
+              width: '100%',
+              overflowX: 'auto',
+              '& .MuiTable-root': {
+                minWidth: 'max-content',
+                width: '100%',
+              },
+              '& .MuiTableCell': {
+                whiteSpace: 'nowrap',
+                position: 'relative',
+                '&:last-child': {
+                  position: 'sticky',
+                  right: 0,
+                  backgroundColor: 'background.paper',
+                  boxShadow: '-2px 0 4px rgba(0,0,0,0.1)',
+                  zIndex: 2,
+                  '&::after': {
+                    content: '""',
+                    position: 'absolute',
+                    left: 0,
+                    top: 0,
+                    width: '1px',
+                    height: '100%',
+                    backgroundColor: 'divider',
+                  }
+                }
+              },
+              '& .MuiTableHead .MuiTableCell': {
+                backgroundColor: 'background.paper',
+                position: 'sticky',
+                top: 0,
+                zIndex: 3,
+                fontWeight: 600,
+                color: 'text.secondary',
+                whiteSpace: 'nowrap',
+                '&:last-child': {
+                  zIndex: 4 // Higher z-index for sticky action column header
+                }
+              },
+              '& .MuiTableBody .MuiTableRow:hover .MuiTableCell': {
+                backgroundColor: 'action.hover',
+                '&:last-child': {
+                  backgroundColor: 'action.hover',
+                }
+              }
             }}
           >
             {isLoading ? (
@@ -962,7 +1208,7 @@ const handleUndoDelete = async (internId) => {
                   }
                 }}
               >
-                <Table>
+                <Table sx={{ minWidth: '1200px' }}>
                   <TableHead>
                     <TableRow>
                       {columns.map((column) => (
@@ -1082,6 +1328,53 @@ const handleUndoDelete = async (internId) => {
                             }}
                           />
                         </TableCell>
+                        {activeTab === 'Completed' && (
+                          <TableCell sx={{ width: '120px', minWidth: '120px' }}>
+                            <Tooltip 
+                              title={certificateSentStatus[intern.id] || intern.certicate_sent 
+                                ? 'Certificate already sent' 
+                                : 'Send Certificate'}
+                            >
+                              <span>
+                                <Button
+                                  size="small"
+                                  color="primary"
+                                  variant="outlined"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSendCertificateClick(intern);
+                                  }}
+                                  disabled={certificateSentStatus[intern.id] || intern.certicate_sent}
+                                  endIcon={
+                                    certificateSentStatus[intern.id] || intern.certicate_sent ? (
+                                      <CheckCircle fontSize="small" />
+                                    ) : (
+                                      <SendIcon fontSize="small" />
+                                    )
+                                  }
+                                  sx={{
+                                    textTransform: 'none',
+                                    '&.Mui-disabled': {
+                                      color: 'success.main',
+                                      borderColor: 'success.light',
+                                      bgcolor: 'success.light',
+                                      opacity: 0.8
+                                    },
+                                    '&:hover': {
+                                      bgcolor: 'primary.light',
+                                      '&.Mui-disabled': {
+                                        bgcolor: 'success.light',
+                                        opacity: 0.8
+                                      }
+                                    }
+                                  }}
+                                >
+                                  {(certificateSentStatus[intern.id] || intern.certicate_sent) ? 'Sent' : 'Send'}
+                                </Button>
+                              </span>
+                            </Tooltip>
+                          </TableCell>
+                        )}
                         <TableCell>
                           <IconButton onClick={(e) => handleMenuOpen(e, intern.id)}>
                             <MoreVertIcon />
@@ -1133,6 +1426,46 @@ const handleUndoDelete = async (internId) => {
               </Table>
             )}
           </TableContainer>
+
+          {/* Certificate Send Confirmation Modal */}
+          <Dialog
+            open={certificateModalOpen}
+            onClose={() => !isSending && setCertificateModalOpen(false)}
+            maxWidth="sm"
+            fullWidth
+          >
+            <DialogContent>
+              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', p: 2, textAlign: 'center' }}>
+                <WarningIcon color="warning" sx={{ fontSize: 60, mb: 2 }} />
+                <Typography variant="h6" gutterBottom>
+                  Are you sure you want to send the certificate?
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                  This will email the certificate to {selectedIntern?.name}'s registered email address.
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 2, mt: 2, width: '100%', justifyContent: 'center' }}>
+                  <Button
+                    variant="outlined"
+                    onClick={() => setCertificateModalOpen(false)}
+                    disabled={isSending}
+                    sx={{ minWidth: 120 }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    onClick={handleConfirmSendCertificate}
+                    disabled={isSending}
+                    startIcon={isSending ? <CircularProgress size={20} color="inherit" /> : null}
+                    sx={{ minWidth: 180 }}
+                  >
+                    {isSending ? 'Sending...' : 'Yes, Send Certificate'}
+                  </Button>
+                </Box>
+              </Box>
+            </DialogContent>
+          </Dialog>
 
           {!isLoading && filteredInterns.length === 0 ? (
             <Box sx={{
