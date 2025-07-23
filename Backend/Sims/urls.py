@@ -29,7 +29,7 @@ urlpatterns = [
 
     path('college-details/', views.CollegeDetailsView.as_view(),
          name='college-details-list'),
-    path('college-details/<uuid:pk>/', views.CollegeDetailsView.as_view(),
+    path('college-details/<str:emp_id>/', views.CollegeDetailsView.as_view(),
          name='college-details-detail'),
 
 

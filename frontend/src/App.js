@@ -34,6 +34,8 @@ import StaffList from "./pages/StaffList";
 import AssetLists from './pages/AssetLists'; // adjust the path as needed
 import LeaveList from "./pages/LeaveList";
 import EditedForm from "./components/EditedForm";
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 // ...existing code...
 
@@ -85,6 +87,18 @@ function ProtectedRoute({ children }) {
 }
 function App() {
   return (
+    <>
+    <ToastContainer 
+    position="top-center"
+    autoClose={5000}
+    hideProgressBar={false}
+    newestOnTop={false}
+    closeOnClick
+    rtl={false}
+    pauseOnFocusLoss
+    draggable
+    pauseOnHover
+  />
     <Router>
       <Routes>
         <Route path="/" element={<InternHomePage />} />
@@ -222,6 +236,7 @@ function App() {
         } />
       </Routes>
     </Router>
+    </>
   );
 }
 

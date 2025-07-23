@@ -131,6 +131,8 @@ import { useTheme } from '@mui/material/styles';
 import { useColorMode } from '../index';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import BuildIcon from '@mui/icons-material/Build';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
@@ -427,29 +429,106 @@ const handleCertificatesMenuClose = () => {
   setSelectedCertInternId(null);
 };
 
-const handleCertificateAction = (type) => {
-  console.log(`${type} for intern ${selectedCertInternId}`);
-  // Add your logic for generating/downloading certificates here
-  switch(type) {
-    case 'Offer Letter':
-      // Handle offer letter
-      break;
-    case 'Partial Certificate':
-      // Handle partial certificate
-      break;
-    case 'Completion Certificate':
-      // Handle completion certificate
-      break;
-    case 'Attendance Certificate':
-      // Handle attendance certificate
-      break;
-    case 'Task Certificate':
-      // Handle task certificate
-      break;
-    default:
-      break;
+const handleCertificateAction = async (type) => {
+  if (!selectedCertInternId) return;
+
+  try {
+    const token = localStorage.getItem("token");
+    let endpoint = '';
+    let method = 'GET';
+    let data = null;
+
+        // Find the selected intern's data
+        const allInterns = Object.values(interns).flat();
+        const selectedIntern = allInterns.find(intern => intern.id === selectedCertInternId);
+        
+        if (!selectedIntern) {
+          console.error('Intern not found');
+          return;
+        }
+        console.log(selectedIntern);
+        const collegeData = await axios.get(`http://localhost:8000/Sims/college-details/${selectedIntern.id}/`, {
+          headers: { Authorization: `Token ${token}` },
+        });
+        const userData = await axios.get(`http://localhost:8000/Sims/user-data/${selectedIntern.id}/`, {
+          headers: { Authorization: `Token ${token}` },
+        });
+        console.log(collegeData.data.college_details);
+        console.log(userData.data);
+
+    switch(type) {
+      case 'Offer Letter':
+        endpoint = `http://localhost:8000/Sims/generate-offer-letter/`;
+        method = 'POST';
+        data = {
+          college_name: collegeData.data.college_details.college_name,
+          start_date: userData.data.start_date,
+          end_date: userData.data.end_date,
+          position_title: userData.data.domain+" Intern", 
+          domain: userData.data.domain,
+          work_location: "VDart, Global Capability Center, Mannarpuram",
+          reporting_to: userData.data.reportingManager || "Derrick Alex",
+          emp_id: selectedIntern.id, 
+          shift_time: userData.data.shift_timing,
+          shift_days: 'Monday to Friday'
+        };
+        console.log(data);
+        break;
+      case 'Completion Certificate':
+        const response = await axios.get(
+          `http://localhost:8000/Sims/generate-completed-certificate/${selectedIntern.id}/`,
+          {
+            headers: { Authorization: `Token ${token}` },
+            responseType: "blob",
+          }
+        );
+    
+        const blob = new Blob([response.data], { type: "application/pdf" });
+        const url = window.URL.createObjectURL(blob);
+    
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", `${userData.data.username}_CompletedCertificate.pdf`);
+        document.body.appendChild(link);
+        link.click();
+    
+        link.remove();
+        window.URL.revokeObjectURL(url);
+        break;
+      default:
+        break;
+    }
+
+    // const response = await axios({
+    //   method,
+    //   url: endpoint,
+    //   data,
+    //   headers: {
+    //     'Authorization': `Token ${token}`,
+    //     'Content-Type': 'application/json'
+    //   } ,
+    //   responseType: 'blob',
+    // });
+    // const blob = new Blob([response.data], { type: "application/pdf" });
+    // const url = window.URL.createObjectURL(blob);
+
+    // const link = document.createElement("a");
+    // link.href = url;
+    // link.setAttribute("download", `${userData.data.username}_CompletedCertificate.pdf`);
+    // document.body.appendChild(link);
+    // link.click();
+
+    // link.remove();
+    // window.URL.revokeObjectURL(url);
+    toast.success(`Successfully generated ${type}.`);
+    
+    
+  } catch (error) {
+    console.error(`Error generating ${type}:`, error);
+    toast.error(`Failed to generate ${type}. Please try again.`);
+  } finally {
+    handleCertificatesMenuClose();
   }
-  handleCertificatesMenuClose();
 };
 
   const handleFilterClick = (event) => {
@@ -757,8 +836,7 @@ const handleUndoDelete = async (internId) => {
     );
 
   const columns = [
-    'Intern ID', 'Intern Name', 'Email ID', 'Department', 'Scheme', 'Domain', 'Start Date', 'End Date', 'Status',
-    ...(activeTab === 'Completed' ? ['Certificate'] : []), 'Action'
+    'Intern ID', 'Intern Name', 'Email ID', 'Department', 'Scheme', 'Domain', 'Start Date', 'End Date', 'Status', 'Action'
   ];
 
   const currentInternsArray = activeTab === 'All' 
@@ -1400,7 +1478,7 @@ const handleUndoDelete = async (internId) => {
   }}
 />
                         </TableCell>
-                        {activeTab === 'Completed' && (
+                        {/* {activeTab === 'Completed' && (
                           <TableCell sx={{ width: '120px', minWidth: '120px' }}>
                             <Tooltip 
                               title={certificateSentStatus[intern.id] || intern.certicate_sent 
@@ -1446,7 +1524,7 @@ const handleUndoDelete = async (internId) => {
                               </span>
                             </Tooltip>
                           </TableCell>
-                        )}
+                        )} */}
                         <TableCell>
                         <IconButton
                           size="small"
@@ -3322,6 +3400,7 @@ const RegisterPage = ({ onNext, initialData, isReturning, onCancel }) => {
                 </Snackbar>
               </Paper>
             </LocalizationProvider>
+            
             );
             };
             // -------------------end company details---------------------
