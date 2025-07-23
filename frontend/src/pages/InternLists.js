@@ -115,7 +115,7 @@ import {
   AddAPhoto as AddPhotoIcon,
   Upload as UploadIcon,
   Send as SendIcon,
-  Warning as WarningIcon
+  Warning as WarningIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -129,6 +129,8 @@ import EditedForm from '../components/EditedForm';
 import UndoIcon from '@mui/icons-material/Undo';
 import { useTheme } from '@mui/material/styles';
 import { useColorMode } from '../index';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import BuildIcon from '@mui/icons-material/Build';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
@@ -234,14 +236,17 @@ const InternLists = ({ setActiveComponent, showAddForm: externalShowAddForm, onF
   const { colorMode } = useColorMode();
   const navigate = useNavigate();
   // Set default tab to 'In Progress' (matches tab value, not 'InProgress')
-  const [activeTab, setActiveTab] = useState('In Progress');
+  const [activeTab, setActiveTab] = useState('All');
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(5);
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedInternId, setSelectedInternId] = useState(null);
+  const [certificatesAnchorEl, setCertificatesAnchorEl] = useState(null);
+  const [selectedCertInternId, setSelectedCertInternId] = useState(null);
   // Initialize interns as an object with all tab keys to avoid blank data
   const [interns, setInterns] = useState({
+    'All': [],
     'In Progress': [],
     'Completed': [],
     'Yet to Join': [],
@@ -268,11 +273,14 @@ const InternLists = ({ setActiveComponent, showAddForm: externalShowAddForm, onF
   const [selectedIntern, setSelectedIntern] = useState(null);
   const [isSending, setIsSending] = useState(false);
   const [certificateSentStatus, setCertificateSentStatus] = useState({});
+  const [activeCertMenu, setActiveCertMenu] = useState('inProgress');
+
 
   const fetchInterns = async () => {
     try {
       setIsLoading(true);
     // Declare intern status arrays
+    const allInterns = [];
     const inProgressInterns = [];
     const completedInterns = [];
     const yetToJoinInterns = [];
@@ -382,6 +390,13 @@ const InternLists = ({ setActiveComponent, showAddForm: externalShowAddForm, onF
     });
 
     setInterns({
+      'All': [
+        ...inProgressInterns,
+        ...completedInterns,
+        ...yetToJoinInterns,
+        ...holdAndWaitInterns,
+        ...discontinuedInterns
+      ],
       'In Progress': inProgressInterns,
       'Completed': completedInterns,
       'Yet to Join': yetToJoinInterns,
@@ -401,6 +416,41 @@ useEffect(() => {
   fetchInterns();
 }, []);
 
+const handleCertificatesMenuOpen = (event, internId, menuType = 'inProgress') => {
+  setCertificatesAnchorEl(event.currentTarget);
+  setSelectedCertInternId(internId);
+  setActiveCertMenu(menuType); // Add this line
+};
+
+const handleCertificatesMenuClose = () => {
+  setCertificatesAnchorEl(null);
+  setSelectedCertInternId(null);
+};
+
+const handleCertificateAction = (type) => {
+  console.log(`${type} for intern ${selectedCertInternId}`);
+  // Add your logic for generating/downloading certificates here
+  switch(type) {
+    case 'Offer Letter':
+      // Handle offer letter
+      break;
+    case 'Partial Certificate':
+      // Handle partial certificate
+      break;
+    case 'Completion Certificate':
+      // Handle completion certificate
+      break;
+    case 'Attendance Certificate':
+      // Handle attendance certificate
+      break;
+    case 'Task Certificate':
+      // Handle task certificate
+      break;
+    default:
+      break;
+  }
+  handleCertificatesMenuClose();
+};
 
   const handleFilterClick = (event) => {
     setFilterAnchorEl(event.currentTarget);
@@ -479,6 +529,18 @@ useEffect(() => {
       setOpenSnackbar(true);
     }
   };
+  const handleSetStatusAll = async () => {
+    try {
+      const response = await axios.get('http://localhost:8000/Sims/user-data/'); // 🔁 Replace with your actual endpoint
+      if (!response.ok) throw new Error("Failed to fetch interns");
+  
+      const data = await response.json();
+      setInterns(data); 
+    } catch (error) {
+      console.error("Error fetching all interns:", error);
+    }
+  };
+  
 const handleSetStatus = async (internId, status) => {
   try {
     const token = localStorage.getItem("token");
@@ -592,6 +654,7 @@ const handleSetStatus = async (internId, status) => {
     console.error("Failed to refresh intern data:", fetchError);
   }
 };
+
 const handleDiscontinueIntern = async (internId) => {
   try {
     const token = localStorage.getItem("token");
@@ -675,30 +738,36 @@ const handleUndoDelete = async (internId) => {
   };
 
   const filteredInterns = activeTab === 'Deleted'
-    ? deletedInterns.filter(intern =>
+  ? deletedInterns.filter(intern =>
       intern.id.toString().includes(searchTerm) ||
       intern.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       intern.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
       intern.scheme.toLowerCase().includes(searchTerm.toLowerCase()) ||
       intern.domain.toLowerCase().includes(searchTerm.toLowerCase())
     )
-    : (interns[activeTab] || []).filter(intern =>
-        (intern.id.toString().includes(searchTerm) ||
-          intern.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          intern.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          intern.scheme.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          intern.domain.toLowerCase().includes(searchTerm.toLowerCase())) &&
-        (filters.department === '' || intern.department === filters.department) &&
-        (filters.scheme === '' || intern.scheme === filters.scheme) &&
-        (filters.domain === '' || intern.domain === filters.domain)
-      );
+  : (interns[activeTab] || []).filter(intern =>
+      (intern.id.toString().includes(searchTerm) ||
+        intern.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        intern.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        intern.scheme.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        intern.domain.toLowerCase().includes(searchTerm.toLowerCase())) &&
+      (filters.department === '' || intern.department === filters.department) &&
+      (filters.scheme === '' || intern.scheme === filters.scheme) &&
+      (filters.domain === '' || intern.domain === filters.domain)
+    );
 
   const columns = [
     'Intern ID', 'Intern Name', 'Email ID', 'Department', 'Scheme', 'Domain', 'Start Date', 'End Date', 'Status',
     ...(activeTab === 'Completed' ? ['Certificate'] : []), 'Action'
   ];
 
-  const currentInternsArray = Array.isArray(interns[activeTab]) ? interns[activeTab] : [];
+  const currentInternsArray = activeTab === 'All' 
+  ? [...(interns['In Progress'] || []), 
+     ...(interns['Completed'] || []), 
+     ...(interns['Yet to Join'] || []), 
+     ...(interns['Hold and Wait'] || []), 
+     ...(interns['Discontinued'] || [])]
+  : Array.isArray(interns[activeTab]) ? interns[activeTab] : [];
   const departments = [...new Set(currentInternsArray.map(intern => intern.department))];
   const schemes = [...new Set(currentInternsArray.map(intern => intern.scheme))];
   const domains = [...new Set(currentInternsArray.map(intern => intern.domain))];
@@ -1042,10 +1111,22 @@ const handleUndoDelete = async (internId) => {
             }}
             variant="fullWidth"
           >
+          <Tab
+              label="All"
+              value="All"
+              icon={<WorkIcon fontSize="small" />}
+              iconPosition="start"
+              sx={{
+                textTransform: 'none',
+                fontWeight: 500,
+                fontSize: '0.875rem',
+                minHeight: 48
+              }}
+            />
             <Tab
               label="In Progress"
               value="In Progress"
-              icon={<WorkIcon fontSize="small" />}
+              icon={<AccessTimeIcon fontSize="small" />}
               iconPosition="start"
               sx={{
                 textTransform: 'none',
@@ -1367,9 +1448,15 @@ const handleUndoDelete = async (internId) => {
                           </TableCell>
                         )}
                         <TableCell>
-                          <IconButton onClick={(e) => handleMenuOpen(e, intern.id)}>
-                            <MoreVertIcon />
-                          </IconButton>
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMenuOpen(e, intern.id);
+                          }}
+                        >
+                          <MoreVertIcon />
+                        </IconButton>
                           <Menu
                             anchorEl={anchorEl}
                             open={selectedInternId === intern.id}
@@ -1387,8 +1474,28 @@ const handleUndoDelete = async (internId) => {
                                 setActionSubMenuAnchorEl(e.currentTarget);
                               }}
                             >
-                              Actions
+                              <BuildIcon fontSize="small" style={{ marginRight: 8 }} /> Actions
                             </MenuItem>
+                            {activeTab === 'In Progress' && (
+                            <MenuItem 
+                              onClick={(e) => {
+                                handleMenuClose();
+                                handleCertificatesMenuOpen(e, intern.id);
+                              }}
+                            >
+                              <Description fontSize="small" sx={{ mr: 1 }} /> Certificates
+                            </MenuItem>
+                            )}
+                            {activeTab === 'Completed' && (
+                              <MenuItem 
+                                onClick={(e) => {
+                                  handleMenuClose();
+                                  handleCertificatesMenuOpen(e, intern.id, 'completed');
+                                }}
+                              >
+                                <Description fontSize="small" sx={{ mr: 1 }} /> Certificates
+                              </MenuItem>
+                            )}
                           </Menu>
                           <Menu
                             anchorEl={actionSubMenuAnchorEl}
@@ -1397,12 +1504,43 @@ const handleUndoDelete = async (internId) => {
                             anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
                             transformOrigin={{ vertical: 'top', horizontal: 'left' }}
                           >
+                            <MenuItem onClick={() => { handleSetStatusAll(); setActionSubMenuAnchorEl(null); handleMenuClose(); }}>All Interns</MenuItem>
                             <MenuItem onClick={() => { handleSetStatus(intern.id, 'In Progress'); setActionSubMenuAnchorEl(null); handleMenuClose(); }}>In Progress</MenuItem>
                             <MenuItem onClick={() => { handleSetStatus(intern.id, 'Completed'); setActionSubMenuAnchorEl(null); handleMenuClose(); }}>Completed</MenuItem>
                             <MenuItem onClick={() => { handleSetStatus(intern.id, 'Yet to Join'); setActionSubMenuAnchorEl(null); handleMenuClose(); }}>Yet to Join</MenuItem>
                             <MenuItem onClick={() => { handleSetStatus(intern.id, 'Hold and Wait'); setActionSubMenuAnchorEl(null); handleMenuClose(); }}>Hold and Wait</MenuItem>
                             <MenuItem onClick={() => { handleSetStatus(intern.id, 'Discontinued'); setActionSubMenuAnchorEl(null); handleMenuClose(); }}>Discontinued</MenuItem>
                           </Menu>
+                          <Menu
+                              anchorEl={certificatesAnchorEl}
+                              open={Boolean(certificatesAnchorEl)}
+                              onClose={handleCertificatesMenuClose}
+                            >
+                              {activeCertMenu === 'inProgress' ? (
+                                // In Progress tab certificates
+                                <>
+                                  <MenuItem onClick={() => handleCertificateAction('Offer Letter')}>
+                                    Send Offer Letter
+                                  </MenuItem>
+                                  <MenuItem onClick={() => handleCertificateAction('Partial Certificate')}>
+                                    Send Partial Certificate
+                                  </MenuItem>
+                                </>
+                              ) : (
+                                // Completed tab certificates
+                                <>
+                                  <MenuItem onClick={() => handleCertificateAction('Completion Certificate')}>
+                                    Generate Completion Certificate
+                                  </MenuItem>
+                                  <MenuItem onClick={() => handleCertificateAction('Attendance Certificate')}>
+                                    Generate Attendance Certificate
+                                  </MenuItem>
+                                  <MenuItem onClick={() => handleCertificateAction('Task Certificate')}>
+                                    Generate Task Certificate
+                                  </MenuItem>
+                                </>
+                              )}
+                            </Menu>
                         </TableCell>
                       </TableRow>
                     ))
