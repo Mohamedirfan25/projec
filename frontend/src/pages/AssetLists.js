@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { keyframes } from '@emotion/react';
 import axios from 'axios';
 import { 
   Box, 
@@ -41,15 +42,104 @@ import {
   Refresh as RefreshIcon,
   Search as SearchIcon
 } from '@mui/icons-material';
+// Shimmer animation
+const shimmer = keyframes`
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+`;
+const useFetchInterns = (retryCount) => {
+  const [interns, setInterns] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fetchInterns = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const token = localStorage.getItem("token");
+      
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+      
+      // Using Promise.all to fetch data in parallel
+      const [userDataRes, registerRes, tempRes] = await Promise.all([
+        axios.get("http://localhost:8000/Sims/user-data/", {
+          headers: { Authorization: `Token ${token}` },
+          timeout: 10000 // 10 second timeout
+        }),
+        axios.get("http://127.0.0.1:8000/Sims/register/", {
+          headers: { Authorization: `Token ${token}` },
+          timeout: 10000
+        }),
+        axios.get("http://localhost:8000/Sims/temps/", {
+          headers: { Authorization: `Token ${token}` },
+          timeout: 10000
+        }),
+      ]);
+
+      // Process data
+      const internUsernames = new Set(
+        tempRes.data
+          .filter(entry => entry.role === "intern")
+          .map(entry => entry.username)
+      );
+
+      const internUsers = userDataRes.data.filter(user =>
+        internUsernames.has(user.username)
+      );
+
+      const today = new Date();
+      const formatted = internUsers.map((user) => {
+        const registerInfo = registerRes.data.find(reg => reg.id === user.user) || {};
+        const endDate = registerInfo.end_date ? new Date(registerInfo.end_date) : null;
+        
+        let status = "InProgress";
+        if (registerInfo.user_status?.toLowerCase() === "discontinued") {
+          status = "Discontinued";
+        } else if (endDate && endDate < today) {
+          status = "Completed";
+        }
+
+        return {
+          id: user.emp_id,
+          name: user.username,
+          firstName: registerInfo.first_name || user.firstName || "",
+          lastName: registerInfo.last_name || user.lastName || "",
+          email: user.email || `${user.username}@example.com`,
+          department: user.department || "-",
+          scheme: user.scheme || "-",
+          domain: user.domain || "-",
+          startDate: registerInfo.start_date || "-",
+          endDate: registerInfo.end_date || "-",
+          status,
+        };
+      });
+      
+      setInterns(formatted);
+      return formatted;
+    } catch (err) {
+      console.error('Error fetching data:', err);
+      setError(err.message || 'Failed to fetch data');
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [retryCount]);
+
+  return { interns, isLoading, error, fetchInterns };
+};
 
 const AssetLists = () => {
   const [activeTab, setActiveTab] = useState('InProgress');
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [interns, setInterns] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [retryCount, setRetryCount] = useState(0);
   
   const [filters, setFilters] = useState({
     department: '',
@@ -76,6 +166,9 @@ const AssetLists = () => {
     'Intern ID', 'Name', 'Email', 'Department', 'Scheme', 'Domain', 'Start Date', 'End Date', 'Status', 'Action'
   ];
   
+  const { interns, isLoading, error: fetchError, fetchInterns } = useFetchInterns(retryCount);
+  const [error, setError] = useState(null);
+
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
   };
@@ -137,76 +230,29 @@ const AssetLists = () => {
     });
   }, [assets, selectedIntern, assetFilters]);
 
-  // Optimized fetch function with error handling
-  const fetchInterns = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const token = localStorage.getItem("token");
-      
-      // Using Promise.all to fetch data in parallel
-      const [userDataRes, registerRes, tempRes] = await Promise.all([
-        axios.get("http://localhost:8000/Sims/user-data/", {
-          headers: { Authorization: `Token ${token}` },
-          timeout: 10000 // 10 second timeout
-        }),
-        axios.get("http://127.0.0.1:8000/Sims/register/", {
-          headers: { Authorization: `Token ${token}` },
-          timeout: 10000
-        }),
-        axios.get("http://localhost:8000/Sims/temps/", {
-          headers: { Authorization: `Token ${token}` },
-          timeout: 10000
-        }),
-      ]);
-
-      // Process data
-      const internUsernames = new Set(
-        tempRes.data
-          .filter(entry => entry.role === "intern")
-          .map(entry => entry.username)
-      );
-
-      const internUsers = userDataRes.data.filter(user =>
-        internUsernames.has(user.username)
-      );
-
-      const today = new Date();
-      const formatted = internUsers.map((user) => {
-        const registerInfo = registerRes.data.find(reg => reg.id === user.user) || {};
-        const endDate = registerInfo.end_date ? new Date(registerInfo.end_date) : null;
-        
-        let status = "InProgress";
-        if (registerInfo.user_status?.toLowerCase() === "discontinued") {
-          status = "Discontinued";
-        } else if (endDate && endDate < today) {
-          status = "Completed";
-        }
-
-        return {
-          id: user.emp_id,
-          name: user.username,
-          firstName: registerInfo.first_name || user.firstName || "",
-          lastName: registerInfo.last_name || user.lastName || "",
-          email: user.email || `${user.username}@example.com`,
-          department: user.department || "-",
-          scheme: user.scheme || "-",
-          domain: user.domain || "-",
-          startDate: registerInfo.start_date || "-",
-          endDate: registerInfo.end_date || "-",
-          status,
-          // ... other fields
-        };
-      });
-
-      setInterns(formatted);
-    } catch (err) {
-      console.error("Failed to fetch interns:", err);
-      setError("Failed to load intern data. Please try again later.");
-    } finally {
-      setIsLoading(false);
+  const handleRetry = () => {
+    setRetryCount(prev => prev + 1);
+    setError(null);
+  };
+  
+  // Update local error state when fetchError changes
+  useEffect(() => {
+    if (fetchError) {
+      setError(fetchError);
     }
-  }, []);
+  }, [fetchError]);
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        await fetchInterns();
+      } catch (err) {
+        // Error is already handled in fetchInterns
+      }
+    };
+    
+    loadData();
+  }, [fetchInterns]);
 
   // Shimmer effect for loading state
   const renderShimmer = () => (
@@ -240,7 +286,7 @@ const AssetLists = () => {
       <Button 
         variant="contained" 
         color="primary" 
-        onClick={fetchInterns}
+        onClick={handleRetry}
         startIcon={<RefreshIcon />}
       >
         Retry
@@ -250,15 +296,30 @@ const AssetLists = () => {
 
   // Update your JSX to include loading and error states
   return (
-    <Box sx={{ p: 3, maxWidth: 1400, margin: '0 auto' }}>
+    <Box sx={{ 
+      p: 3, 
+      maxWidth: 1400, 
+      margin: '0 auto',
+      '& .MuiSkeleton-root': {
+        backgroundColor: 'rgba(0, 0, 0, 0.05)',
+      },
+      '& .MuiSkeleton-wave': {
+        transform: 'scale(1, 0.8)',
+      },
+      '& .shimmer-animation': {
+        animation: `${shimmer} 2s infinite`,
+        background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+        backgroundSize: '200% 100%',
+      }
+    }}>
       {/* Error Snackbar */}
       <Snackbar
         open={!!error}
         autoHideDuration={6000}
-        onClose={() => setError(null)}
+        onClose={handleRetry}
         anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
       >
-        <Alert onClose={() => setError(null)} severity="error" sx={{ width: '100%' }}>
+        <Alert onClose={handleRetry} severity="error" sx={{ width: '100%' }}>
           {error}
         </Alert>
       </Snackbar>
@@ -271,11 +332,47 @@ const AssetLists = () => {
           </TableHead>
           <TableBody>
             {isLoading ? (
-              renderShimmer()
+              // Shimmer effect for loading state
+              <>
+                {[...Array(5)].map((_, index) => (
+                  <TableRow key={`shimmer-${index}`}>
+                    <TableCell colSpan={columns.length} sx={{ p: 0 }}>
+                      <Box sx={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        p: 2,
+                        animation: 'shimmer 2s infinite linear',
+                        background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+                        backgroundSize: '200% 100%',
+                        borderRadius: 1,
+                        mb: 1
+                      }}>
+                        <Skeleton variant="circular" width={40} height={40} sx={{ mr: 2 }} />
+                        <Box sx={{ flex: 1 }}>
+                          <Skeleton variant="text" width="60%" height={24} sx={{ mb: 1 }} />
+                          <Skeleton variant="text" width="40%" height={20} />
+                        </Box>
+                        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                          <Skeleton variant="rounded" width={100} height={32} />
+                          <Skeleton variant="circular" width={32} height={32} />
+                        </Box>
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </>
             ) : error ? (
               <TableRow>
-                <TableCell colSpan={columns.length}>
+                <TableCell colSpan={columns.length} sx={{ textAlign: 'center', p: 4 }}>
                   <ErrorBoundary error={error} />
+                  <Button 
+                    variant="contained" 
+                    color="primary" 
+                    onClick={handleRetry}
+                    sx={{ mt: 2 }}
+                  >
+                    Retry
+                  </Button>
                 </TableCell>
               </TableRow>
             ) : filteredInterns.length === 0 ? (
