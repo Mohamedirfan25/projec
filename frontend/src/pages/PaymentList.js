@@ -25,6 +25,7 @@ import {
   FormControl,
   InputLabel,
   Pagination,
+  PaginationItem,
   Snackbar,
   CircularProgress,
 } from "@mui/material";
@@ -39,6 +40,7 @@ import {
   Payment,
   FilterList,
   Close,
+  ArrowDropDown as ArrowDropDownIcon,
 } from "@mui/icons-material";
 import AddIcon from '@mui/icons-material/Add';
 import { useTheme } from '@mui/material/styles';
@@ -554,6 +556,11 @@ const PaymentList = () => {
       setLogDialogOpen(true);
     }
   };
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(1);
+  };
+
 
   const handleAddPaymentFromTable = (payment) => {
     const user = userData.find(u => u.emp_id === parseInt(payment.internId));
@@ -907,20 +914,54 @@ const PaymentList = () => {
       <Box
         sx={{
           display: "flex",
-          justifyContent: "space-between",
+          justifyContent: "flex-end",
           alignItems: "center",
           mt: 3,
         }}
       >
-        <Typography>
-          Showing {paginatedPayments.length} of {filteredPayments.length}{" "}
-          results
-        </Typography>
+                        <Typography variant="body2" sx={{ mr: 1 }} color="text.secondary">
+                          Rows per page:
+                        </Typography>
+                        <FormControl variant="standard" size="small">
+                          <Select
+                            value={rowsPerPage}
+                            onChange={handleChangeRowsPerPage}
+                            IconComponent={ArrowDropDownIcon}
+                            sx={{
+                              '& .MuiSelect-select': {
+                                py: 1,
+                                pl: 1.5,
+                                pr: 3
+                              }
+                            }}
+                          >
+                            {[5, 10, 25].map((option) => (
+                              <MenuItem key={option} value={option}>
+                                {option}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+        <Typography sx={{ ml: 2 }}>{`${(page - 1) * rowsPerPage + 1}-${Math.min(page * rowsPerPage, filteredPayments.length)} of ${filteredPayments.length}`}</Typography>
         <Pagination
           count={Math.ceil(filteredPayments.length / rowsPerPage)}
           page={page}
           onChange={(e, value) => setPage(value)}
           color="primary"
+            renderItem={(item) => {
+              // Only render the previous and next buttons
+              if (item.type === 'previous' || item.type === 'next') {
+                return <PaginationItem {...item} />;
+              }
+              // Return null for all other items (page numbers, etc.)
+              return null;
+            }}
+          sx={{
+            ml: 2,
+            '& .MuiPagination-ul': {
+              justifyContent: 'flex-end'
+            }
+          }}
         />
       </Box>
 

@@ -19,6 +19,7 @@ import {
   InputAdornment,
   Avatar,
   Pagination,
+  PaginationItem,
   Select,
   MenuItem,
   FormControl,
@@ -1701,7 +1702,7 @@ const handleUndoDelete = async (internId) => {
           ) : !isLoading && (
             <Box sx={{
               display: 'flex',
-              justifyContent: 'space-between',
+              justifyContent: 'flex-end',
               alignItems: 'center',
               mt: 3,
               p: 2,
@@ -1709,9 +1710,6 @@ const handleUndoDelete = async (internId) => {
               borderRadius: 3,
               boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
             }}>
-              <Typography variant="body2" color="text.secondary">
-                Showing {paginatedInterns.length} of {filteredInterns.length} interns
-              </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center' }}>
                 <Typography variant="body2" sx={{ mr: 1 }} color="text.secondary">
                   Rows per page:
@@ -1736,13 +1734,27 @@ const handleUndoDelete = async (internId) => {
                     ))}
                   </Select>
                 </FormControl>
+                <Typography sx={{ ml: 2 }}>{`${(page - 1) * rowsPerPage + 1}-${Math.min(page * rowsPerPage, filteredInterns.length)} of ${filteredInterns.length}`}</Typography>
                 <Pagination
-                  count={count}
-                  page={page}
-                  onChange={handleChangePage}
-                  shape="rounded"
-                  sx={{ ml: 2 }}
-                />
+  count={count}
+  page={page}
+  onChange={handleChangePage}
+  shape="rounded"
+  renderItem={(item) => {
+    // Only render the previous and next buttons
+    if (item.type === 'previous' || item.type === 'next') {
+      return <PaginationItem {...item} />;
+    }
+    // Return null for all other items (page numbers, etc.)
+    return null;
+  }}
+  sx={{ 
+    ml: 2,
+    '& .MuiPagination-ul': {
+      justifyContent: 'flex-end'
+    }
+  }}
+/>
               </Box>
             </Box>
           )}

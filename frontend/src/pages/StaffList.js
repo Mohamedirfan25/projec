@@ -15,6 +15,7 @@ import {
     MenuItem,
     Stack,
     Pagination,
+    PaginationItem,
     InputAdornment,
     FormControl,
     Select,
@@ -477,8 +478,14 @@ const StaffList = () => {
                         onChange={(event, value) => setPage(value)}
                         shape="rounded"
                         size="small"
-                        siblingCount={0}
-                        boundaryCount={0}
+                        renderItem={(item) => {
+                            // Only render the previous and next buttons
+                            if (item.type === 'previous' || item.type === 'next') {
+                            return <PaginationItem {...item} />;
+                            }
+                            // Return null for all other items (page numbers, etc.)
+                            return null;
+                        }}
                       />
                     </Box>
                   </Box>
