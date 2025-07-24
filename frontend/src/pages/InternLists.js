@@ -115,7 +115,7 @@ import {
   AddAPhoto as AddPhotoIcon,
   Upload as UploadIcon,
   Send as SendIcon,
-  Warning as WarningIcon
+  Warning as WarningIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -127,101 +127,78 @@ import { createTheme, ThemeProvider } from '@mui/material/styles';
 import { Link } from 'react-router-dom';
 import EditedForm from '../components/EditedForm';
 import UndoIcon from '@mui/icons-material/Undo';
+import { useTheme } from '@mui/material/styles';
+import { useColorMode } from '../index';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import BuildIcon from '@mui/icons-material/Build';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
 const theme = createTheme({
   palette: {
+    mode: 'light',
     primary: {
       main: '#4361ee',
+      dark: '#3a56e8',
       contrastText: '#ffffff',
-    },
-    secondary: {
-      main: '#3f37c9',
     },
     background: {
       default: '#f8f9fa',
       paper: '#ffffff',
+      darkDefault: '#121212',
+      darkPaper: '#1e1e1e',
     },
     text: {
       primary: '#212529',
       secondary: '#6c757d',
-    },
-  },
-  typography: {
-    fontFamily: '"Inter", "Helvetica", "Arial", sans-serif',
-    h4: {
-      fontWeight: 700,
-      fontSize: '2rem',
-    },
-    h5: {
-      fontWeight: 600,
-    },
-    h6: {
-      fontWeight: 500,
-    },
-    button: {
-      textTransform: 'none',
-      fontWeight: 600,
+      darkPrimary: '#ffffff',
+      darkSecondary: '#e0e0e0',
     },
   },
   components: {
     MuiButton: {
       styleOverrides: {
-        root: {
-          borderRadius: '8px',
-          padding: '10px 20px',
-          boxShadow: 'none',
+        root: ({ theme }) => ({
+          backgroundColor: theme.palette.mode === 'dark' 
+            ? theme.palette.primary.dark
+            : theme.palette.primary.main,
+        }),
+        contained: ({ theme }) => ({
           '&:hover': {
-            boxShadow: 'none',
+            backgroundColor: theme.palette.mode === 'dark' 
+              ? theme.palette.primary.dark
+              : '#3a56e8',
           },
-        },
-        contained: {
-          '&:hover': {
-            backgroundColor: '#3a56e8',
-          },
-        },
+        }),
       },
     },
     MuiTextField: {
       styleOverrides: {
-        root: {
+        root: ({ theme }) => ({
           '& .MuiOutlinedInput-root': {
-            borderRadius: '8px',
+            '& fieldset': {
+              borderColor: theme.palette.mode === 'dark' 
+                ? 'rgba(255, 255, 255, 0.23)'
+                : 'rgba(0, 0, 0, 0.23)',
+            },
+            '&:hover fieldset': {
+              borderColor: theme.palette.mode === 'dark' 
+                ? theme.palette.primary.dark
+                : theme.palette.primary.main,
+            },
           },
-        },
-      },
-    },
-    MuiCard: {
-      styleOverrides: {
-        root: {
-          borderRadius: '12px',
-          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)',
-          transition: 'box-shadow 0.3s ease',
-          '&:hover': {
-            boxShadow: '0 8px 16px rgba(0, 0, 0, 0.1)',
-          },
-        },
+        }),
       },
     },
     MuiPaper: {
       styleOverrides: {
-        root: {
-          borderRadius: '12px',
-          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)',
-        },
-      },
-    },
-    MuiStepIcon: {
-      styleOverrides: {
-        root: {
-          '&.Mui-completed': {
-            color: '#4caf50',
-          },
-          '&.Mui-active': {
-            color: '#4361ee',
-          },
-        },
+        root: ({ theme }) => ({
+          bgcolor: theme.palette.mode === 'dark' 
+            ? theme.palette.background.darkPaper
+            : theme.palette.background.paper,
+        }),
       },
     },
   },
@@ -257,17 +234,21 @@ const generateCompletedCertificate = async (empId, firstName) => {
 
 const InternLists = ({ setActiveComponent, showAddForm: externalShowAddForm, onFormComplete, onFormCancel }) => {
   const [isLoading, setIsLoading] = useState(true);
-
+  const theme = useTheme();
+  const { colorMode } = useColorMode();
   const navigate = useNavigate();
   // Set default tab to 'In Progress' (matches tab value, not 'InProgress')
-  const [activeTab, setActiveTab] = useState('In Progress');
+  const [activeTab, setActiveTab] = useState('All');
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(5);
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedInternId, setSelectedInternId] = useState(null);
+  const [certificatesAnchorEl, setCertificatesAnchorEl] = useState(null);
+  const [selectedCertInternId, setSelectedCertInternId] = useState(null);
   // Initialize interns as an object with all tab keys to avoid blank data
   const [interns, setInterns] = useState({
+    'All': [],
     'In Progress': [],
     'Completed': [],
     'Yet to Join': [],
@@ -294,11 +275,14 @@ const InternLists = ({ setActiveComponent, showAddForm: externalShowAddForm, onF
   const [selectedIntern, setSelectedIntern] = useState(null);
   const [isSending, setIsSending] = useState(false);
   const [certificateSentStatus, setCertificateSentStatus] = useState({});
+  const [activeCertMenu, setActiveCertMenu] = useState('inProgress');
+
 
   const fetchInterns = async () => {
     try {
       setIsLoading(true);
     // Declare intern status arrays
+    const allInterns = [];
     const inProgressInterns = [];
     const completedInterns = [];
     const yetToJoinInterns = [];
@@ -408,6 +392,13 @@ const InternLists = ({ setActiveComponent, showAddForm: externalShowAddForm, onF
     });
 
     setInterns({
+      'All': [
+        ...inProgressInterns,
+        ...completedInterns,
+        ...yetToJoinInterns,
+        ...holdAndWaitInterns,
+        ...discontinuedInterns
+      ],
       'In Progress': inProgressInterns,
       'Completed': completedInterns,
       'Yet to Join': yetToJoinInterns,
@@ -427,6 +418,118 @@ useEffect(() => {
   fetchInterns();
 }, []);
 
+const handleCertificatesMenuOpen = (event, internId, menuType = 'inProgress') => {
+  setCertificatesAnchorEl(event.currentTarget);
+  setSelectedCertInternId(internId);
+  setActiveCertMenu(menuType); // Add this line
+};
+
+const handleCertificatesMenuClose = () => {
+  setCertificatesAnchorEl(null);
+  setSelectedCertInternId(null);
+};
+
+const handleCertificateAction = async (type) => {
+  if (!selectedCertInternId) return;
+
+  try {
+    const token = localStorage.getItem("token");
+    let endpoint = '';
+    let method = 'GET';
+    let data = null;
+
+        // Find the selected intern's data
+        const allInterns = Object.values(interns).flat();
+        const selectedIntern = allInterns.find(intern => intern.id === selectedCertInternId);
+        
+        if (!selectedIntern) {
+          console.error('Intern not found');
+          return;
+        }
+        console.log(selectedIntern);
+        const collegeData = await axios.get(`http://localhost:8000/Sims/college-details/${selectedIntern.id}/`, {
+          headers: { Authorization: `Token ${token}` },
+        });
+        const userData = await axios.get(`http://localhost:8000/Sims/user-data/${selectedIntern.id}/`, {
+          headers: { Authorization: `Token ${token}` },
+        });
+        console.log(collegeData.data.college_details);
+        console.log(userData.data);
+
+    switch(type) {
+      case 'Offer Letter':
+        endpoint = `http://localhost:8000/Sims/generate-offer-letter/`;
+        method = 'POST';
+        data = {
+          college_name: collegeData.data.college_details.college_name,
+          start_date: userData.data.start_date,
+          end_date: userData.data.end_date,
+          position_title: userData.data.domain+" Intern", 
+          domain: userData.data.domain,
+          work_location: "VDart, Global Capability Center, Mannarpuram",
+          reporting_to: userData.data.reportingManager || "Derrick Alex",
+          emp_id: selectedIntern.id, 
+          shift_time: userData.data.shift_timing,
+          shift_days: 'Monday to Friday'
+        };
+        console.log(data);
+        break;
+      case 'Completion Certificate':
+        const response = await axios.get(
+          `http://localhost:8000/Sims/generate-completed-certificate/${selectedIntern.id}/`,
+          {
+            headers: { Authorization: `Token ${token}` },
+            responseType: "blob",
+          }
+        );
+    
+        const blob = new Blob([response.data], { type: "application/pdf" });
+        const url = window.URL.createObjectURL(blob);
+    
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", `${userData.data.username}_CompletedCertificate.pdf`);
+        document.body.appendChild(link);
+        link.click();
+    
+        link.remove();
+        window.URL.revokeObjectURL(url);
+        break;
+      default:
+        break;
+    }
+
+    // const response = await axios({
+    //   method,
+    //   url: endpoint,
+    //   data,
+    //   headers: {
+    //     'Authorization': `Token ${token}`,
+    //     'Content-Type': 'application/json'
+    //   } ,
+    //   responseType: 'blob',
+    // });
+    // const blob = new Blob([response.data], { type: "application/pdf" });
+    // const url = window.URL.createObjectURL(blob);
+
+    // const link = document.createElement("a");
+    // link.href = url;
+    // link.setAttribute("download", `${userData.data.username}_CompletedCertificate.pdf`);
+    // document.body.appendChild(link);
+    // link.click();
+
+    // link.remove();
+    // window.URL.revokeObjectURL(url);
+    toast.success(`Successfully generated ${type}.`);
+    
+    
+  } catch (error) {
+    console.error(`Error generating ${type}:`, error);
+    toast.error(`Failed to generate ${type}. Please try again.`);
+  } finally {
+    handleCertificatesMenuClose();
+  }
+};
 
   const handleFilterClick = (event) => {
     setFilterAnchorEl(event.currentTarget);
@@ -505,6 +608,18 @@ useEffect(() => {
       setOpenSnackbar(true);
     }
   };
+  const handleSetStatusAll = async () => {
+    try {
+      const response = await axios.get('http://localhost:8000/Sims/user-data/'); // 🔁 Replace with your actual endpoint
+      if (!response.ok) throw new Error("Failed to fetch interns");
+  
+      const data = await response.json();
+      setInterns(data); 
+    } catch (error) {
+      console.error("Error fetching all interns:", error);
+    }
+  };
+  
 const handleSetStatus = async (internId, status) => {
   try {
     const token = localStorage.getItem("token");
@@ -618,6 +733,7 @@ const handleSetStatus = async (internId, status) => {
     console.error("Failed to refresh intern data:", fetchError);
   }
 };
+
 const handleDiscontinueIntern = async (internId) => {
   try {
     const token = localStorage.getItem("token");
@@ -701,30 +817,35 @@ const handleUndoDelete = async (internId) => {
   };
 
   const filteredInterns = activeTab === 'Deleted'
-    ? deletedInterns.filter(intern =>
+  ? deletedInterns.filter(intern =>
       intern.id.toString().includes(searchTerm) ||
       intern.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       intern.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
       intern.scheme.toLowerCase().includes(searchTerm.toLowerCase()) ||
       intern.domain.toLowerCase().includes(searchTerm.toLowerCase())
     )
-    : (interns[activeTab] || []).filter(intern =>
-        (intern.id.toString().includes(searchTerm) ||
-          intern.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          intern.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          intern.scheme.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          intern.domain.toLowerCase().includes(searchTerm.toLowerCase())) &&
-        (filters.department === '' || intern.department === filters.department) &&
-        (filters.scheme === '' || intern.scheme === filters.scheme) &&
-        (filters.domain === '' || intern.domain === filters.domain)
-      );
+  : (interns[activeTab] || []).filter(intern =>
+      (intern.id.toString().includes(searchTerm) ||
+        intern.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        intern.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        intern.scheme.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        intern.domain.toLowerCase().includes(searchTerm.toLowerCase())) &&
+      (filters.department === '' || intern.department === filters.department) &&
+      (filters.scheme === '' || intern.scheme === filters.scheme) &&
+      (filters.domain === '' || intern.domain === filters.domain)
+    );
 
   const columns = [
-    'Intern ID', 'Intern Name', 'Email ID', 'Department', 'Scheme', 'Domain', 'Start Date', 'End Date', 'Status',
-    ...(activeTab === 'Completed' ? ['Certificate'] : []), 'Action'
+    'Intern ID', 'Intern Name', 'Email ID', 'Department', 'Scheme', 'Domain', 'Start Date', 'End Date', 'Status', 'Action'
   ];
 
-  const currentInternsArray = Array.isArray(interns[activeTab]) ? interns[activeTab] : [];
+  const currentInternsArray = activeTab === 'All' 
+  ? [...(interns['In Progress'] || []), 
+     ...(interns['Completed'] || []), 
+     ...(interns['Yet to Join'] || []), 
+     ...(interns['Hold and Wait'] || []), 
+     ...(interns['Discontinued'] || [])]
+  : Array.isArray(interns[activeTab]) ? interns[activeTab] : [];
   const departments = [...new Set(currentInternsArray.map(intern => intern.department))];
   const schemes = [...new Set(currentInternsArray.map(intern => intern.scheme))];
   const domains = [...new Set(currentInternsArray.map(intern => intern.domain))];
@@ -865,8 +986,16 @@ const handleUndoDelete = async (internId) => {
         </>
       ) : (
         <>
-          <Box sx={{ p: 3, maxWidth: 1400, margin: '0 auto' }}>
-          {/* Edit Intern Dialog */}
+<Box sx={{ 
+  p: 3, 
+  bgcolor: theme.palette.mode === 'dark' 
+    ? theme.palette.background.darkDefault 
+    : theme.palette.background.default,
+  minHeight: '100vh',
+  color: theme.palette.mode === 'dark' 
+    ? theme.palette.text.darkPrimary 
+    : theme.palette.text.primary
+}}>          {/* Edit Intern Dialog */}
           <Dialog open={showEditedForm} onClose={() => setShowEditedForm(false)} maxWidth="md" fullWidth>
             <DialogTitle>Edit Intern Details</DialogTitle>
             <DialogContent>
@@ -1060,10 +1189,22 @@ const handleUndoDelete = async (internId) => {
             }}
             variant="fullWidth"
           >
+          <Tab
+              label="All"
+              value="All"
+              icon={<WorkIcon fontSize="small" />}
+              iconPosition="start"
+              sx={{
+                textTransform: 'none',
+                fontWeight: 500,
+                fontSize: '0.875rem',
+                minHeight: 48
+              }}
+            />
             <Tab
               label="In Progress"
               value="In Progress"
-              icon={<WorkIcon fontSize="small" />}
+              icon={<AccessTimeIcon fontSize="small" />}
               iconPosition="start"
               sx={{
                 textTransform: 'none',
@@ -1139,9 +1280,16 @@ const handleUndoDelete = async (internId) => {
             component={Paper}
             sx={{
               borderRadius: 3,
-              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-              border: '1px solid',
-              borderColor: 'divider',
+              boxShadow: theme.palette.mode === 'dark' 
+              ? '0 1px 3px rgba(255,255,255,0.1)'
+              : '0 1px 3px rgba(0,0,0,0.1)',
+            border: '1px solid',
+            borderColor: theme.palette.mode === 'dark' 
+              ? 'rgba(255,255,255,0.12)'
+              : 'divider',
+            bgcolor: theme.palette.mode === 'dark' 
+              ? theme.palette.background.darkPaper
+              : theme.palette.background.paper,
               mt: 3,
               minHeight: '400px',
               position: 'relative',
@@ -1199,7 +1347,9 @@ const handleUndoDelete = async (internId) => {
                   left: 0,
                   right: 0,
                   bottom: 0,
-                  background: 'linear-gradient(110deg, #f5f7fa 8%, #f0f2f5 18%, #f5f7fa 33%)',
+                  background: theme.palette.mode === 'dark' 
+                  ? 'linear-gradient(110deg, #333 8%, #444 18%, #333 33%)' 
+                  : 'linear-gradient(110deg, #f5f7fa 8%, #f0f2f5 18%, #f5f7fa 33%)',
                   backgroundSize: '200% 100%',
                   animation: 'shimmer 1.5s infinite linear',
                   zIndex: 1,
@@ -1293,42 +1443,42 @@ const handleUndoDelete = async (internId) => {
                         <TableCell>{intern.startDate}</TableCell>
                         <TableCell>{intern.endDate}</TableCell>
                         <TableCell>
-                          <Chip
-                            label={intern.status}
-                            sx={{
-                              fontWeight: 700,
-                              fontSize: '1em',
-                              px: 2,
-                              py: 0.5,
-                              borderRadius: 1,
-                              minWidth: 110,
-                              textAlign: 'center',
-                              bgcolor:
-                                intern.status === 'Completed' ? '#d0f5e8'
-                                : intern.status === 'Free' ? '#e3f2fd'
-                                : intern.status === 'Pending' ? '#fff9db'
-                                : intern.status === 'Incomplete' ? '#ffe3e0'
-                                : intern.status === 'In Progress' ? '#e3f2fd'
-                                : intern.status === 'Yet to Join' ? '#fff9db'
-                                : intern.status === 'Hold and Wait' ? '#ffe3e0'
-                                : intern.status === 'Discontinued' ? '#ffe3e0'
-                                : intern.status === 'Deleted' ? '#f5f5f5'
-                                : '#f5f5f5',
-                              color:
-                                intern.status === 'Completed' ? '#009688'
-                                : intern.status === 'Free' ? '#1976d2'
-                                : intern.status === 'Pending' ? '#ffa000'
-                                : intern.status === 'Incomplete' ? '#d32f2f'
-                                : intern.status === 'In Progress' ? '#1976d2'
-                                : intern.status === 'Yet to Join' ? '#ffa000'
-                                : intern.status === 'Hold and Wait' ? '#d32f2f'
-                                : intern.status === 'Discontinued' ? '#d32f2f'
-                                : intern.status === 'Deleted' ? '#616161'
-                                : '#757575',
-                            }}
-                          />
+                        <Chip
+  label={intern.status}
+  sx={{
+    fontWeight: 700,
+    fontSize: '1em',
+    px: 2,
+    py: 0.5,
+    borderRadius: 1,
+    minWidth: 110,
+    textAlign: 'center',
+    bgcolor:
+      intern.status === 'Completed' ? (theme.palette.mode === 'dark' ? '#004d40' : '#d0f5e8')
+      : intern.status === 'Free' ? (theme.palette.mode === 'dark' ? '#0d47a1' : '#e3f2fd')
+      : intern.status === 'Pending' ? (theme.palette.mode === 'dark' ? '#f57c00' : '#fff9db')
+      : intern.status === 'Incomplete' ? (theme.palette.mode === 'dark' ? '#b71c1c' : '#ffe3e0')
+      : intern.status === 'In Progress' ? (theme.palette.mode === 'dark' ? '#0d47a1' : '#e3f2fd')
+      : intern.status === 'Yet to Join' ? (theme.palette.mode === 'dark' ? '#f57c00' : '#fff9db')
+      : intern.status === 'Hold and Wait' ? (theme.palette.mode === 'dark' ? '#b71c1c' : '#ffe3e0')
+      : intern.status === 'Discontinued' ? (theme.palette.mode === 'dark' ? '#b71c1c' : '#ffe3e0')
+      : intern.status === 'Deleted' ? (theme.palette.mode === 'dark' ? '#212121' : '#f5f5f5')
+      : theme.palette.mode === 'dark' ? '#212121' : '#f5f5f5',
+    color:
+      intern.status === 'Completed' ? (theme.palette.mode === 'dark' ? '#80cbc4' : '#009688')
+      : intern.status === 'Free' ? (theme.palette.mode === 'dark' ? '#64b5f6' : '#1976d2')
+      : intern.status === 'Pending' ? (theme.palette.mode === 'dark' ? '#ffd740' : '#ffa000')
+      : intern.status === 'Incomplete' ? (theme.palette.mode === 'dark' ? '#ef9a9a' : '#d32f2f')
+      : intern.status === 'In Progress' ? (theme.palette.mode === 'dark' ? '#64b5f6' : '#1976d2')
+      : intern.status === 'Yet to Join' ? (theme.palette.mode === 'dark' ? '#ffd740' : '#ffa000')
+      : intern.status === 'Hold and Wait' ? (theme.palette.mode === 'dark' ? '#ef9a9a' : '#d32f2f')
+      : intern.status === 'Discontinued' ? (theme.palette.mode === 'dark' ? '#ef9a9a' : '#d32f2f')
+      : intern.status === 'Deleted' ? (theme.palette.mode === 'dark' ? '#9e9e9e' : '#616161')
+      : theme.palette.mode === 'dark' ? '#9e9e9e' : '#757575',
+  }}
+/>
                         </TableCell>
-                        {activeTab === 'Completed' && (
+                        {/* {activeTab === 'Completed' && (
                           <TableCell sx={{ width: '120px', minWidth: '120px' }}>
                             <Tooltip 
                               title={certificateSentStatus[intern.id] || intern.certicate_sent 
@@ -1374,11 +1524,17 @@ const handleUndoDelete = async (internId) => {
                               </span>
                             </Tooltip>
                           </TableCell>
-                        )}
+                        )} */}
                         <TableCell>
-                          <IconButton onClick={(e) => handleMenuOpen(e, intern.id)}>
-                            <MoreVertIcon />
-                          </IconButton>
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMenuOpen(e, intern.id);
+                          }}
+                        >
+                          <MoreVertIcon />
+                        </IconButton>
                           <Menu
                             anchorEl={anchorEl}
                             open={selectedInternId === intern.id}
@@ -1396,8 +1552,28 @@ const handleUndoDelete = async (internId) => {
                                 setActionSubMenuAnchorEl(e.currentTarget);
                               }}
                             >
-                              Actions
+                              <BuildIcon fontSize="small" style={{ marginRight: 8 }} /> Actions
                             </MenuItem>
+                            {activeTab === 'In Progress' && (
+                            <MenuItem 
+                              onClick={(e) => {
+                                handleMenuClose();
+                                handleCertificatesMenuOpen(e, intern.id);
+                              }}
+                            >
+                              <Description fontSize="small" sx={{ mr: 1 }} /> Certificates
+                            </MenuItem>
+                            )}
+                            {activeTab === 'Completed' && (
+                              <MenuItem 
+                                onClick={(e) => {
+                                  handleMenuClose();
+                                  handleCertificatesMenuOpen(e, intern.id, 'completed');
+                                }}
+                              >
+                                <Description fontSize="small" sx={{ mr: 1 }} /> Certificates
+                              </MenuItem>
+                            )}
                           </Menu>
                           <Menu
                             anchorEl={actionSubMenuAnchorEl}
@@ -1406,12 +1582,43 @@ const handleUndoDelete = async (internId) => {
                             anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
                             transformOrigin={{ vertical: 'top', horizontal: 'left' }}
                           >
+                            <MenuItem onClick={() => { handleSetStatusAll(); setActionSubMenuAnchorEl(null); handleMenuClose(); }}>All Interns</MenuItem>
                             <MenuItem onClick={() => { handleSetStatus(intern.id, 'In Progress'); setActionSubMenuAnchorEl(null); handleMenuClose(); }}>In Progress</MenuItem>
                             <MenuItem onClick={() => { handleSetStatus(intern.id, 'Completed'); setActionSubMenuAnchorEl(null); handleMenuClose(); }}>Completed</MenuItem>
                             <MenuItem onClick={() => { handleSetStatus(intern.id, 'Yet to Join'); setActionSubMenuAnchorEl(null); handleMenuClose(); }}>Yet to Join</MenuItem>
                             <MenuItem onClick={() => { handleSetStatus(intern.id, 'Hold and Wait'); setActionSubMenuAnchorEl(null); handleMenuClose(); }}>Hold and Wait</MenuItem>
                             <MenuItem onClick={() => { handleSetStatus(intern.id, 'Discontinued'); setActionSubMenuAnchorEl(null); handleMenuClose(); }}>Discontinued</MenuItem>
                           </Menu>
+                          <Menu
+                              anchorEl={certificatesAnchorEl}
+                              open={Boolean(certificatesAnchorEl)}
+                              onClose={handleCertificatesMenuClose}
+                            >
+                              {activeCertMenu === 'inProgress' ? (
+                                // In Progress tab certificates
+                                <>
+                                  <MenuItem onClick={() => handleCertificateAction('Offer Letter')}>
+                                    Send Offer Letter
+                                  </MenuItem>
+                                  <MenuItem onClick={() => handleCertificateAction('Partial Certificate')}>
+                                    Send Partial Certificate
+                                  </MenuItem>
+                                </>
+                              ) : (
+                                // Completed tab certificates
+                                <>
+                                  <MenuItem onClick={() => handleCertificateAction('Completion Certificate')}>
+                                    Generate Completion Certificate
+                                  </MenuItem>
+                                  <MenuItem onClick={() => handleCertificateAction('Attendance Certificate')}>
+                                    Generate Attendance Certificate
+                                  </MenuItem>
+                                  <MenuItem onClick={() => handleCertificateAction('Task Certificate')}>
+                                    Generate Task Certificate
+                                  </MenuItem>
+                                </>
+                              )}
+                            </Menu>
                         </TableCell>
                       </TableRow>
                     ))
@@ -3193,6 +3400,7 @@ const RegisterPage = ({ onNext, initialData, isReturning, onCancel }) => {
                 </Snackbar>
               </Paper>
             </LocalizationProvider>
+            
             );
             };
             // -------------------end company details---------------------

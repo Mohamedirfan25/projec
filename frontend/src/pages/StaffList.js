@@ -32,6 +32,8 @@ import {
 import StaffRegistrationForm from '../components/StaffRegistrationForm';
 import axios from 'axios';
 import StaffCreationForm from "../components/StaffCreationForm";
+import { useColorMode } from '../index';
+import { useTheme } from '@mui/material/styles';
 
 const shimmer = keyframes`
   0% { background-position: -200% 0; }
@@ -45,13 +47,15 @@ const ShimmerRow = styled(TableRow)(({ theme }) => ({
 }));
 
 const ShimmerCell = styled(Box)(({ theme }) => ({
-  height: '24px',
-  background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
-  backgroundSize: '200% 100%',
-  animation: `${shimmer} 1.5s infinite linear`,
-  borderRadius: '4px',
-  margin: '4px 0',
-}));
+    height: '24px',
+    background: theme.palette.mode === 'dark' 
+      ? 'linear-gradient(90deg, #333 25%, #444 50%, #333 75%)' 
+      : 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+    backgroundSize: '200% 100%',
+    animation: `${shimmer} 1.5s infinite linear`,
+    borderRadius: '4px',
+    margin: '4px 0',
+  }));
 
 const StaffList = () => {
     const [staff, setStaff] = useState([]);
@@ -66,6 +70,8 @@ const StaffList = () => {
     const [rowsPerPage, setRowsPerPage] = useState(5);
     const [formMode, setFormMode] = useState(null);
     const [editStaffId, setEditStaffId] = useState(null);
+    const { colorMode } = useColorMode();
+    const theme = useTheme();
 
     const fetchStaffData = useCallback(async () => {
         setIsLoading(true);
@@ -200,7 +206,16 @@ const StaffList = () => {
                 </Button>
             </Box>
 
-            <Paper elevation={0} sx={{ p: 3, mb: 3, borderRadius: 4, bgcolor: 'background.paper' }}>
+            <Paper 
+        elevation={0} 
+        sx={{ 
+            p: 3, 
+            mb: 3, 
+            borderRadius: 4, 
+            bgcolor: 'background.paper',
+            border: `1px solid ${theme.palette.divider}`,
+        }}
+    >
                 <Stack
                     direction="row"
                     spacing={2}
@@ -211,29 +226,53 @@ const StaffList = () => {
                     rowGap={2}
                 >
                     <Stack direction="row" spacing={2} alignItems="center">
-                        <TextField
-                            variant="outlined"
-                            placeholder="Search by Emp ID or Name..."
-                            size="small"
-                            value={searchTerm}
-                            onChange={handleSearch}
-                            sx={{ width: 300 }}
-                            InputProps={{
-                                startAdornment: (
-                                    <InputAdornment position="start">
-                                        <SearchIcon color="action" />
-                                    </InputAdornment>
-                                ),
-                            }}
-                        />
+                    <TextField
+        variant="outlined"
+        placeholder="Search by Emp ID or Name..."
+        size="small"
+        value={searchTerm}
+        onChange={handleSearch}
+        sx={{ 
+            width: 300,
+            '& .MuiOutlinedInput-root': {
+                backgroundColor: theme.palette.background.paper,
+                '&:hover fieldset': {
+                    borderColor: theme.palette.primary.main,
+                },
+            },
+        }}
+        InputProps={{
+            startAdornment: (
+                <InputAdornment position="start">
+                    <SearchIcon 
+                        color="action" 
+                        sx={{ 
+                            color: theme.palette.text.secondary 
+                        }} 
+                    />
+                </InputAdornment>
+            ),
+        }}
+    />
                         <Button variant="outlined" onClick={handleReset}>
                             Reset
                         </Button>
                     </Stack>
 
                     <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-                        <FormControl variant="outlined" size="small" sx={{ minWidth: 180 }}>
-                            <InputLabel>Role</InputLabel>
+                    <FormControl 
+        variant="outlined" 
+        size="small" 
+        sx={{ 
+            minWidth: 180,
+            '& .MuiOutlinedInput-root': {
+                backgroundColor: theme.palette.background.paper,
+            },
+            '& .MuiInputLabel-root': {
+                color: theme.palette.text.secondary,
+            },
+        }}
+    >                            <InputLabel>Role</InputLabel>
                             <Select
                                 value={filters.role}
                                 onChange={(e) => handleFilterChange('role', e.target.value)}
@@ -248,8 +287,19 @@ const StaffList = () => {
                             </Select>
                         </FormControl>
 
-                        <FormControl variant="outlined" size="small" sx={{ minWidth: 180 }}>
-                            <InputLabel>Domain</InputLabel>
+                        <FormControl 
+        variant="outlined" 
+        size="small" 
+        sx={{ 
+            minWidth: 180,
+            '& .MuiOutlinedInput-root': {
+                backgroundColor: theme.palette.background.paper,
+            },
+            '& .MuiInputLabel-root': {
+                color: theme.palette.text.secondary,
+            },
+        }}
+    >                            <InputLabel>Domain</InputLabel>
                             <Select
                                 value={filters.domain}
                                 onChange={(e) => handleFilterChange('domain', e.target.value)}
@@ -264,8 +314,19 @@ const StaffList = () => {
                             </Select>
                         </FormControl>
 
-                        <FormControl variant="outlined" size="small" sx={{ minWidth: 120 }}>
-                            <InputLabel>Status</InputLabel>
+                        <FormControl 
+        variant="outlined" 
+        size="small" 
+        sx={{ 
+            minWidth: 180,
+            '& .MuiOutlinedInput-root': {
+                backgroundColor: theme.palette.background.paper,
+            },
+            '& .MuiInputLabel-root': {
+                color: theme.palette.text.secondary,
+            },
+        }}
+    >                            <InputLabel>Status</InputLabel>
                             <Select
                                 value={filters.status}
                                 onChange={(e) => handleFilterChange('status', e.target.value)}
@@ -280,32 +341,41 @@ const StaffList = () => {
                 </Stack>
 
                 <TableContainer 
-                    component={Paper} 
-                    elevation={0} 
-                    sx={{ 
-                        borderRadius: 4,
-                        minHeight: 400,
-                        position: 'relative',
-                        overflow: 'hidden',
-                        '&:after': {
-                            content: '""',
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            background: 'linear-gradient(110deg, #f5f7fa 8%, #f0f2f5 18%, #f5f7fa 33%)',
-                            backgroundSize: '200% 100%',
-                            animation: isLoading ? `${shimmer} 1.5s infinite linear` : 'none',
-                            opacity: isLoading ? 0.6 : 0,
-                            transition: 'opacity 0.3s ease',
-                            pointerEvents: 'none',
-                            zIndex: 1,
-                        },
-                    }}
-                >
-                    <Table sx={{ minWidth: 650, position: 'relative', zIndex: 2 }}>
-                        <TableHead sx={{ bgcolor: 'grey.100' }}>
+        component={Paper} 
+        elevation={0} 
+        sx={{ 
+            borderRadius: 4,
+            minHeight: 400,
+            position: 'relative',
+            overflow: 'hidden',
+            bgcolor: 'background.paper',
+            '&:after': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                background: theme.palette.mode === 'dark'
+                    ? 'linear-gradient(110deg, #1a1a1a 8%, #2a2a2a 18%, #1a1a1a 33%)'
+                    : 'linear-gradient(110deg, #f5f7fa 8%, #f0f2f5 18%, #f5f7fa 33%)',
+                backgroundSize: '200% 100%',
+                animation: isLoading ? `${shimmer} 1.5s infinite linear` : 'none',
+                opacity: isLoading ? 0.6 : 0,
+                transition: 'opacity 0.3s ease',
+                pointerEvents: 'none',
+                zIndex: 1,
+            },
+        }}
+    >
+        <Table sx={{ minWidth: 650, position: 'relative', zIndex: 2 }}>
+            <TableHead sx={{ 
+                bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'grey.100',
+                '& th': {
+                    color: theme.palette.text.primary,
+                    fontWeight: 600,
+                }
+            }}>
                             <TableRow>
                                 <TableCell sx={{ fontWeight: 600 }}>Emp ID</TableCell>
                                 <TableCell sx={{ fontWeight: 600 }}>Emp Name</TableCell>
@@ -338,17 +408,23 @@ const StaffList = () => {
                                         <TableCell>{employee.role}</TableCell>
                                         <TableCell>{employee.domain}</TableCell>
                                         <TableCell>
-                                            <Chip
-                                                label={employee.status}
-                                                color={employee.status === 'Working' ? 'success' : 'error'}
-                                                size="small"
-                                                sx={{
-                                                    fontWeight: 500,
-                                                    borderRadius: 1,
-                                                    px: 1,
-                                                    color: 'white'
-                                                }}
-                                            />
+                                        <Chip
+        label={employee.status}
+        color={employee.status === 'Working' ? 'success' : 'error'}
+        size="small"
+        sx={{
+            fontWeight: 500,
+            borderRadius: 1,
+            px: 1,
+            color: 'white',
+            '&.MuiChip-colorSuccess': {
+                backgroundColor: theme.palette.success.main,
+            },
+            '&.MuiChip-colorError': {
+                backgroundColor: theme.palette.error.main,
+            },
+        }}
+    />
                                         </TableCell>
                                         <TableCell>
                                             <IconButton

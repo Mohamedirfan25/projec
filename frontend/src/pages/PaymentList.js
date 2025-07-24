@@ -41,18 +41,89 @@ import {
   Close,
 } from "@mui/icons-material";
 import AddIcon from '@mui/icons-material/Add';
+import { useTheme } from '@mui/material/styles';
+import { useColorMode } from '../index';
+import { createTheme } from '@mui/material/styles';
 // import { useNavigate } from "react-router-dom";
-
+const theme = createTheme({
+  palette: {
+    mode: 'light',
+    primary: {
+      main: '#4361ee',
+      dark: '#3a56e8',
+      contrastText: '#ffffff',
+    },
+    background: {
+      default: '#f8f9fa',
+      paper: '#ffffff',
+      darkDefault: '#121212',
+      darkPaper: '#1e1e1e',
+    },
+    text: {
+      primary: '#212529',
+      secondary: '#6c757d',
+      darkPrimary: '#ffffff',
+      darkSecondary: '#e0e0e0',
+    },
+  },
+  components: {
+    MuiButton: {
+      styleOverrides: {
+        root: ({ theme }) => ({
+          backgroundColor: theme.palette.mode === 'dark' 
+            ? theme.palette.primary.dark
+            : theme.palette.primary.main,
+        }),
+        contained: ({ theme }) => ({
+          '&:hover': {
+            backgroundColor: theme.palette.mode === 'dark' 
+              ? theme.palette.primary.dark
+              : '#3a56e8',
+          },
+        }),
+      },
+    },
+    MuiTextField: {
+      styleOverrides: {
+        root: ({ theme }) => ({
+          '& .MuiOutlinedInput-root': {
+            '& fieldset': {
+              borderColor: theme.palette.mode === 'dark' 
+                ? 'rgba(255, 255, 255, 0.23)'
+                : 'rgba(0, 0, 0, 0.23)',
+            },
+            '&:hover fieldset': {
+              borderColor: theme.palette.mode === 'dark' 
+                ? theme.palette.primary.dark
+                : theme.palette.primary.main,
+            },
+          },
+        }),
+      },
+    },
+    MuiPaper: {
+      styleOverrides: {
+        root: ({ theme }) => ({
+          bgcolor: theme.palette.mode === 'dark' 
+            ? theme.palette.background.darkPaper
+            : theme.palette.background.paper,
+        }),
+      },
+    },
+  },
+});
 // Shimmer Row Component
 const ShimmerRow = () => (
   <TableRow>
-    {[...Array(9)].map((_, i) => (
+    {[...Array(5)].map((_, i) => (
       <TableCell key={i}>
         <Box
           sx={{
             height: 20,
             width: i % 2 === 0 ? '80%' : '60%',
-            backgroundColor: '#f0f0f0',
+            bgcolor: theme.palette.mode === 'dark' 
+            ? '#1e1e1e' 
+            : '#f0f0f0',
             borderRadius: 1,
             animation: 'pulse 1.5s ease-in-out infinite',
             '@keyframes pulse': {
@@ -131,6 +202,8 @@ const PaymentList = () => {
   const [logDialogOpen, setLogDialogOpen] = useState(false);
   const [selectedInternLogs, setSelectedInternLogs] = useState(null);
   const [isAddingFromTable, setIsAddingFromTable] = useState(false);
+  const theme = useTheme();
+  const { colorMode } = useColorMode();
 
   const handleCloseActionMenu = () => {
     setActionAnchorEl(null);
@@ -516,19 +589,58 @@ const PaymentList = () => {
 
   if (loading) {
     return (
-      <Box sx={{ padding: 4, bgcolor: "white", color: "black" }}>
-        <Box sx={{ display: "flex", alignItems: "center", marginBottom: 3 }}>
+<Box sx={{ 
+  p: 3, 
+  bgcolor: theme.palette.mode === 'dark' 
+    ? theme.palette.background.darkDefault 
+    : theme.palette.background.default,
+  minHeight: '100vh',
+  color: theme.palette.mode === 'dark' 
+    ? theme.palette.text.darkPrimary 
+    : theme.palette.text.primary
+}}>        <Box sx={{ display: "flex", alignItems: "center", marginBottom: 3 }}>
           <Payment sx={{ marginRight: 1, fontSize: 40 }} />
           <Typography variant="h4" gutterBottom>
             Payment List
           </Typography>
         </Box>
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead sx={{ backgroundColor: "#f5f5f5" }}>
+        <TableContainer
+  component={Paper}
+  sx={{
+    borderRadius: 3,
+    boxShadow: theme.palette.mode === 'dark' 
+      ? '0 1px 3px rgba(255,255,255,0.1)'
+      : '0 1px 3px rgba(0,0,0,0.1)',
+    border: '1px solid',
+    borderColor: theme.palette.mode === 'dark' 
+      ? 'rgba(255,255,255,0.12)'
+      : 'divider',
+    bgcolor: theme.palette.mode === 'dark' 
+      ? theme.palette.background.darkPaper
+      : theme.palette.background.paper,
+    '& .MuiTableCell': {
+      borderColor: theme.palette.mode === 'dark' 
+        ? 'rgba(255,255,255,0.12)'
+        : 'divider',
+    },
+    '& .MuiTableHead .MuiTableCell': {
+      bgcolor: theme.palette.mode === 'dark' 
+        ? 'rgba(255,255,255,0.05)'
+        : theme.palette.background.paper,
+      color: theme.palette.mode === 'dark' 
+        ? theme.palette.text.darkSecondary
+        : 'text.secondary',
+    }
+  }}
+>          <Table>
+            <TableHead sx={{ backgroundColor: theme.palette.mode === 'dark' 
+        ? 'rgba(255,255,255,0.05)'
+        : theme.palette.background.paper }}>
               <TableRow>
                 {["Intern ID", "Name", "Start Date", "End Date", "Total Amount", "Paid", "Balance", "Status", "Actions"].map((header) => (
-                  <TableCell key={header} sx={{ fontWeight: "bold", color: "black" }}>
+                  <TableCell key={header} sx={{ fontWeight: "bold", color: theme.palette.mode === 'dark' 
+        ? '#ffffff'
+        : 'text.secondary' }}>
                     {header}
                   </TableCell>
                 ))}
@@ -562,8 +674,16 @@ const PaymentList = () => {
   }
 
   return (
-    <Box sx={{ padding: 4, bgcolor: "white", color: "black" }}>
-      <Box sx={{ display: "flex", alignItems: "center", marginBottom: 3 }}>
+<Box sx={{ 
+  p: 3, 
+  bgcolor: theme.palette.mode === 'dark' 
+    ? theme.palette.background.darkDefault 
+    : theme.palette.background.default,
+  minHeight: '100vh',
+  color: theme.palette.mode === 'dark' 
+    ? theme.palette.text.darkPrimary 
+    : theme.palette.text.primary
+}}>      <Box sx={{ display: "flex", alignItems: "center", marginBottom: 3 }}>
         <Payment sx={{ marginRight: 1, fontSize: 40 }} />
         <Typography variant="h4" gutterBottom>
           Payment List
@@ -621,9 +741,38 @@ const PaymentList = () => {
         </Button>
       </Box>
 
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead sx={{ backgroundColor: "#f5f5f5" }}>
+      <TableContainer
+  component={Paper}
+  sx={{
+    borderRadius: 3,
+    boxShadow: theme.palette.mode === 'dark' 
+      ? '0 1px 3px rgba(255,255,255,0.1)'
+      : '0 1px 3px rgba(0,0,0,0.1)',
+    border: '1px solid',
+    borderColor: theme.palette.mode === 'dark' 
+      ? 'rgba(255,255,255,0.12)'
+      : 'divider',
+    bgcolor: theme.palette.mode === 'dark' 
+      ? theme.palette.background.darkPaper
+      : theme.palette.background.paper,
+    '& .MuiTableCell': {
+      borderColor: theme.palette.mode === 'dark' 
+        ? 'rgba(255,255,255,0.12)'
+        : 'divider',
+    },
+    '& .MuiTableHead .MuiTableCell': {
+      bgcolor: theme.palette.mode === 'dark' 
+        ? 'rgba(255,255,255,0.05)'
+        : theme.palette.background.paper,
+      color: theme.palette.mode === 'dark' 
+        ? theme.palette.text.darkSecondary
+        : 'text.secondary',
+    }
+  }}
+>        <Table>
+          <TableHead sx={{ backgroundColor: theme.palette.mode === 'dark' 
+        ? 'rgba(94, 86, 86, 0.05)'
+        : theme.palette.background.paper }}>
             <TableRow>
               {[
                 "Intern ID",
@@ -638,7 +787,9 @@ const PaymentList = () => {
               ].map((header) => (
                 <TableCell
                   key={header}
-                  sx={{ fontWeight: "bold", color: "black" }}
+                  sx={{ fontWeight: "bold", color: theme.palette.mode === 'dark' 
+        ? '#ffffff'
+        : 'text.secondary' }}
                 >
                   {header}
                 </TableCell>
@@ -941,21 +1092,22 @@ const PaymentList = () => {
                         bg: "#e3f2fd",
                         text: "#1565c0",
                         border: "#bbdefb",
+                        bgDark: "#ffffff",
+                        textDark: "#616161",
                       },
                       BankTransfer: {
                         bg: "#e8f5e9",
                         text: "#2e7d32",
                         border: "#c8e6c9",
-                      },
-                      Cash: {
-                        bg: "#fff3e0",
-                        text: "#e65100",
-                        border: "#ffe0b2",
+                        bgDark: "#ffffff",
+                        textDark: "#616161",
                       },
                       default: {
                         bg: "#f5f5f5",
                         text: "#616161",
                         border: "#e0e0e0",
+                        bgDark: "#ffffff",
+                        textDark: "#616161",
                       },
                     };
                     const method = log.mode || "Unknown";
@@ -968,19 +1120,18 @@ const PaymentList = () => {
                           ${log.amount?.toFixed(2)}
                         </TableCell>
                         <TableCell>
-                          <Chip
-                            label={method}
-                            size="medium"
-                            sx={{
-                              backgroundColor: colors.bg,
-                              color: colors.text,
-                              border: `1px solid ${colors.border}`,
-                              fontWeight: 500,
-                              minWidth: "120px",
-                              height: "32px",
-                              borderRadius: "6px",
-                            }}
-                          />
+                        <Chip
+  label={method}
+  size="medium"
+  sx={{
+    backgroundColor: theme.palette.mode === 'dark' 
+      ? colors.bgDark
+      : colors.bg,
+    color: theme.palette.mode === 'dark' 
+      ? colors.textDark
+      : colors.text,
+  }}
+/>
                         </TableCell>
                         <TableCell>
                           <IconButton
