@@ -375,32 +375,37 @@ const StaffList = () => {
                 </TableContainer>
 
                 {!isLoading && filteredStaff.length > 0 && (
-                    <Stack direction="row" justifyContent="space-between" alignItems="center" mt={3}>
-                        <FormControl variant="standard" sx={{ minWidth: 120 }}>
-                            <InputLabel>Rows per page</InputLabel>
-                            <Select
-                                value={rowsPerPage}
-                                onChange={handleRowsPerPageChange}
-                                label="Rows per page"
-                            >
-                                {[5, 10, 25, 50].map((option) => (
-                                    <MenuItem key={option} value={option}>
-                                        {option}
-                                    </MenuItem>
-                                ))}
-                            </Select>
-                        </FormControl>
-
-                        <Pagination
-                            count={totalPages}
-                            page={page}
-                            onChange={(event, value) => setPage(value)}
-                            shape="rounded"
-                            color="primary"
-                            showFirstButton
-                            showLastButton
-                        />
-                    </Stack>
+                  <Box sx={{ display: "flex", justifyContent: "flex-end", alignItems: "center", marginTop: 2 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                      <Typography>Rows per page:</Typography>
+                      <Select
+                        value={rowsPerPage}
+                        onChange={handleRowsPerPageChange}
+                        size="small"
+                        variant="standard"
+                        disableUnderline
+                        sx={{
+                          '& .MuiSelect-select': {
+                            paddingRight: '24px',
+                          }
+                        }}
+                      >
+                        <MenuItem value={5}>5</MenuItem>
+                        <MenuItem value={10}>10</MenuItem>
+                        <MenuItem value={20}>20</MenuItem>
+                      </Select>
+                      <Typography>{`${(page - 1) * rowsPerPage + 1}-${Math.min(page * rowsPerPage, filteredStaff.length)} of ${filteredStaff.length}`}</Typography>
+                      <Pagination
+                        count={Math.ceil(filteredStaff.length / rowsPerPage)}
+                        page={page}
+                        onChange={(event, value) => setPage(value)}
+                        shape="rounded"
+                        size="small"
+                        siblingCount={0}
+                        boundaryCount={0}
+                      />
+                    </Box>
+                  </Box>
                 )}
             </Paper>
         </Box>
