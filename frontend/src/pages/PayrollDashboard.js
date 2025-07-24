@@ -1104,12 +1104,13 @@ const fetchFeeData = async () => {
                 <Select
                   label="Payment Method"
                   name="paymentMethod"
-                  defaultValue={currentPayment?.paymentMethod || "UPI"}
+                  defaultValue={currentPayment?.paymentMethod || "Bank Transfer"}
                   required
                 >
-                  <MenuItem value="Cash">Cash</MenuItem>
-                  <MenuItem value="Net Banking">Net Banking</MenuItem>
+                  <MenuItem value="Bank Transfer">Bank Transfer</MenuItem>
                   <MenuItem value="UPI">UPI</MenuItem>
+                  <MenuItem value="Net Banking">Net Banking</MenuItem>
+                  <MenuItem value="Cash">Cash</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -1329,6 +1330,17 @@ const fetchFeeData = async () => {
     }
   };
 
+  const handleLogout = () => {
+    // Clear the authentication token
+    localStorage.removeItem("token");
+    // Close the menu
+    handleMenuClose();
+    // Redirect to login page
+    navigate("/loginpage");
+    // Optional: Show a logout message
+    showSnackbar("Logged out successfully", "info");
+  };
+
   return (
     <ThemeProvider theme={theme}>
       <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
@@ -1440,7 +1452,7 @@ const fetchFeeData = async () => {
                   My Profile
                 </MenuItem>
                 <Divider />
-                <MenuItem onClick={handleMenuClose}>
+                <MenuItem onClick={handleLogout}>
                   <ListItemIcon>
                     <ExitToAppIcon fontSize="small" />
                   </ListItemIcon>
@@ -1557,7 +1569,7 @@ const fetchFeeData = async () => {
             </List>
             <Divider />
             <List>
-              <ListItemButton onClick={handleMenuClose}>
+              <ListItemButton onClick={handleLogout}>
                 <ListItemIcon>
                   <ExitToAppIcon />
                 </ListItemIcon>

@@ -455,7 +455,7 @@ const AttendanceLists = () => {
         borderRadius: 3,
         boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
       }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
           <Typography variant="h5" sx={{ fontWeight: 700, color: 'text.primary' }}>
             Attendance  List
           </Typography>
@@ -1396,7 +1396,7 @@ const AttendanceDashboard = () => {
             rawDate: record.date,
             day: day,
             status: record.present_status || "Null",
-            checkIn: record.check_in ? formatTime(record.check_in) : "--",
+            checkIn: record.check_in ? formatTime(record.check_in) : "-",
             checkOut: record.check_out ? formatTime(record.check_out) : "--",
             workTime: workTime,
             totalHours: record.total_hours || "--",
@@ -2196,6 +2196,8 @@ const AttendanceDashboard = () => {
         return renderTable();
       case "leave":
         return <LeaveList userRole="staff" />;
+      case "profile":
+        return renderProfile();
       default:
         return renderDashboard();
     }

@@ -187,8 +187,14 @@ function stringToColor(string) {
 }
 
 function getInitials(name) {
-  if (!name) return '?';
-  return name.split(' ').map(part => part[0]).join('').toUpperCase();
+  if (!name || name.trim() === '') return 'U';
+  
+  const words = name.trim().split(' ').filter(word => word.length > 0);
+  
+  if (words.length === 0) return 'U';
+  if (words.length === 1) return words[0].substring(0, 2).toUpperCase();
+  
+  return words.map(word => word[0]).join('').toUpperCase().substring(0, 2);
 }
 
 const InternDashboard = () => {
@@ -406,7 +412,7 @@ const InternDashboard = () => {
   const fetchProfileData = async () => {
     try {
       const token = localStorage.getItem("token");
-      const username = localStorage.getItem("user"); // 👈 Store this at login
+      const username = localStorage.getItem("user"); // 
 
       const personalDataResponse = await axios.get("http://localhost:8000/Sims/personal-data/", {
         headers: { Authorization: `Token ${token}` },
@@ -431,7 +437,7 @@ const InternDashboard = () => {
       const collegeDetails = collegeDetailsResponse.data.find(c => c.username === username) || {};
 
       setProfileData({
-        username: personalData?.username || "N/A",
+        username: personalData?.username || username || "User",
         email: personalData?.email || "N/A",
         phone_no: personalData?.phone_no || "N/A",
         role: tempView?.role || "N/A",
@@ -440,6 +446,16 @@ const InternDashboard = () => {
       });
     } catch (error) {
       console.error("Error fetching profile data:", error);
+      // Set fallback data
+      const username = localStorage.getItem("user") || "User";
+      setProfileData({
+        username: username,
+        email: "N/A",
+        phone_no: "N/A", 
+        role: "N/A",
+        startDate: "N/A",
+        department: "N/A",
+      });
     }
   };
 
@@ -1242,6 +1258,8 @@ const InternDashboard = () => {
         return <PerformanceFeedbackPage />;
       case "tasks":
         return <TaskManager />;
+      case "profile":
+        return renderUserProfile();
       default:
         return renderDashboard();
     }
@@ -1347,9 +1365,9 @@ const InternDashboard = () => {
                 </IconButton>
               </Tooltip>
               <Menu
-                anchorEl={anchorEl}
-                open={Boolean(anchorEl)}
-                onClose={handleMenuClose}
+                anchorEl={accountAnchorEl}
+                open={Boolean(accountAnchorEl)}
+                onClose={handleAccountMenuClose}
                 anchorOrigin={{
                   vertical: 'bottom',
                   horizontal: 'right',
@@ -1361,7 +1379,7 @@ const InternDashboard = () => {
               >
                 <MenuItem onClick={() => {
                   setActiveView("profile");
-                  handleMenuClose();
+                  handleAccountMenuClose();
                 }}>
                   <ListItemIcon>
                     <AccountCircleIcon fontSize="small" />
