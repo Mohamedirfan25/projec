@@ -303,7 +303,7 @@ class TempView(APIView):
 
 
 class UserDataView(APIView):
-    permission_classes = [IsAuthenticated, IsStaff]
+    permission_classes = [IsAuthenticated]
     def check_user_role(self, username, role_type):
         if not User.objects.filter(username=username).exists():
             return False, Response({"error": f"Reporting {role_type} not found"}, status=status.HTTP_400_BAD_REQUEST)
