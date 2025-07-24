@@ -118,6 +118,7 @@ import { Feedback } from "@mui/icons-material";
 import PerformanceFeedbackPage from "./PerformanceFeedbackPage";
 import TaskManager from "./Tasks"; // Adjust the path as needed
 import InternManagementLists from "./InternManagementLists";
+import InternLists from "./InternLists";
 // Customized theme for professional appearance
 const theme = createTheme({
   palette: {
@@ -249,6 +250,8 @@ const InternDashboard = () => {
   ]);
 
   const navigate = useNavigate();
+  const [staffDepartment, setStaffDepartment] = useState(null);
+  const [isLoadingDepartment, setIsLoadingDepartment] = useState(true);
   const rowsPerPage = 5;
 
   // Dashboard options for dropdown
@@ -1048,63 +1051,51 @@ const InternDashboard = () => {
                   <TableRow>
                     <TableCell>EMP ID</TableCell> {/* Moved EMP ID to first column */}
                     <TableCell>Name</TableCell>
-                    <TableCell>Department</TableCell>
+                    <TableCell>Domain</TableCell>
                     <TableCell>Status</TableCell>
-                    <TableCell>Document Upload</TableCell>
                     <TableCell>Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {users.slice(0, 5).map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell>{user.emp_id}</TableCell> {/* Added EMP ID to table cell */}
-                      <TableCell>
-                        <Box display="flex" alignItems="center">
-                          {user.name}
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Box display="flex" alignItems="center">
-                          {getDepartmentIcon(user.department)}
-                          <Typography sx={{ ml: 1 }}>{user.department}</Typography>
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={user.status}
-                          color={
-                            user.status === 'Active' ? 'success' :
-                              user.status === 'On Leave' ? 'warning' : 'error'
-                          }
-                        />
-                      </TableCell>
-                      <TableCell>
-                        {user.uploads ? (
-                          <Chip
-                            label="Uploaded"
-                            color="success"
-                            size="small"
-                            icon={<CheckCircleOutlineIcon fontSize="small" />}
-                          />
-                        ) : (
-                          <Button
-                            variant="outlined"
-                            size="small"
-                            onClick={() => handleUploadClick(user)}
-                            startIcon={<CloudUploadIcon fontSize="small" />}
-                          >
-                            Upload
-                          </Button>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <IconButton onClick={(e) => handleActionMenuOpen(e, user)}>
-                          <MoreVertIcon />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
+  {users
+    .filter(user => {
+      // If staffDepartment is not set, show all users
+      if (!staffDepartment) return true;
+      // Otherwise, only show users from the same department
+      return user.department === staffDepartment;
+    })
+    .slice(0, 5) // Limit to 5 results
+    .map((user) => (
+      <TableRow key={user.id}>
+        <TableCell>{user.emp_id}</TableCell>
+        <TableCell>
+          <Box display="flex" alignItems="center">
+            {user.name}
+          </Box>
+        </TableCell>
+        <TableCell>
+          <Box display="flex" alignItems="center">
+            {getDepartmentIcon(user.department)}
+            <Typography sx={{ ml: 1 }}>{user.department}</Typography>
+          </Box>
+        </TableCell>
+        <TableCell>
+          <Chip
+            label={user.status}
+            color={
+              user.status === 'Active' ? 'success' :
+              user.status === 'On Leave' ? 'warning' : 'error'
+            }
+          />
+        </TableCell>
+        <TableCell>
+          <IconButton onClick={(e) => handleActionMenuOpen(e, user)}>
+            <MoreVertIcon />
+          </IconButton>
+        </TableCell>
+      </TableRow>
+    ))}
+</TableBody>
               </Table>
             </TableContainer>
           </CardContent>
@@ -1113,11 +1104,38 @@ const InternDashboard = () => {
     </Grid>
   );
 
-  const renderUserList = () => (
-    <Grid item xs={12}>
-            <InternManagementLists />
-          </Grid>
-  );
+  useEffect(() => {
+    const fetchDepartment = async () => {
+      try {
+        const response = await axios.get('http://localhost:8000/Sims/user-data/', {
+          headers: {
+            'Authorization': `Token ${localStorage.getItem('token')}`
+          }
+        });
+        // Assuming the response has a department field
+        setStaffDepartment(response.data.department);
+      } catch (error) {
+        console.error('Error fetching department:', error);
+      } finally {
+        setIsLoadingDepartment(false);
+      }
+    };
+  
+    fetchDepartment();
+  }, []);
+  const renderUserList = () => {
+    if (isLoadingDepartment) {
+      return <CircularProgress />; // Show loading indicator while fetching
+    }
+  
+    return (
+      <Grid item xs={12}>
+        <InternLists 
+          departmentFilter={staffDepartment}
+        />
+      </Grid>
+    );
+  };
 
   const renderUserProfile = () => (
     <Grid container spacing={3}>
