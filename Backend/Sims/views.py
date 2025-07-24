@@ -132,7 +132,7 @@ class TempView(APIView):
         # Verify admin user creating the record
         try:
             admin_temp = Temp.objects.get(user=request.user)
-            if admin_temp.role.lower() not in ["admin", "hr"]:
+            if admin_temp.role.lower() not in ["admin", "hr", "staff"]:
                 return Response("Only admins/HR can create employee records", 
                               status=status.HTTP_403_FORBIDDEN)
         except Temp.DoesNotExist:

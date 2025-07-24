@@ -233,7 +233,7 @@ const generateCompletedCertificate = async (empId, firstName) => {
   }
 };
 
-const InternLists = ({ setActiveComponent, showAddForm: externalShowAddForm, onFormComplete, onFormCancel }) => {
+const InternLists = ({ setActiveComponent, showAddForm: externalShowAddForm, onFormComplete, onFormCancel, departmentFilter }) => {
   const [isLoading, setIsLoading] = useState(true);
   const theme = useTheme();
   const { colorMode } = useColorMode();
@@ -418,6 +418,7 @@ const InternLists = ({ setActiveComponent, showAddForm: externalShowAddForm, onF
 useEffect(() => {
   fetchInterns();
 }, []);
+
 
 const handleCertificatesMenuOpen = (event, internId, menuType = 'inProgress') => {
   setCertificatesAnchorEl(event.currentTarget);
@@ -825,24 +826,36 @@ const handleUndoDelete = async (internId) => {
     });
   };
 
-  const filteredInterns = activeTab === 'Deleted'
-  ? deletedInterns.filter(intern =>
-      intern.id.toString().includes(searchTerm) ||
-      intern.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      intern.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      intern.scheme.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      intern.domain.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-  : (interns[activeTab] || []).filter(intern =>
-      (intern.id.toString().includes(searchTerm) ||
-        intern.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        intern.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        intern.scheme.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        intern.domain.toLowerCase().includes(searchTerm.toLowerCase())) &&
-      (filters.department === '' || intern.department === filters.department) &&
-      (filters.scheme === '' || intern.scheme === filters.scheme) &&
-      (filters.domain === '' || intern.domain === filters.domain)
-    );
+  const filteredInterns = React.useMemo(() => {
+    const baseFiltered = activeTab === 'Deleted'
+      ? deletedInterns.filter(intern =>
+          intern.id.toString().includes(searchTerm) ||
+          intern.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          intern.department?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          intern.scheme?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          intern.domain?.toLowerCase().includes(searchTerm.toLowerCase())
+        )
+      : (interns[activeTab] || []).filter(intern =>
+          (intern.id.toString().includes(searchTerm) ||
+           intern.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           intern.department?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           intern.scheme?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           intern.domain?.toLowerCase().includes(searchTerm.toLowerCase())) &&
+          (filters.department === '' || intern.department === filters.department) &&
+          (filters.scheme === '' || intern.scheme === filters.scheme) &&
+          (filters.domain === '' || intern.domain === filters.domain)
+        );
+  
+    // Apply department filter if provided
+    if (departmentFilter) {
+      return baseFiltered.filter(intern => 
+        intern.department && 
+        intern.department.toLowerCase() === departmentFilter.toLowerCase()
+      );
+    }
+  
+    return baseFiltered;
+  }, [activeTab, deletedInterns, searchTerm, interns, filters, departmentFilter]);
 
   const columns = [
     'Intern ID', 'Intern Name', 'Email ID', 'Department', 'Scheme', 'Domain', 'Start Date', 'End Date', 'Status', 'Action'
