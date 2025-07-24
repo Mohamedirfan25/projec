@@ -1065,6 +1065,17 @@ class AssertStockView(APIView):
             return Response({"error": f"Assert stock with ID {pk} not found"},
                             status=status.HTTP_404_NOT_FOUND)
 
+class UserPermissionsView(APIView):
+    """
+    API endpoint that returns the current user's permissions.
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        from .permissions import get_user_permissions
+        permissions = get_user_permissions(request.user)
+        return Response(permissions)
+
 
 class AssertIssueView(APIView):
     permission_classes = [IsAuthenticated, StaffAssertAccessPermission]

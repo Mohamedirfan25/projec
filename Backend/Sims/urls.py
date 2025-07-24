@@ -3,6 +3,7 @@ from . import views
 from .views import generate_offer_letter_api
 from .views import generate_completed_certificate
 from .views import CollegeDetailsView
+from .views import UserPermissionsView
 
 urlpatterns = [
     path("generate-completed-certificate/<str:emp_id>/",
@@ -156,4 +157,5 @@ urlpatterns = [
     path('assertuserhistory/',views.UserAssertAllTimeHistoryView.as_view(),name='asset-user-history'),
 
     path('deleted-users/', views.DeletedUsersView.as_view(), name='deleted-users'),
+    path('user-permissions/', UserPermissionsView.as_view(), name='user-permissions'),
 ]

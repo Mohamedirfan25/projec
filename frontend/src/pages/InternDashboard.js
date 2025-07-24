@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   AppBar,
   Toolbar,
@@ -249,6 +249,13 @@ const InternDashboard = () => {
     { name: 'Jun', performance: 90 }
   ]);
 
+  const [userPermissions, setUserPermissions] = useState({
+    hasAssetAccess: false,
+    hasAttendanceAccess: false,
+    hasPayrollAccess: false,
+    hasInternAccess: true // Default to true as this is the main dashboard
+  });
+
   const navigate = useNavigate();
   const [staffDepartment, setStaffDepartment] = useState(null);
   const [isLoadingDepartment, setIsLoadingDepartment] = useState(true);
@@ -279,17 +286,38 @@ const InternDashboard = () => {
     }
   ];
 
+  const filteredDashboardOptions = useMemo(() => {
+    return dashboardOptions.filter(option => {
+      // Always show the Intern Management option
+      if (option.id === 'intern') {
+        return true;
+      }
+      
+      // For other options, check permissions
+      switch (option.id) {
+        case 'asset':
+          return userPermissions.hasAssetAccess;
+        case 'attendance':
+          return userPermissions.hasAttendanceAccess;
+        case 'payroll':
+          return userPermissions.hasPayrollAccess;
+        default:
+          return false;
+      }
+    });
+  }, [userPermissions]);
+
   // Fetch all necessary data on component mount
   useEffect(() => {
     const token = localStorage.getItem("token");
     console.log(token);
-
 
     fetchUsers();
     fetchActiveInternCount();
     fetchInternCount();
     fetchDomainData();
     fetchProfileData();
+    fetchUserPermissions();
   }, []);
 
   const fetchUsers = async () => {
@@ -462,7 +490,24 @@ const InternDashboard = () => {
     }
   };
 
-
+  const fetchUserPermissions = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.get("http://localhost:8000/Sims/user-permissions/", {
+        headers: { Authorization: `Token ${token}` }
+      });
+      setUserPermissions(response.data);
+    } catch (error) {
+      console.error("Error fetching user permissions:", error);
+      // Default to no access if there's an error
+      setUserPermissions({
+        hasAssetAccess: false,
+        hasAttendanceAccess: false,
+        hasPayrollAccess: false,
+        hasInternAccess: true
+      });
+    }
+  };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -1311,7 +1356,7 @@ const InternDashboard = () => {
               open={Boolean(dashboardAnchorEl)}
               onClose={handleDashboardMenuClose}
             >
-              {dashboardOptions.map((dashboard) => (
+              {filteredDashboardOptions.map((dashboard) => (
                 <MenuItem
                   key={dashboard.id}
                   onClick={() => {

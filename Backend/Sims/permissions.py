@@ -1,4 +1,49 @@
 from rest_framework.permissions import BasePermission
+from .models import Temp, UserData
+
+def get_user_permissions(user):
+    """
+    Returns a dictionary of the user's permissions for different modules.
+    """
+    try:
+        temp = getattr(user, 'profile', None) or Temp.objects.get(user=user)
+        is_admin = temp.role.lower() == 'admin' if hasattr(temp, 'role') else temp.is_admin
+        
+        # Admin has access to everything
+        if is_admin:
+            return {
+                "hasAssetAccess": True,
+                "hasAttendanceAccess": True,
+                "hasPayrollAccess": True,
+                "hasInternAccess": True
+            }
+            
+        # For non-admin users, check their specific permissions
+        try:
+            user_data = UserData.objects.get(user=user, is_deleted=False)
+            return {
+                "hasAssetAccess": getattr(user_data, 'is_assert_access', False),
+                "hasAttendanceAccess": getattr(user_data, 'is_attendance_access', False),
+                "hasPayrollAccess": getattr(user_data, 'is_payroll_access', False),
+                "hasInternAccess": getattr(user_data, 'is_internmanagement_access', False)
+            }
+        except UserData.DoesNotExist:
+            # If no UserData exists, return all False
+            return {
+                "hasAssetAccess": False,
+                "hasAttendanceAccess": False,
+                "hasPayrollAccess": False,
+                "hasInternAccess": False
+            }
+            
+    except (Temp.DoesNotExist, AttributeError):
+        # If user has no Temp record or other error, return no permissions
+        return {
+            "hasAssetAccess": False,
+            "hasAttendanceAccess": False,
+            "hasPayrollAccess": False,
+            "hasInternAccess": False
+        }
 
 class IsAdmin(BasePermission):
     def has_permission(self, request, view):
@@ -10,12 +55,10 @@ class IsAdmin(BasePermission):
             if temp:
                 return temp.is_admin
             # Fallback: check Temp model directly
-            from .models import Temp
             temp_obj = Temp.objects.get(user=user)
             return temp_obj.role.lower() == 'admin'
         except Exception:
             return False
-from .models import Temp, UserData
 
 class BaseStaffAccessPermission(BasePermission):
     access_field = ''
@@ -42,7 +85,7 @@ class StaffAssertAccessPermission(BaseStaffAccessPermission):
     access_field = 'is_assert_access'
 
 class StaffPayRollPermission(BaseStaffAccessPermission):
-    access_field='is_payroll_access'
+    access_field = 'is_payroll_access'
 
 class IsStaff(BasePermission):
     """
