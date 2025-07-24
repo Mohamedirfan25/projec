@@ -473,6 +473,14 @@ const handleCertificateAction = async (type) => {
           shift_days: 'Monday to Friday'
         };
         console.log(data);
+        const offer_letter = await axios.post(endpoint, data ,
+          {
+          headers: {
+            Authorization: `Token ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+        );
         break;
       case 'Completion Certificate':
         const response = await axios.get(
