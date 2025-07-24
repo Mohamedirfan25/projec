@@ -31,8 +31,6 @@ import {
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import axios from 'axios';
-import { useNavigate } from "react-router-dom";
-import { useLocation } from "react-router-dom";
 
 const initialDomains = [
   {
@@ -427,14 +425,8 @@ const DomainManagement = () => {
     setLoading(false);
     handleCloseDialog();
   };
-  
-  
-    const navigate = useNavigate();
-    const location = useLocation();
-const departmentFilter = location.state?.department || null;
-    const handleAddStaff = () => {
-      navigate("/register"); // 👈 Redirect to register page
-    };
+
+
 
   const handleAddIntern = () => {
     setLoading(true);

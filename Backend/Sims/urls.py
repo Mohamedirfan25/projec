@@ -122,7 +122,7 @@ urlpatterns = [
 
 
     path('documents/', views.DocumentView.as_view(), name='documents-list'),
-    path('documents/<uuid:pk>/', views.DocumentView.as_view(), name='document-detail'),
+    path('documents/<str:emp_id>/', views.DocumentView.as_view(), name='document-detail'),
 
 
 

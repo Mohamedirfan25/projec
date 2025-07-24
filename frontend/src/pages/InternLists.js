@@ -1562,7 +1562,64 @@ const handleUndoDelete = async (internId) => {
                             open={selectedInternId === intern.id}
                             onClose={handleMenuClose}
                           >
-                            <MenuItem onClick={() => { setSelectedEditData(intern); setShowEditedForm(true); handleMenuClose(); }}>
+                            <MenuItem onClick={async () => {
+                              const userData = await axios.get(`http://localhost:8000/Sims/user-data/${intern.id}`,
+                                {
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Token ${localStorage.getItem('token')}`,
+                                  },
+                                }
+                              );
+                              const personalData = await axios.get(`http://localhost:8000/Sims/personal-data/${intern.id}`,
+                                {
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Token ${localStorage.getItem('token')}`,
+                                  },
+                                }
+                              );
+                              const collegeData = await axios.get(`http://localhost:8000/Sims/college-details/${intern.id}`,
+                                {
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Token ${localStorage.getItem('token')}`,
+                                  },
+                                }
+                              );
+                              console.log("userData",userData.data); 
+                              console.log("personalData",personalData.data); 
+                              console.log("collegeData",collegeData.data); 
+                              console.log("intern",intern);
+                              const formData = {
+                                id: intern.id,
+                                first_name: intern.firstName,
+                                last_name: intern.lastName,
+                                mobile: personalData.data.phone_no,
+                                dob : personalData.data.date_of_birth,
+                                gender : personalData.data.gender,
+                                collegeName : collegeData.data.college_details.college_name,
+                                collegeAddress : collegeData.data.college_details.college_address,
+                                collegeDepartment : collegeData.data.college_details.college_department,
+                                yearOfPassing : collegeData.data.college_details.year_of_passing,
+                                teamName : userData.data.team_name,
+                                assetCode : userData.data.asset_code,
+                                startDate : userData.data.start_date,
+                                endDate : userData.data.end_date,
+                                duration : userData.data.duration,
+                                workingDays : "mon-fri",
+                                shiftTiming : userData.data.shift_timing,
+                                status : intern.user_status,
+                                scheme : intern.scheme,
+                                ...userData.data,
+                                ...personalData.data,
+                                ...collegeData.data.college_details,
+                              }
+                              console.log("formData",formData);
+                              setSelectedEditData(formData); 
+                              setShowEditedForm(true); 
+                              handleMenuClose(); 
+                              }}>
                               <EditIcon fontSize="small" style={{ marginRight: 8 }} /> Edit
                             </MenuItem>
                             <MenuItem onClick={() => { handleDeleteIntern(intern.id); handleMenuClose(); }}>
