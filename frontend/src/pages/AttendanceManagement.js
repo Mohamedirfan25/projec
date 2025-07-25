@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Box,
   Typography,
@@ -11,6 +12,7 @@ import {
   TableRow,
   Paper,
   Card,
+  CardContent,
   Divider,
   TablePagination,
   IconButton,
@@ -24,11 +26,18 @@ import {
   Select,
   MenuItem,
   TextField,
+  Chip,
+  Pagination,
+  Grid,
+  FormHelperText,
 } from "@mui/material";
-import { Refresh, MoreVert, Event } from "@mui/icons-material";
+import { Refresh, MoreVert, Event, Close } from "@mui/icons-material";
+import { DatePicker, LocalizationProvider } from "@mui/x-date-pickers";
+import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import axios from "axios";
 
 const AttendanceManagement = () => {
+  const navigate = useNavigate();
   const [internId, setInternId] = useState("");
   const [name, setName] = useState("");
   const [domain, setDomain] = useState("");
@@ -52,6 +61,16 @@ const AttendanceManagement = () => {
   const [selectedDate, setSelectedDate] = useState(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [reason, setReason] = useState("");
+  
+  // Attendance Claim Dialog State
+  const [claimDialogOpen, setClaimDialogOpen] = useState(false);
+  const [claimForm, setClaimForm] = useState({
+    date: new Date(),
+    forPeriod: '',
+    dayType: 'full',
+    halfDayType: 'first',
+  });
+  const [formErrors, setFormErrors] = useState({});
 
   const months = [
     "January",
@@ -144,13 +163,32 @@ const AttendanceManagement = () => {
         }
       );
 
-      const filteredData = response.data.records.filter((record) => {
-        const dateObj = new Date(record.date);
-        return (
-          months[dateObj.getMonth()] === selectedMonth &&
-          dateObj.getFullYear().toString() === selectedYear
-        );
+      console.log("API Response:", response.data); // Debug log
+
+      // Ensure we have records to process
+      if (!response.data.records || !Array.isArray(response.data.records)) {
+        console.error("No records found in response or invalid format");
+        setAttendanceData([]);
+        setLoading(false);
+        return;
+      }
+
+      // Filter by month and year
+      let filteredData = response.data.records.filter((record) => {
+        if (!record.date) return false;
+        try {
+          const dateObj = new Date(record.date);
+          return (
+            months[dateObj.getMonth()] === selectedMonth &&
+            dateObj.getFullYear().toString() === selectedYear
+          );
+        } catch (e) {
+          console.error("Error parsing date:", record.date, e);
+          return false;
+        }
       });
+
+      console.log("Filtered by date:", filteredData); // Debug log
 
       // Filter by status
       if (status === "present") {
@@ -163,42 +201,78 @@ const AttendanceManagement = () => {
         );
       }
 
-      const updatedData = filteredData.map((record) => ({
-        ...record,
-        day: new Date(record.date).toLocaleString("en-US", {
-          weekday: "short",
-        }),
-        shift: "Day Shift", // You can adjust this as needed
-        workTime: calculateWorkTime(record.check_in, record.check_out), // Calculate work time
-      }));
+      console.log("After status filter:", filteredData); // Debug log
 
+      // Process and format the data for display
+      const updatedData = filteredData.map((record) => {
+        // Ensure we have valid date and times
+        const dateObj = record.date ? new Date(record.date) : new Date();
+        const checkInTime = record.check_in ? new Date(record.check_in) : null;
+        const checkOutTime = record.check_out ? new Date(record.check_out) : null;
+
+        return {
+          ...record,
+          date: dateObj.toISOString(), // Ensure consistent date format
+          check_in: checkInTime ? checkInTime.toISOString() : null,
+          check_out: checkOutTime ? checkOutTime.toISOString() : null,
+          day: dateObj.toLocaleString("en-US", { weekday: "short" }),
+          shift: "Day Shift",
+          workTime: calculateWorkTime(checkInTime, checkOutTime),
+        };
+      });
+
+      console.log("Processed data:", updatedData); // Debug log
       setAttendanceData(updatedData);
-      setLoading(false);
     } catch (err) {
-      setError(err.message);
+      console.error("Error in filterAttendanceData:", err);
+      setError(err.message || "Failed to fetch attendance data");
+      setAttendanceData([]);
+    } finally {
       setLoading(false);
-      console.error("Error fetching attendance data:", err);
     }
   };
 
   // Function to calculate work time based on check-in and check-out
   const calculateWorkTime = (checkIn, checkOut) => {
-    if (!checkIn || !checkOut) return "--";
-    const start = new Date(checkIn);
-    const end = new Date(checkOut);
-    const totalMinutes = Math.round((end - start) / 60000); // difference in minutes
-    const hours = Math.floor(totalMinutes / 60);
-    const minutes = totalMinutes % 60;
-    return `${hours}h ${minutes}m`;
+    try {
+      // If either time is missing or invalid, return placeholder
+      if (!checkIn || !checkOut || isNaN(new Date(checkIn)) || isNaN(new Date(checkOut))) {
+        return "--";
+      }
+      
+      // Ensure we have Date objects
+      const start = new Date(checkIn);
+      const end = new Date(checkOut);
+      
+      // Calculate time difference in minutes
+      const totalMinutes = Math.round((end - start) / 60000);
+      
+      // Handle case where end time is before start time (overnight shift)
+      const absMinutes = Math.abs(totalMinutes);
+      const hours = Math.floor(absMinutes / 60);
+      const minutes = absMinutes % 60;
+      
+      return `${hours}h ${minutes.toString().padStart(2, '0')}m`;
+    } catch (error) {
+      console.error("Error calculating work time:", { checkIn, checkOut, error });
+      return "--";
+    }
   };
 
   const formatTime = (dateTimeString) => {
-    const date = new Date(dateTimeString);
-    return date.toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    });
+    if (!dateTimeString) return '--:--';
+    try {
+      const date = new Date(dateTimeString);
+      if (isNaN(date.getTime())) return '--:--';
+      return date.toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      });
+    } catch (error) {
+      console.error("Error formatting time:", { dateTimeString, error });
+      return '--:--';
+    }
   };
 
   const handleMoreVertClick = (event, row) => {
@@ -317,279 +391,321 @@ const AttendanceManagement = () => {
       date: selectedDate,
       firstHalfStatus,
       secondHalfStatus,
-      reason,
     });
-    handleEditDialogClose();
+    setEditDialogOpen(false);
   };
 
   const handleAttendanceClaim = () => {
-    if (selectedRow) {
-      // Here you can add the logic for handling attendance claim
-      console.log("Attendance Claim for:", selectedRow);
-      // Show a success message
-      alert("Attendance claim has been submitted for " + new Date(selectedRow.date).toLocaleDateString());
-      // Close the menu
-      handleCloseMenu();
+    // Format the period as "Month Year" (e.g., "July 2024")
+    // Use current month and year if none selected
+    const selectedMonthValue = month || currentMonth;
+    const selectedYearValue = year || currentYear;
+    const formattedPeriod = `${selectedMonthValue} ${selectedYearValue}`;
+    
+    setClaimForm(prev => ({
+      ...prev,
+      forPeriod: formattedPeriod
+    }));
+    
+    setClaimDialogOpen(true);
+  };
+
+  const handleClaimDialogClose = () => {
+    setClaimDialogOpen(false);
+    setClaimForm({
+      date: new Date(),
+      forPeriod: '',
+      dayType: 'full',
+      halfDayType: 'first',
+    });
+    setFormErrors({});
+  };
+
+  const handleClaimFormChange = (field, value) => {
+    setClaimForm(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const validateForm = () => {
+    const errors = {};
+    if (!claimForm.forPeriod.trim()) {
+      errors.forPeriod = 'For Period is required';
+    }
+    if (!claimForm.date) {
+      errors.date = 'Date is required';
+    }
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleClaimSubmit = (e) => {
+    e.preventDefault();
+    if (validateForm()) {
+      // Handle form submission
+      console.log('Submitting claim:', claimForm);
+      // Add your API call here
+      handleClaimDialogClose();
     }
   };
 
   return (
-    <Box
-      sx={{ padding: { xs: 1, sm: 2, md: 3 }, maxWidth: 1200, margin: "auto" }}
+  <Box
+    sx={{ padding: { xs: 1, sm: 2, md: 3 }, maxWidth: 1200, margin: "auto" }}
+  >
+    <Typography
+      variant="h5"
+      align="center"
+      sx={{ marginBottom: 2, fontWeight: "bold", color: "primary.main" }}
     >
-      <Typography
-        variant="h5"
-        align="center"
-        sx={{ marginBottom: 2, fontWeight: "bold", color: "primary.main" }}
-      >
-        Attendance Management
-      </Typography>
+      Attendance Management
+    </Typography>
 
-      <Divider sx={{ marginBottom: 3 }} />
+    <Divider sx={{ marginBottom: 3 }} />
 
-      <Box
-        sx={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 2,
-          marginBottom: 3,
-        }}
-      >
-        <Box sx={{ flex: 1, display: "flex", alignItems: "center", gap: 1 }}>
-          <Typography variant="body1" sx={{ fontWeight: "bold" }}>
-            Intern ID:
-          </Typography>
-          <Typography variant="body1">{internId}</Typography>
-        </Box>
-        <Box sx={{ flex: 1, display: "flex", alignItems: "center", gap: 1 }}>
-          <Typography variant="body1" sx={{ fontWeight: "bold" }}>
-            Name:
-          </Typography>
-          <Typography variant="body1">{name}</Typography>
-        </Box>
-        {/* <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 2,
+        marginBottom: 3,
+      }}
+    >
+      <Box sx={{ flex: 1, display: "flex", alignItems: "center", gap: 1 }}>
+        <Typography variant="body1" sx={{ fontWeight: "bold" }}>
+          Intern ID:
+        </Typography>
+        <Typography variant="body1">{internId}</Typography>
+      </Box>
+      <Box sx={{ flex: 1, display: "flex", alignItems: "center", gap: 1 }}>
+        <Typography variant="body1" sx={{ fontWeight: "bold" }}>
+          Name:
+        </Typography>
+        <Typography variant="body1">{name}</Typography>
+      </Box>
+      {/* <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Typography variant="body1" sx={{ fontWeight: 'bold' }}>Domain:</Typography>
                     <Typography variant="body1">{domain}</Typography>
                 </Box> */}
-      </Box>
+    </Box>
 
-      <Box
-        sx={{
-          display: "flex",
-          flexDirection: { xs: "column", sm: "row" },
-          alignItems: "center",
-          gap: 2,
-          marginBottom: 3,
-        }}
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: { xs: "column", sm: "row" },
+        alignItems: "center",
+        gap: 2,
+        marginBottom: 3,
+      }}
+    >
+      <Typography variant="body1" sx={{ fontWeight: "bold" }}>
+        For The Period
+      </Typography>
+      <TextField
+        select
+        label="Month"
+        value={month}
+        onChange={handleMonthChange}
+        size="small"
+        sx={{ width: { xs: "100%", sm: 150 } }}
       >
-        <Typography variant="body1" sx={{ fontWeight: "bold" }}>
-          For The Period
-        </Typography>
-        <TextField
-          select
-          label="Month"
-          value={month}
-          onChange={handleMonthChange}
-          size="small"
-          sx={{ width: { xs: "100%", sm: 150 } }}
+        {months.map((m) => (
+          <MenuItem key={m} value={m}>
+            {m}
+          </MenuItem>
+        ))}
+      </TextField>
+      <TextField
+        select
+        label="Year"
+        value={year}
+        onChange={handleYearChange}
+        size="small"
+        sx={{ width: { xs: "100%", sm: 100 } }}
+      >
+        {years.map((y) => (
+          <MenuItem key={y} value={y}>
+            {y}
+          </MenuItem>
+        ))}
+      </TextField>
+      <FormControl size="small" sx={{ width: { xs: "100%", sm: 150 } }}>
+        <InputLabel id="filter-status-label">Filter Status</InputLabel>
+        <Select
+          labelId="filter-status-label"
+          value={filterStatus}
+          onChange={handleFilterChange}
+          label="Filter Status"
         >
-          {months.map((m) => (
-            <MenuItem key={m} value={m}>
-              {m}
-            </MenuItem>
-          ))}
-        </TextField>
-        <TextField
-          select
-          label="Year"
-          value={year}
-          onChange={handleYearChange}
-          size="small"
-          sx={{ width: { xs: "100%", sm: 100 } }}
-        >
-          {years.map((y) => (
-            <MenuItem key={y} value={y}>
-              {y}
-            </MenuItem>
-          ))}
-        </TextField>
-        <FormControl size="small" sx={{ width: { xs: "100%", sm: 150 } }}>
-          <InputLabel id="filter-status-label">Filter Status</InputLabel>
-          <Select
-            labelId="filter-status-label"
-            value={filterStatus}
-            onChange={handleFilterChange}
-            label="Filter Status"
-          >
-            <MenuItem value="all">All</MenuItem>
-            <MenuItem value="present">Present</MenuItem>
-            <MenuItem value="absent">Absent</MenuItem>
-          </Select>
-        </FormControl>
+          <MenuItem value="all">All</MenuItem>
+          <MenuItem value="present">Present</MenuItem>
+          <MenuItem value="absent">Absent</MenuItem>
+        </Select>
+      </FormControl>
+      
+      <Box sx={{ display: 'flex', gap: 1, ml: 'auto' }}>
         <Button
           variant="contained"
           onClick={handleRefresh}
-          sx={{ textTransform: "none" }}
           startIcon={<Refresh />}
+          sx={{ textTransform: 'none' }}
         >
           Refresh
         </Button>
-      </Box>
-
-      <Divider sx={{ marginBottom: 3 }} />
-
-      <Card sx={{ padding: 2, boxShadow: 3 }}>
-        {loading && (
-          <Typography sx={{ padding: 2 }}>Loading data...</Typography>
-        )}
-        {error && (
-          <Typography color="error" sx={{ padding: 2 }}>
-            Error: {error}
-          </Typography>
-        )}
-
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell sx={{ fontWeight: "bold" }}>Date</TableCell>
-                <TableCell sx={{ fontWeight: "bold" }}>Day</TableCell>
-                <TableCell sx={{ fontWeight: "bold" }}>Shift</TableCell>
-                <TableCell sx={{ fontWeight: "bold" }}>Work Time</TableCell>
-                <TableCell sx={{ fontWeight: "bold" }}>In Time</TableCell>
-                <TableCell sx={{ fontWeight: "bold" }}>Out Time</TableCell>
-                <TableCell sx={{ fontWeight: "bold" }}>Total Hours</TableCell>
-                <TableCell sx={{ fontWeight: "bold" }}>First Half</TableCell>
-                <TableCell sx={{ fontWeight: "bold" }}>Second Half</TableCell>
-                <TableCell sx={{ fontWeight: "bold" }}>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {attendanceData.length > 0 ? (
-                attendanceData
-                  .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                  .map((row, index) => (
-                    <TableRow key={index}>
-                      <TableCell
-                        onClick={() => handleRowClick(row)}
-                        style={{ cursor: "pointer" }}
-                      >
-                        {new Date(row.date).toLocaleDateString("en-US")}
-                      </TableCell>
-                      <TableCell>
-                        {row.day ||
-                          new Date(row.date).toLocaleString("en-US", {
-                            weekday: "short",
-                          })}
-                      </TableCell>
-                      <TableCell>{row.shift || "Day Shift"}</TableCell>
-                      <TableCell>{row.workTime || "--"}</TableCell>{" "}
-                      {/* Using calculated Work Time */}
-                      <TableCell>
-                        {row.check_in ? formatTime(row.check_in) : "--"}
-                      </TableCell>
-                      <TableCell>
-                        {row.check_out ? formatTime(row.check_out) : "--"}
-                      </TableCell>
-                      <TableCell>
-                        {calculateTotalHours(row.total_hours)}
-                      </TableCell>
-                      <TableCell>
-                        <span
-                          style={{
-                            backgroundColor: row.check_in
-                              ? "#d4edda"
-                              : "#f8d7da",
-                            color: row.check_in ? "#155724" : "#721c24",
-                            padding: "2px 6px",
-                            borderRadius: "4px",
-                            fontWeight: "bold",
-                          }}
-                        >
-                          {row.check_in ? "Present" : "Absent"}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <span
-                          style={{
-                            backgroundColor: row.check_out
-                              ? "#d4edda"
-                              : "#f8d7da",
-                            color: row.check_out ? "#155724" : "#721c24",
-                            padding: "2px 6px",
-                            borderRadius: "4px",
-                            fontWeight: "bold",
-                          }}
-                        >
-                          {row.check_out ? "Present" : "Absent"}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <IconButton
-                          onClick={(event) => handleMoreVertClick(event, row)}
-                        >
-                          <MoreVert />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={10} align="center">
-                    No records available
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-        <TablePagination
-          rowsPerPageOptions={[5, 10, 25]}
-          component="div"
-          count={attendanceData.length}
-          rowsPerPage={rowsPerPage}
-          page={page}
-          onPageChange={handleChangePage}
-          onRowsPerPageChange={handleChangeRowsPerPage}
-        />
-      </Card>
-
-      {/* Menu for Actions (Edit/Delete) */}
-      <Menu
-        anchorEl={anchorEl}
-        open={Boolean(anchorEl)}
-        onClose={handleCloseMenu}
-        PaperProps={{
-          style: {
-            width: "180px",
-          },
-        }}
-      >
-        <MenuItem onClick={handleAttendanceClaim}>
-          <Event fontSize="small" sx={{ color: "#1976d2", marginRight: 1 }} />
-          Attendance Claim
-        </MenuItem>
-      </Menu>
-
-      {/* Dialog for Detailed Logs */}
-      <Dialog
-        open={dialogOpen}
-        onClose={handleCloseDialog}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle
-          sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold", color: "#333" }}
-        >
-          Daily In/Out Punch
-        </DialogTitle>
-        <DialogContent
+        <Button
+          variant="outlined"
+          onClick={() => navigate('/LeaveManagement')}
+          startIcon={<Event />}
           sx={{
-            padding: 0,
-            height: "250px",
-            overflow: "auto",
+            textTransform: 'none',
+            color: 'secondary.main',
+            borderColor: 'secondary.main',
+            '&:hover': {
+              borderColor: 'secondary.dark',
+              backgroundColor: 'rgba(156, 39, 176, 0.04)'
+            }
           }}
         >
+          Request Leave
+        </Button>
+        <Button
+          variant="outlined"
+          onClick={handleAttendanceClaim}
+          startIcon={<Event />}
+          sx={{
+            textTransform: 'none',
+            color: 'primary.main',
+            borderColor: 'primary.main',
+            '&:hover': {
+              borderColor: 'primary.dark',
+              backgroundColor: 'rgba(25, 118, 210, 0.04)'
+            }
+          }}
+        >
+          Attendance Claim
+        </Button>
+      </Box>
+    </Box>
+
+    {/* Main Table Content */}
+    <TableContainer component={Paper} sx={{ marginBottom: 3, boxShadow: 'none', border: '1px solid #e0e0e0' }}>
+      <Table size="small">
+        <TableHead>
+          <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
+            <TableCell sx={{ fontWeight: 'bold', color: '#333' }}>Date</TableCell>
+            <TableCell sx={{ fontWeight: 'bold', color: '#333' }}>Day</TableCell>
+            <TableCell sx={{ fontWeight: 'bold', color: '#333' }}>Shift</TableCell>
+            <TableCell sx={{ fontWeight: 'bold', color: '#333' }}>Work Time</TableCell>
+            <TableCell sx={{ fontWeight: 'bold', color: '#333' }}>In Time</TableCell>
+            <TableCell sx={{ fontWeight: 'bold', color: '#333' }}>Out Time</TableCell>
+            <TableCell sx={{ fontWeight: 'bold', color: '#333' }}>Total Hours</TableCell>
+            <TableCell sx={{ fontWeight: 'bold', color: '#333' }}>First Half</TableCell>
+            <TableCell sx={{ fontWeight: 'bold', color: '#333' }}>Second Half</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {attendanceData.length > 0 ? (
+            attendanceData.map((row, index) => {
+              const isPresent = row.present_status === 'Present';
+              const firstHalfStatus = row.check_in ? 'Present' : 'Absent';
+              const secondHalfStatus = row.check_out ? 'Present' : 'Absent';
+              
+              return (
+                <TableRow 
+                  key={index}
+                  hover
+                  onClick={() => handleRowClick(row)}
+                  sx={{ 
+                    cursor: 'pointer',
+                    '&:nth-of-type(odd)': {
+                      backgroundColor: '#f9f9f9'
+                    }
+                  }}
+                >
+                  <TableCell>{new Date(row.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</TableCell>
+                  <TableCell>{new Date(row.date).toLocaleDateString('en-US', { weekday: 'short' })}</TableCell>
+                  <TableCell>Day Shift</TableCell>
+                  <TableCell>9:00 AM - 6:00 PM</TableCell>
+                  <TableCell>{row.check_in ? formatTime(row.check_in) : '--:--'}</TableCell>
+                  <TableCell>{row.check_out ? formatTime(row.check_out) : '--:--'}</TableCell>
+                  <TableCell>{row.workTime || '--'}</TableCell>
+                  <TableCell>
+                    <Chip 
+                      label={firstHalfStatus}
+                      color={firstHalfStatus === 'Present' ? 'success' : 'error'}
+                      size="small"
+                      variant="outlined"
+                      sx={{ 
+                        minWidth: 70,
+                        borderRadius: 1,
+                        fontWeight: 'medium',
+                        borderWidth: '1.5px'
+                      }}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Chip 
+                      label={secondHalfStatus}
+                      color={secondHalfStatus === 'Present' ? 'success' : 'error'}
+                      size="small"
+                      variant="outlined"
+                      sx={{ 
+                        minWidth: 70,
+                        borderRadius: 1,
+                        fontWeight: 'medium',
+                        borderWidth: '1.5px'
+                      }}
+                    />
+                  </TableCell>
+
+                </TableRow>
+              );
+            })
+          ) : (
+            <TableRow>
+              <TableCell colSpan={9} align="center" sx={{ py: 3 }}>
+                {loading ? 'Loading attendance data...' : 'No attendance records found'}
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
+      <TablePagination
+        rowsPerPageOptions={[5, 10, 25]}
+        component="div"
+        count={attendanceData.length}
+        rowsPerPage={rowsPerPage}
+        page={page}
+        onPageChange={handleChangePage}
+        onRowsPerPageChange={handleChangeRowsPerPage}
+        sx={{
+          '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
+            marginBottom: 0
+          },
+          '& .MuiTablePagination-toolbar': {
+            padding: '8px 16px',
+            minHeight: '56px'
+          }
+        }}
+      />
+    </TableContainer>
+
+    {/* Dialog for Detailed Logs */}
+    <Dialog
+      open={dialogOpen}
+      onClose={handleCloseDialog}
+      maxWidth="md"
+      fullWidth
+    >
+      <DialogTitle>Attendance Details</DialogTitle>
+      <DialogContent
+        sx={{
+          padding: 0,
+          height: "250px",
+          overflow: "auto",
+        }}
+      >
           <Table sx={{ margin: "2%", width: "95%" }}>
             <TableHead>
               <TableRow>
@@ -762,6 +878,148 @@ const AttendanceManagement = () => {
             Delete
           </Button>
         </DialogActions>
+      </Dialog>
+
+      {/* Attendance Claim Dialog */}
+      <Dialog 
+        open={claimDialogOpen} 
+        onClose={handleClaimDialogClose}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          borderBottom: '1px solid #e0e0e0',
+          pb: 1,
+          m: 0,
+          p: 2
+        }}>
+          <Typography variant="h6" sx={{ fontWeight: 'bold' }}>Attendance Claim</Typography>
+          <IconButton 
+            onClick={handleClaimDialogClose}
+            size="small"
+            sx={{ color: 'text.secondary' }}
+          >
+            <Close />
+          </IconButton>
+        </DialogTitle>
+        
+        <form onSubmit={handleClaimSubmit}>
+          <DialogContent sx={{ p: 3 }}>
+            <Grid container spacing={3}>
+              {/* Current Date */}
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Date"
+                  value={new Date().toLocaleDateString('en-US', { 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                  })}
+                  InputProps={{
+                    readOnly: true,
+                  }}
+                  variant="outlined"
+                  size="small"
+                />
+              </Grid>
+              
+              {/* For Period */}
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="For Period"
+                  value={claimForm.forPeriod}
+                  onChange={(e) => handleClaimFormChange('forPeriod', e.target.value)}
+                  variant="outlined"
+                  size="small"
+                  placeholder="e.g., January 2024"
+                  error={!!formErrors.forPeriod}
+                  helperText={formErrors.forPeriod}
+                  required
+                />
+              </Grid>
+              
+              {/* Date Picker */}
+              <Grid item xs={12} sm={6}>
+                <LocalizationProvider dateAdapter={AdapterDateFns}>
+                  <DatePicker
+                    label="Select Date"
+                    value={claimForm.date}
+                    onChange={(date) => handleClaimFormChange('date', date)}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        fullWidth
+                        size="small"
+                        error={!!formErrors.date}
+                        helperText={formErrors.date}
+                        required
+                      />
+                    )}
+                  />
+                </LocalizationProvider>
+              </Grid>
+              
+              {/* Day Type */}
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Day</InputLabel>
+                  <Select
+                    value={claimForm.dayType}
+                    onChange={(e) => handleClaimFormChange('dayType', e.target.value)}
+                    label="Day"
+                  >
+                    <MenuItem value="full">Full Day</MenuItem>
+                    <MenuItem value="half">Half Day</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              
+              {/* Half Day Type (conditional) */}
+              {claimForm.dayType === 'half' && (
+                <Grid item xs={12}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel>Half Day</InputLabel>
+                    <Select
+                      value={claimForm.halfDayType}
+                      onChange={(e) => handleClaimFormChange('halfDayType', e.target.value)}
+                      label="Half Day"
+                    >
+                      <MenuItem value="first">First Half</MenuItem>
+                      <MenuItem value="second">Second Half</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+              )}
+            </Grid>
+          </DialogContent>
+          
+          <DialogActions sx={{ 
+            p: 2, 
+            borderTop: '1px solid #e0e0e0',
+            justifyContent: 'flex-end',
+            gap: 1
+          }}>
+            <Button 
+              onClick={handleClaimDialogClose}
+              variant="outlined"
+              color="inherit"
+            >
+              Cancel
+            </Button>
+            <Button 
+              type="submit"
+              variant="contained"
+              color="primary"
+            >
+              Submit Claim
+            </Button>
+          </DialogActions>
+        </form>
       </Dialog>
     </Box>
   );

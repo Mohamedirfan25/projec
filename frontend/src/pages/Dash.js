@@ -2255,6 +2255,11 @@ const App = () => {
                   page: "Document View",
                 },
                 {
+                  text: "Attendance",
+                  icon: <EventIcon />,
+                  page: "AttendanceManagement",
+                },
+                {
                   text: "Asset Report",
                   icon: <FeedbackIcon />,
                   page: "Asset Report",
@@ -2525,17 +2530,6 @@ const App = () => {
                           >
                             {`Leave Balance: ${leaveBalance} days`}
                           </Typography>
-                          <Button
-                            variant="contained"
-                            color="primary"
-                            size="small"
-                            sx={{ mt: 2 }}
-                            onClick={() =>
-                              handlePageChange("AttendanceManagement")
-                            }
-                          >
-                            View Details
-                          </Button>
                         </Box>
                       </CardContent>
                     </Card>
@@ -2623,15 +2617,7 @@ const App = () => {
                           >
                             Remaining Leave Days
                           </Typography>
-                          <Button
-                            variant="contained"
-                            color="primary"
-                            size="small"
-                            sx={{ mt: 2 }}
-                            onClick={() => handlePageChange("Leave Management")}
-                          >
-                            Request Leave
-                          </Button>
+
                         </Box>
                       </CardContent>
                     </Card>
