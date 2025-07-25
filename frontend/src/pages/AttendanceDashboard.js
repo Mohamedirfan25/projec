@@ -455,7 +455,7 @@ const AttendanceLists = () => {
         borderRadius: 3,
         boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
       }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
           <Typography variant="h5" sx={{ fontWeight: 700, color: 'text.primary' }}>
             Attendance  List
           </Typography>
@@ -1273,6 +1273,68 @@ const AttendanceLists = () => {
 };
 
 const AttendanceDashboard = () => {
+  // User permissions state
+  const [userPermissions, setUserPermissions] = useState({
+    hasAssetAccess: false,
+    hasAttendanceAccess: true, // Default to true since they're in the attendance dashboard
+    hasPayrollAccess: false
+  });
+
+  // Update the getDashboardOptions function to use the component's state
+  const getDashboardOptions = () => {
+    return [
+      {
+        id: 'asset',
+        label: 'Asset Dashboard',
+        icon: <EngineeringIcon />,
+        visible: userPermissions.hasAssetAccess
+      },
+      {
+        id: 'attendance',
+        label: 'Attendance Dashboard',
+        icon: <AssignmentIcon />,
+        current: true,
+        visible: userPermissions.hasAttendanceAccess
+      },
+      {
+        id: 'intern',
+        label: 'Intern Dashboard',
+        icon: <PeopleIcon />,
+        visible: true // Always show Intern Dashboard
+      },
+      {
+        id: 'payroll',
+        label: 'Payroll Dashboard',
+        icon: <AttachMoneyIcon />,
+        visible: userPermissions.hasPayrollAccess
+      }
+    ].filter(option => option.visible);
+  };
+
+  // Fetch user permissions when component mounts
+  useEffect(() => {
+    const fetchUserPermissions = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await axios.get("http://localhost:8000/Sims/user-permissions/", {
+          headers: { Authorization: `Token ${token}` }
+        });
+        setUserPermissions(response.data);
+      } catch (error) {
+        console.error("Error fetching user permissions:", error);
+        // Set default permissions if the API call fails
+        setUserPermissions({
+          hasAssetAccess: false,
+          hasAttendanceAccess: true,
+          hasPayrollAccess: false
+        });
+      }
+    };
+
+    fetchUserPermissions();
+  }, []);
+
+  // Existing state declarations
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [dateRange, setDateRange] = useState("month");
@@ -1294,7 +1356,7 @@ const AttendanceDashboard = () => {
   const [dashboardAnchorEl, setDashboardAnchorEl] = useState(null);
   const [attendanceData, setAttendanceData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [logData, setLogData] = useState([]); // <-- You missed this
+  const [logData, setLogData] = useState([]);
   const [mergedData, setMergedData] = useState([]);
   const [error, setError] = useState(null);
   const [profileData, setProfileData] = useState({
@@ -1313,31 +1375,6 @@ const AttendanceDashboard = () => {
   const actionMenuOpen = Boolean(actionAnchorEl);
   const accountMenuOpen = Boolean(accountAnchorEl);
   const dashboardMenuOpen = Boolean(dashboardAnchorEl);
-
-  // Dashboard options for dropdown
-  const dashboardOptions = [
-    {
-      id: 'asset',
-      label: 'Asset Dashboard',
-      icon: <EngineeringIcon />
-    },
-    {
-      id: 'attendance',
-      label: 'Attendance Dashboard',
-      icon: <AssignmentIcon />,
-      current: true
-    },
-    {
-      id: 'intern',
-      label: 'Intern Dashboard',
-      icon: <PeopleIcon />
-    },
-    {
-      id: 'payroll',
-      label: 'Payroll Dashboard',
-      icon: <AttachMoneyIcon />
-    }
-  ];
 
   // Helper functions for date/time formatting
   const formatTime = (timeStr) => {
@@ -1396,7 +1433,7 @@ const AttendanceDashboard = () => {
             rawDate: record.date,
             day: day,
             status: record.present_status || "Null",
-            checkIn: record.check_in ? formatTime(record.check_in) : "--",
+            checkIn: record.check_in ? formatTime(record.check_in) : "-",
             checkOut: record.check_out ? formatTime(record.check_out) : "--",
             workTime: workTime,
             totalHours: record.total_hours || "--",
@@ -2196,6 +2233,8 @@ const AttendanceDashboard = () => {
         return renderTable();
       case "leave":
         return <LeaveList userRole="staff" />;
+      case "profile":
+        return renderProfile();
       default:
         return renderDashboard();
     }
@@ -2229,7 +2268,7 @@ const AttendanceDashboard = () => {
               open={dashboardMenuOpen}
               onClose={handleDashboardMenuClose}
             >
-              {dashboardOptions.map((dashboard) => (
+              {getDashboardOptions().map((dashboard) => (
                 <MenuItem
                   key={dashboard.id}
                   onClick={() => {

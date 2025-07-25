@@ -132,7 +132,7 @@ class TempView(APIView):
         # Verify admin user creating the record
         try:
             admin_temp = Temp.objects.get(user=request.user)
-            if admin_temp.role.lower() not in ["admin", "hr"]:
+            if admin_temp.role.lower() not in ["admin", "hr", "staff"]:
                 return Response("Only admins/HR can create employee records", 
                               status=status.HTTP_403_FORBIDDEN)
         except Temp.DoesNotExist:
@@ -303,7 +303,7 @@ class TempView(APIView):
 
 
 class UserDataView(APIView):
-    permission_classes = [IsAuthenticated, IsStaff]
+    permission_classes = [IsAuthenticated]
     def check_user_role(self, username, role_type):
         if not User.objects.filter(username=username).exists():
             return False, Response({"error": f"Reporting {role_type} not found"}, status=status.HTTP_400_BAD_REQUEST)
@@ -363,7 +363,7 @@ class UserDataView(APIView):
             return Response(serializer.data)
 
     def post(self, request):
-    # First, get the logged-in user and their role
+        # First, get the logged-in user and their role
         try:
             logged_in_temp = Temp.objects.get(user=request.user)
         except Temp.DoesNotExist:
@@ -409,7 +409,6 @@ class UserDataView(APIView):
         existing_user_data = UserData.objects.filter(emp_id__emp_id=emp_id).first()
         if existing_user_data:
             # Check if required fields are null
-            # Modify this list based on which fields you consider required
             required_fields = ['domain', 'start_date', 'shift_timing', 'reporting_manager']
             incomplete = any(getattr(existing_user_data, field) is None for field in required_fields if hasattr(existing_user_data, field))
             
@@ -417,6 +416,20 @@ class UserDataView(APIView):
                 # If required fields are null, update the existing record
                 serializer = UserDataSerializer(existing_user_data, data=request.data, partial=True)
                 if serializer.is_valid():
+                    # Set status based on start date for existing records too
+                    start_date_str = request.data.get('start_date')
+                    if start_date_str:
+                        from datetime import datetime
+                        try:
+                            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+                            today = datetime.now().date()
+                            if start_date > today:
+                                serializer.validated_data['user_status'] = 'yettojoin'
+                            else:
+                                serializer.validated_data['user_status'] = 'inprogress'
+                        except (ValueError, TypeError):
+                            serializer.validated_data['user_status'] = 'inprogress'
+                    
                     serializer.save()
                     return Response(serializer.data, status=status.HTTP_200_OK)
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -428,13 +441,32 @@ class UserDataView(APIView):
         # If no UserData exists, create a new one
         temp = get_object_or_404(Temp, emp_id=emp_id)
         user = temp.user
+        
+        # Initialize serializer with request data
         serializer = UserDataSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.validated_data['emp_id'] = temp
-            serializer.validated_data['user'] = user
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Set the status after validation but before saving
+        start_date_str = request.data.get('start_date')
+        if start_date_str:
+            from datetime import datetime
+            try:
+                start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+                today = datetime.now().date()
+                serializer.validated_data['user_status'] = 'yettojoin' if start_date > today else 'inprogress'
+            except (ValueError, TypeError):
+                serializer.validated_data['user_status'] = 'inprogress'
+        else:
+            serializer.validated_data['user_status'] = 'inprogress'
+        
+        # Set required fields
+        serializer.validated_data['emp_id'] = temp
+        serializer.validated_data['user'] = user
+        
+        # Save the instance
+        user_data = serializer.save()
+        return Response(UserDataSerializer(user_data).data, status=status.HTTP_201_CREATED)
 
     def put(self, request, emp_id):
         user = Temp.objects.get(user=request.user)
@@ -1069,6 +1101,17 @@ class AssertStockView(APIView):
         except AssertStock.DoesNotExist:
             return Response({"error": f"Assert stock with ID {pk} not found"},
                             status=status.HTTP_404_NOT_FOUND)
+
+class UserPermissionsView(APIView):
+    """
+    API endpoint that returns the current user's permissions.
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        from .permissions import get_user_permissions
+        permissions = get_user_permissions(request.user)
+        return Response(permissions)
 
 
 class AssertIssueView(APIView):

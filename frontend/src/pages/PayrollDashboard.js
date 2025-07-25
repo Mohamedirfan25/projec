@@ -249,9 +249,23 @@ function getInitials(name) {
   return name.split(' ').map(part => part[0]).join('').toUpperCase();
 }
 
-const PayrollDashboard = () => {
-  const [payments, setPayments] = useState([]);
+// Helper function to get color based on status
+const getStatusColor = (status) => {
+  switch (status?.toLowerCase()) {
+    case 'paid':
+      return 'success';
+    case 'pending':
+      return 'warning';
+    case 'failed':
+      return 'error';
+    default:
+      return 'default';
+  }
+};
 
+const PayrollDashboard = () => {
+  const [payments, setPayments] = useState(initialPayments);
+  const [filteredPayments, setFilteredPayments] = useState(payments);
   const [openModal, setOpenModal] = useState(false);
   const [currentPayment, setCurrentPayment] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -515,185 +529,143 @@ const [paymentStatusData, setPaymentStatusData] = useState([]);
   };
 
   // Dashboard options for dropdown
-  const dashboardOptions = [
-    {
-      id: 'asset',
-      label: 'Asset Dashboard',
-      icon: <EngineeringIcon />
-    },
-    {
-      id: 'attendance',
-      label: 'Attendance Dashboard',
-      icon: <AssignmentIcon />
-    },
-    {
-      id: 'intern',
-      label: 'Intern Dashboard',
-      icon: <PeopleIcon />
-    },
-    {
-      id: 'payroll',
-      label: 'Payroll Dashboard',
-      icon: <AttachMoneyIcon />,
-      current: true
-    }
-  ];
-
-  const filteredPayments = payments.filter((payment) => {
-    const matchesSearch =
-      payment.internName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      payment.reference?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      payment.department?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      payment.internId?.toLowerCase().includes(searchTerm.toLowerCase());
-  
-    const matchesStatus = statusFilter ? payment.status === statusFilter : true;
-    const matchesMethod = methodFilter ? payment.paymentMethod === methodFilter : true;
-  
-    return matchesSearch && matchesStatus && matchesMethod;
+  const [userPermissions, setUserPermissions] = useState({
+    hasAssetAccess: false,
+    hasAttendanceAccess: false,
+    hasPayrollAccess: true, // Default to true since this is the Payroll Dashboard
+    hasInternAccess: true   // Always show Intern Dashboard
   });
-  
-  const paginatedPayments = filteredPayments.slice(
-    (page - 1) * rowsPerPage,
-    page * rowsPerPage
-  );
-  
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'Paid':
-        return 'success';
-      case 'Pending':
-        return 'warning';
-      case 'Overdue':
-        return 'error';
-      default:
-        return 'default';
+  // Fetch user permissions on component mount
+  useEffect(() => {
+    const fetchUserPermissions = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await axios.get("http://localhost:8000/Sims/user-permissions/", {
+          headers: { Authorization: `Token ${token}` }
+        });
+        
+        if (response.data) {
+          setUserPermissions(prev => ({
+            ...prev,
+            ...response.data,
+            hasInternAccess: true // Always ensure Intern Dashboard is accessible
+          }));
+        }
+      } catch (error) {
+        console.error("Error fetching user permissions:", error);
+        // Fallback to default permissions if API call fails
+        setUserPermissions(prev => ({
+          ...prev,
+          hasInternAccess: true // Still ensure Intern Dashboard is accessible
+        }));
+      }
+    };
+
+    fetchUserPermissions();
+  }, []);
+
+  // Get filtered dashboard options based on permissions
+  const getDashboardOptions = () => {
+    return [
+      {
+        id: 'asset',
+        label: 'Asset Dashboard',
+        icon: <EngineeringIcon />,
+        visible: userPermissions.hasAssetAccess
+      },
+      {
+        id: 'attendance',
+        label: 'Attendance Dashboard',
+        icon: <AssignmentIcon />,
+        visible: userPermissions.hasAttendanceAccess
+      },
+      {
+        id: 'intern',
+        label: 'Intern Dashboard',
+        icon: <PeopleIcon />,
+        visible: true // Always show Intern Dashboard
+      },
+      {
+        id: 'payroll',
+        label: 'Payroll Dashboard',
+        icon: <AttachMoneyIcon />,
+        visible: userPermissions.hasPayrollAccess,
+        current: true
+      }
+    ].filter(option => option.visible);
+  };
+
+  // Dashboard options for dropdown - now using the filtered version
+  const dashboardOptions = getDashboardOptions();
+  
+  const fetchFeeData = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      
+      // Fetch all required data in parallel
+      const [feeResponse, userDataResponse] = await Promise.all([
+        axios.get("http://localhost:8000/Sims/fees/", {
+          headers: { Authorization: `Token ${token}` },
+        }),
+        axios.get("http://localhost:8000/Sims/user-data/", {
+          headers: { Authorization: `Token ${token}` },
+        })
+      ]);
+
+      const feeData = feeResponse.data;
+      const userData = userDataResponse.data;
+
+      // Create a mapping of username to emp_id
+      const userEmpIdMap = {};
+      userData.forEach(user => {
+        userEmpIdMap[user.username] = user.emp_id;
+      });
+
+      const formattedPayments = feeData.flatMap((item) =>
+        item.payment_details.map((payment) => ({
+          id: payment.id,
+          internId: userEmpIdMap[item.employee_id] || item.employee_id, // Use emp_id if available
+          internName: item.employee_name,
+          department: item.domain,
+          amount: parseFloat(payment.amount),
+          date: payment.paid_date.split("T")[0],
+          status: "Paid",
+          paymentMethod: payment.payment_method,
+          reference: payment.transaction_id || payment.id,
+          employee_id: item.employee_id // Keep original employee_id for reference
+        }))
+      );
+
+      setPayments(formattedPayments);
+
+      // Status calculation logic
+      let paid = 0;
+      let pending = 0;
+
+      feeData.forEach((item) => {
+        const { scheme, summary, payment_details } = item;
+        const hasPaid = payment_details.length > 0;
+        const isPending = summary.remaining_amount > 0 && scheme !== "FREE";
+
+        if (hasPaid) paid++;
+        if (isPending) pending++;
+      });
+
+      const statusSummary = [
+        { name: "Paid", value: paid },
+        { name: "Pending", value: pending },
+        { name: "Overdue", value: 0 },
+        { name: "Cancelled", value: 0 }
+      ];
+
+      setPaymentStatusData(statusSummary);
+
+    } catch (error) {
+      console.error("Error fetching payment data:", error);
+      showSnackbar("Failed to load payment data", "error");
     }
   };
-  
-  const [profileData, setProfileData] = useState({
-           username: "",
-           email: "",
-           phone_no: "",
-           role: "",
-           startDate: "",
-           department: "",
-           photo: null,
-           aadhar_number: "",
-           gender: "",
-           shift_timing: "",
-           team_name: "",
-           reporting_manager: ""
-         });
-     
-   const fetchProfileData = async () => {
-          try {
-            const token = localStorage.getItem("token");
-            const response = await axios.get("http://localhost:8000/Sims/staffs-details/", {
-              headers: {
-                Authorization: `Token ${token}`,
-              },
-            });
-      
-            if (response.data && response.data.length > 0) {
-              const staffData = response.data[0]; // Get first staff member (assuming it's the current user)
-              const personalData = staffData.details.personal_data;
-              const userData = staffData.details.user_data;
-      
-              setProfileData({
-                username: personalData?.username || "N/A",
-                email: personalData?.email || "N/A",
-                phone_no: personalData?.phone_no || "N/A",
-                role: "Staff", // Since this is the staff dashboard
-                startDate: userData?.start_date || "N/A",
-                department: userData?.domain_name || "N/A",
-                photo: personalData?.photo || null,
-                aadhar_number: personalData?.aadhar_number || "N/A",
-                gender: personalData?.gender === 'M' ? 'Male' : 'Female',
-                shift_timing: userData?.shift_timing || "N/A",
-                team_name: userData?.team_name || "N/A",
-                reporting_manager: userData?.reporting_manager_username || "N/A"
-              });
-            }
-          } catch (error) {
-            console.error("Error fetching staff profile data:", error);
-            if (error.response && error.response.status === 401) {
-              localStorage.removeItem("token");
-              window.location.href = "/login";
-            }
-          }
-        };
-      
-// Add this state at the top
-
-
-const fetchFeeData = async () => {
-  try {
-    const token = localStorage.getItem("token");
-    
-    // Fetch all required data in parallel
-    const [feeResponse, userDataResponse] = await Promise.all([
-      axios.get("http://localhost:8000/Sims/fees/", {
-        headers: { Authorization: `Token ${token}` },
-      }),
-      axios.get("http://localhost:8000/Sims/user-data/", {
-        headers: { Authorization: `Token ${token}` },
-      })
-    ]);
-
-    const feeData = feeResponse.data;
-    const userData = userDataResponse.data;
-
-    // Create a mapping of username to emp_id
-    const userEmpIdMap = {};
-    userData.forEach(user => {
-      userEmpIdMap[user.username] = user.emp_id;
-    });
-
-    const formattedPayments = feeData.flatMap((item) =>
-      item.payment_details.map((payment) => ({
-        id: payment.id,
-        internId: userEmpIdMap[item.employee_id] || item.employee_id, // Use emp_id if available
-        internName: item.employee_name,
-        department: item.domain,
-        amount: parseFloat(payment.amount),
-        date: payment.paid_date.split("T")[0],
-        status: "Paid",
-        paymentMethod: payment.payment_method,
-        reference: payment.transaction_id || payment.id,
-        employee_id: item.employee_id // Keep original employee_id for reference
-      }))
-    );
-
-    setPayments(formattedPayments);
-
-    // Status calculation logic
-    let paid = 0;
-    let pending = 0;
-
-    feeData.forEach((item) => {
-      const { scheme, summary, payment_details } = item;
-      const hasPaid = payment_details.length > 0;
-      const isPending = summary.remaining_amount > 0 && scheme !== "FREE";
-
-      if (hasPaid) paid++;
-      if (isPending) pending++;
-    });
-
-    const statusSummary = [
-      { name: "Paid", value: paid },
-      { name: "Pending", value: pending },
-      { name: "Overdue", value: 0 },
-      { name: "Cancelled", value: 0 }
-    ];
-
-    setPaymentStatusData(statusSummary);
-
-  } catch (error) {
-    console.error("Error fetching payment data:", error);
-    showSnackbar("Failed to load payment data", "error");
-  }
-};
   useEffect(() => {   
     setLoading(true);
     fetchFeeData();
@@ -1104,12 +1076,13 @@ const fetchFeeData = async () => {
                 <Select
                   label="Payment Method"
                   name="paymentMethod"
-                  defaultValue={currentPayment?.paymentMethod || "UPI"}
+                  defaultValue={currentPayment?.paymentMethod || "Bank Transfer"}
                   required
                 >
-                  <MenuItem value="Cash">Cash</MenuItem>
-                  <MenuItem value="Net Banking">Net Banking</MenuItem>
+                  <MenuItem value="Bank Transfer">Bank Transfer</MenuItem>
                   <MenuItem value="UPI">UPI</MenuItem>
+                  <MenuItem value="Net Banking">Net Banking</MenuItem>
+                  <MenuItem value="Cash">Cash</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -1329,6 +1302,70 @@ const fetchFeeData = async () => {
     }
   };
 
+  const handleLogout = () => {
+    // Clear the authentication token
+    localStorage.removeItem("token");
+    // Close the menu
+    handleMenuClose();
+    // Redirect to login page
+    navigate("/loginpage");
+    // Optional: Show a logout message
+    showSnackbar("Logged out successfully", "info");
+  };
+
+  const [profileData, setProfileData] = useState({
+           username: "",
+           email: "",
+           phone_no: "",
+           role: "",
+           startDate: "",
+           department: "",
+           photo: null,
+           aadhar_number: "",
+           gender: "",
+           shift_timing: "",
+           team_name: "",
+           reporting_manager: ""
+         });
+     
+   const fetchProfileData = async () => {
+          try {
+            const token = localStorage.getItem("token");
+            const response = await axios.get("http://localhost:8000/Sims/staffs-details/", {
+              headers: {
+                Authorization: `Token ${token}`,
+              },
+            });
+      
+            if (response.data && response.data.length > 0) {
+              const staffData = response.data[0]; // Get first staff member (assuming it's the current user)
+              const personalData = staffData.details.personal_data;
+              const userData = staffData.details.user_data;
+      
+              setProfileData({
+                username: personalData?.username || "N/A",
+                email: personalData?.email || "N/A",
+                phone_no: personalData?.phone_no || "N/A",
+                role: "Staff", // Since this is the staff dashboard
+                startDate: userData?.start_date || "N/A",
+                department: userData?.domain_name || "N/A",
+                photo: personalData?.photo || null,
+                aadhar_number: personalData?.aadhar_number || "N/A",
+                gender: personalData?.gender === 'M' ? 'Male' : 'Female',
+                shift_timing: userData?.shift_timing || "N/A",
+                team_name: userData?.team_name || "N/A",
+                reporting_manager: userData?.reporting_manager_username || "N/A"
+              });
+            }
+          } catch (error) {
+            console.error("Error fetching staff profile data:", error);
+            if (error.response && error.response.status === 401) {
+              localStorage.removeItem("token");
+              window.location.href = "/login";
+            }
+          }
+        };
+      
   return (
     <ThemeProvider theme={theme}>
       <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
@@ -1440,7 +1477,7 @@ const fetchFeeData = async () => {
                   My Profile
                 </MenuItem>
                 <Divider />
-                <MenuItem onClick={handleMenuClose}>
+                <MenuItem onClick={handleLogout}>
                   <ListItemIcon>
                     <ExitToAppIcon fontSize="small" />
                   </ListItemIcon>
@@ -1557,7 +1594,7 @@ const fetchFeeData = async () => {
             </List>
             <Divider />
             <List>
-              <ListItemButton onClick={handleMenuClose}>
+              <ListItemButton onClick={handleLogout}>
                 <ListItemIcon>
                   <ExitToAppIcon />
                 </ListItemIcon>

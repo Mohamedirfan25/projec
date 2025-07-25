@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   AppBar,
   Toolbar,
@@ -118,6 +118,7 @@ import { Feedback } from "@mui/icons-material";
 import PerformanceFeedbackPage from "./PerformanceFeedbackPage";
 import TaskManager from "./Tasks"; // Adjust the path as needed
 import InternManagementLists from "./InternManagementLists";
+import InternLists from "./InternLists";
 // Customized theme for professional appearance
 const theme = createTheme({
   palette: {
@@ -187,8 +188,14 @@ function stringToColor(string) {
 }
 
 function getInitials(name) {
-  if (!name) return '?';
-  return name.split(' ').map(part => part[0]).join('').toUpperCase();
+  if (!name || name.trim() === '') return 'U';
+  
+  const words = name.trim().split(' ').filter(word => word.length > 0);
+  
+  if (words.length === 0) return 'U';
+  if (words.length === 1) return words[0].substring(0, 2).toUpperCase();
+  
+  return words.map(word => word[0]).join('').toUpperCase().substring(0, 2);
 }
 
 const InternDashboard = () => {
@@ -242,7 +249,16 @@ const InternDashboard = () => {
     { name: 'Jun', performance: 90 }
   ]);
 
+  const [userPermissions, setUserPermissions] = useState({
+    hasAssetAccess: false,
+    hasAttendanceAccess: false,
+    hasPayrollAccess: false,
+    hasInternAccess: true // Default to true as this is the main dashboard
+  });
+
   const navigate = useNavigate();
+  const [staffDepartment, setStaffDepartment] = useState(null);
+  const [isLoadingDepartment, setIsLoadingDepartment] = useState(true);
   const rowsPerPage = 5;
 
   // Dashboard options for dropdown
@@ -270,17 +286,38 @@ const InternDashboard = () => {
     }
   ];
 
+  const filteredDashboardOptions = useMemo(() => {
+    return dashboardOptions.filter(option => {
+      // Always show the Intern Management option
+      if (option.id === 'intern') {
+        return true;
+      }
+      
+      // For other options, check permissions
+      switch (option.id) {
+        case 'asset':
+          return userPermissions.hasAssetAccess;
+        case 'attendance':
+          return userPermissions.hasAttendanceAccess;
+        case 'payroll':
+          return userPermissions.hasPayrollAccess;
+        default:
+          return false;
+      }
+    });
+  }, [userPermissions]);
+
   // Fetch all necessary data on component mount
   useEffect(() => {
     const token = localStorage.getItem("token");
     console.log(token);
-
 
     fetchUsers();
     fetchActiveInternCount();
     fetchInternCount();
     fetchDomainData();
     fetchProfileData();
+    fetchUserPermissions();
   }, []);
 
   const fetchUsers = async () => {
@@ -406,7 +443,7 @@ const InternDashboard = () => {
   const fetchProfileData = async () => {
     try {
       const token = localStorage.getItem("token");
-      const username = localStorage.getItem("user"); // 👈 Store this at login
+      const username = localStorage.getItem("user"); // 
 
       const personalDataResponse = await axios.get("http://localhost:8000/Sims/personal-data/", {
         headers: { Authorization: `Token ${token}` },
@@ -431,7 +468,7 @@ const InternDashboard = () => {
       const collegeDetails = collegeDetailsResponse.data.find(c => c.username === username) || {};
 
       setProfileData({
-        username: personalData?.username || "N/A",
+        username: personalData?.username || username || "User",
         email: personalData?.email || "N/A",
         phone_no: personalData?.phone_no || "N/A",
         role: tempView?.role || "N/A",
@@ -440,10 +477,37 @@ const InternDashboard = () => {
       });
     } catch (error) {
       console.error("Error fetching profile data:", error);
+      // Set fallback data
+      const username = localStorage.getItem("user") || "User";
+      setProfileData({
+        username: username,
+        email: "N/A",
+        phone_no: "N/A", 
+        role: "N/A",
+        startDate: "N/A",
+        department: "N/A",
+      });
     }
   };
 
-
+  const fetchUserPermissions = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.get("http://localhost:8000/Sims/user-permissions/", {
+        headers: { Authorization: `Token ${token}` }
+      });
+      setUserPermissions(response.data);
+    } catch (error) {
+      console.error("Error fetching user permissions:", error);
+      // Default to no access if there's an error
+      setUserPermissions({
+        hasAssetAccess: false,
+        hasAttendanceAccess: false,
+        hasPayrollAccess: false,
+        hasInternAccess: true
+      });
+    }
+  };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -1032,63 +1096,51 @@ const InternDashboard = () => {
                   <TableRow>
                     <TableCell>EMP ID</TableCell> {/* Moved EMP ID to first column */}
                     <TableCell>Name</TableCell>
-                    <TableCell>Department</TableCell>
+                    <TableCell>Domain</TableCell>
                     <TableCell>Status</TableCell>
-                    <TableCell>Document Upload</TableCell>
                     <TableCell>Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {users.slice(0, 5).map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell>{user.emp_id}</TableCell> {/* Added EMP ID to table cell */}
-                      <TableCell>
-                        <Box display="flex" alignItems="center">
-                          {user.name}
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Box display="flex" alignItems="center">
-                          {getDepartmentIcon(user.department)}
-                          <Typography sx={{ ml: 1 }}>{user.department}</Typography>
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={user.status}
-                          color={
-                            user.status === 'Active' ? 'success' :
-                              user.status === 'On Leave' ? 'warning' : 'error'
-                          }
-                        />
-                      </TableCell>
-                      <TableCell>
-                        {user.uploads ? (
-                          <Chip
-                            label="Uploaded"
-                            color="success"
-                            size="small"
-                            icon={<CheckCircleOutlineIcon fontSize="small" />}
-                          />
-                        ) : (
-                          <Button
-                            variant="outlined"
-                            size="small"
-                            onClick={() => handleUploadClick(user)}
-                            startIcon={<CloudUploadIcon fontSize="small" />}
-                          >
-                            Upload
-                          </Button>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <IconButton onClick={(e) => handleActionMenuOpen(e, user)}>
-                          <MoreVertIcon />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
+  {users
+    .filter(user => {
+      // If staffDepartment is not set, show all users
+      if (!staffDepartment) return true;
+      // Otherwise, only show users from the same department
+      return user.department === staffDepartment;
+    })
+    .slice(0, 5) // Limit to 5 results
+    .map((user) => (
+      <TableRow key={user.id}>
+        <TableCell>{user.emp_id}</TableCell>
+        <TableCell>
+          <Box display="flex" alignItems="center">
+            {user.name}
+          </Box>
+        </TableCell>
+        <TableCell>
+          <Box display="flex" alignItems="center">
+            {getDepartmentIcon(user.department)}
+            <Typography sx={{ ml: 1 }}>{user.department}</Typography>
+          </Box>
+        </TableCell>
+        <TableCell>
+          <Chip
+            label={user.status}
+            color={
+              user.status === 'Active' ? 'success' :
+              user.status === 'On Leave' ? 'warning' : 'error'
+            }
+          />
+        </TableCell>
+        <TableCell>
+          <IconButton onClick={(e) => handleActionMenuOpen(e, user)}>
+            <MoreVertIcon />
+          </IconButton>
+        </TableCell>
+      </TableRow>
+    ))}
+</TableBody>
               </Table>
             </TableContainer>
           </CardContent>
@@ -1097,11 +1149,38 @@ const InternDashboard = () => {
     </Grid>
   );
 
-  const renderUserList = () => (
-    <Grid item xs={12}>
-            <InternManagementLists />
-          </Grid>
-  );
+  useEffect(() => {
+    const fetchDepartment = async () => {
+      try {
+        const response = await axios.get('http://localhost:8000/Sims/user-data/', {
+          headers: {
+            'Authorization': `Token ${localStorage.getItem('token')}`
+          }
+        });
+        // Assuming the response has a department field
+        setStaffDepartment(response.data.department);
+      } catch (error) {
+        console.error('Error fetching department:', error);
+      } finally {
+        setIsLoadingDepartment(false);
+      }
+    };
+  
+    fetchDepartment();
+  }, []);
+  const renderUserList = () => {
+    if (isLoadingDepartment) {
+      return <CircularProgress />; // Show loading indicator while fetching
+    }
+  
+    return (
+      <Grid item xs={12}>
+        <InternLists 
+          departmentFilter={staffDepartment}
+        />
+      </Grid>
+    );
+  };
 
   const renderUserProfile = () => (
     <Grid container spacing={3}>
@@ -1242,6 +1321,8 @@ const InternDashboard = () => {
         return <PerformanceFeedbackPage />;
       case "tasks":
         return <TaskManager />;
+      case "profile":
+        return renderUserProfile();
       default:
         return renderDashboard();
     }
@@ -1275,7 +1356,7 @@ const InternDashboard = () => {
               open={Boolean(dashboardAnchorEl)}
               onClose={handleDashboardMenuClose}
             >
-              {dashboardOptions.map((dashboard) => (
+              {filteredDashboardOptions.map((dashboard) => (
                 <MenuItem
                   key={dashboard.id}
                   onClick={() => {
@@ -1347,9 +1428,9 @@ const InternDashboard = () => {
                 </IconButton>
               </Tooltip>
               <Menu
-                anchorEl={anchorEl}
-                open={Boolean(anchorEl)}
-                onClose={handleMenuClose}
+                anchorEl={accountAnchorEl}
+                open={Boolean(accountAnchorEl)}
+                onClose={handleAccountMenuClose}
                 anchorOrigin={{
                   vertical: 'bottom',
                   horizontal: 'right',
@@ -1361,7 +1442,7 @@ const InternDashboard = () => {
               >
                 <MenuItem onClick={() => {
                   setActiveView("profile");
-                  handleMenuClose();
+                  handleAccountMenuClose();
                 }}>
                   <ListItemIcon>
                     <AccountCircleIcon fontSize="small" />

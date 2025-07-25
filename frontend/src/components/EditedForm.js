@@ -198,9 +198,9 @@ const PersonalDetailsForm = ({ onNext, initialData, isReturning, onClose }) => {
   ];
 
   const genders = [
-    { value: "male", label: "Male", icon: <MaleIcon /> },
-    { value: "female", label: "Female", icon: <FemaleIcon /> },
-    { value: "other", label: "Other", icon: <OtherIcon /> }
+    { value: "M", label: "Male", icon: <MaleIcon /> },
+    { value: "F", label: "Female", icon: <FemaleIcon /> },
+    { value: "O", label: "Other", icon: <OtherIcon /> }
   ];
 
   useEffect(() => {
@@ -713,7 +713,7 @@ const CollegeInfoForm = ({ onBack, onNext, initialData }) => {
     collegeEmail: initialData?.collegeEmail || "",
     degreeType: initialData?.degreeType || "UG",
     degree: initialData?.degree || "",
-    department: initialData?.department || "",
+    collegeDepartment: initialData?.collegeDepartment || "",
     yearOfPassing: initialData?.yearOfPassing || "",
     cgpa: initialData?.cgpa || "",
     facultyNumber: initialData?.facultyNumber || ""
@@ -728,7 +728,7 @@ const CollegeInfoForm = ({ onBack, onNext, initialData }) => {
         collegeEmail: initialData?.collegeEmail || "",
         degreeType: initialData?.degreeType || "UG",
         degree: initialData?.degree || "",
-        department: initialData?.collegeDepartment || "",
+        collegeDepartment: initialData?.collegeDepartment || "",
         yearOfPassing: initialData?.yearOfPassing || "",
         cgpa: initialData?.cgpa || "",
         facultyNumber: initialData?.facultyNumber || ""
@@ -978,8 +978,8 @@ const CollegeInfoForm = ({ onBack, onNext, initialData }) => {
                 </Box>
               </InputLabel>
               <Select
-                name="department"
-                value={formData.department}
+                name="collegeDepartment"
+                value={formData.collegeDepartment}
                 onChange={handleChange}
                 label="Department"
               >
@@ -1119,18 +1119,11 @@ const CompanyDetailsForm = ({ onBack, onNext, initialData }) => {
   const [snackbarSeverity, setSnackbarSeverity] = useState("success");
 
   const domains = [
-    "IT Services",
-    "Product Development",
-    "Consulting",
-    "Finance",
-    "Healthcare",
-    "Education",
-    "Manufacturing",
-    "Retail",
-    "Telecommunications",
-    "Automotive",
-    "Energy",
-    "Media & Entertainment"
+    "Full Stack",
+    "Data Analytics",
+    "Digital Marketing",
+    "UI/UX Design",
+    "AI & Machine Learning"
   ];
 
   const departments = [
@@ -1317,7 +1310,7 @@ const CompanyDetailsForm = ({ onBack, onNext, initialData }) => {
               </FormControl>
             </Grid>
             
-            <Grid item xs={12} md={6}>
+            {/* <Grid item xs={12} md={6}>
               <FormControl fullWidth>
                 <InputLabel>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1337,7 +1330,7 @@ const CompanyDetailsForm = ({ onBack, onNext, initialData }) => {
                   ))}
                 </Select>
               </FormControl>
-            </Grid>
+            </Grid> */}
             
             <Grid item xs={12}>
               <Divider>
@@ -1366,17 +1359,17 @@ const CompanyDetailsForm = ({ onBack, onNext, initialData }) => {
                   onChange={handleChange}
                 >
                   <FormControlLabel
-                    value="free"
+                    value="FREE"
                     control={<Radio color="primary" />}
                     label="Free"
                   />
                   <FormControlLabel
-                    value="course"
+                    value="COURSE"
                     control={<Radio color="primary" />}
                     label="Course"
                   />
                   <FormControlLabel
-                    value="project"
+                    value="PROJECT"
                     control={<Radio color="primary" />}
                     label="Project"
                   />
@@ -2100,7 +2093,7 @@ const MultiStepForm = ({ internData, onClose }) => {
       collegeEmail: internData.collegeEmail || '',
       degreeType: internData.degreeType || 'UG',
       degree: internData.degree || '',
-      department: internData.collegeDepartment || '',
+      collegeDepartment: internData.collegeDepartment || '',
       yearOfPassing: internData.yearOfPassing || '',
       cgpa: internData.cgpa || '',
       facultyNumber: internData.facultyNumber || ''

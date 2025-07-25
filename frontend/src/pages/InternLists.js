@@ -19,6 +19,7 @@ import {
   InputAdornment,
   Avatar,
   Pagination,
+  PaginationItem,
   Select,
   MenuItem,
   FormControl,
@@ -232,7 +233,7 @@ const generateCompletedCertificate = async (empId, firstName) => {
   }
 };
 
-const InternLists = ({ setActiveComponent, showAddForm: externalShowAddForm, onFormComplete, onFormCancel }) => {
+const InternLists = ({ setActiveComponent, showAddForm: externalShowAddForm, onFormComplete, onFormCancel, departmentFilter }) => {
   const [isLoading, setIsLoading] = useState(true);
   const theme = useTheme();
   const { colorMode } = useColorMode();
@@ -418,6 +419,7 @@ useEffect(() => {
   fetchInterns();
 }, []);
 
+
 const handleCertificatesMenuOpen = (event, internId, menuType = 'inProgress') => {
   setCertificatesAnchorEl(event.currentTarget);
   setSelectedCertInternId(internId);
@@ -473,6 +475,14 @@ const handleCertificateAction = async (type) => {
           shift_days: 'Monday to Friday'
         };
         console.log(data);
+        const offer_letter = await axios.post(endpoint, data ,
+          {
+          headers: {
+            Authorization: `Token ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+        );
         break;
       case 'Completion Certificate':
         const response = await axios.get(
@@ -816,24 +826,36 @@ const handleUndoDelete = async (internId) => {
     });
   };
 
-  const filteredInterns = activeTab === 'Deleted'
-  ? deletedInterns.filter(intern =>
-      intern.id.toString().includes(searchTerm) ||
-      intern.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      intern.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      intern.scheme.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      intern.domain.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-  : (interns[activeTab] || []).filter(intern =>
-      (intern.id.toString().includes(searchTerm) ||
-        intern.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        intern.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        intern.scheme.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        intern.domain.toLowerCase().includes(searchTerm.toLowerCase())) &&
-      (filters.department === '' || intern.department === filters.department) &&
-      (filters.scheme === '' || intern.scheme === filters.scheme) &&
-      (filters.domain === '' || intern.domain === filters.domain)
-    );
+  const filteredInterns = React.useMemo(() => {
+    const baseFiltered = activeTab === 'Deleted'
+      ? deletedInterns.filter(intern =>
+          intern.id.toString().includes(searchTerm) ||
+          intern.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          intern.department?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          intern.scheme?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          intern.domain?.toLowerCase().includes(searchTerm.toLowerCase())
+        )
+      : (interns[activeTab] || []).filter(intern =>
+          (intern.id.toString().includes(searchTerm) ||
+           intern.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           intern.department?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           intern.scheme?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           intern.domain?.toLowerCase().includes(searchTerm.toLowerCase())) &&
+          (filters.department === '' || intern.department === filters.department) &&
+          (filters.scheme === '' || intern.scheme === filters.scheme) &&
+          (filters.domain === '' || intern.domain === filters.domain)
+        );
+  
+    // Apply department filter if provided
+    if (departmentFilter) {
+      return baseFiltered.filter(intern => 
+        intern.department && 
+        intern.department.toLowerCase() === departmentFilter.toLowerCase()
+      );
+    }
+  
+    return baseFiltered;
+  }, [activeTab, deletedInterns, searchTerm, interns, filters, departmentFilter]);
 
   const columns = [
     'Intern ID', 'Intern Name', 'Email ID', 'Department', 'Scheme', 'Domain', 'Start Date', 'End Date', 'Status', 'Action'
@@ -1540,7 +1562,64 @@ const handleUndoDelete = async (internId) => {
                             open={selectedInternId === intern.id}
                             onClose={handleMenuClose}
                           >
-                            <MenuItem onClick={() => { setSelectedEditData(intern); setShowEditedForm(true); handleMenuClose(); }}>
+                            <MenuItem onClick={async () => {
+                              const userData = await axios.get(`http://localhost:8000/Sims/user-data/${intern.id}`,
+                                {
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Token ${localStorage.getItem('token')}`,
+                                  },
+                                }
+                              );
+                              const personalData = await axios.get(`http://localhost:8000/Sims/personal-data/${intern.id}`,
+                                {
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Token ${localStorage.getItem('token')}`,
+                                  },
+                                }
+                              );
+                              const collegeData = await axios.get(`http://localhost:8000/Sims/college-details/${intern.id}`,
+                                {
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Token ${localStorage.getItem('token')}`,
+                                  },
+                                }
+                              );
+                              console.log("userData",userData.data); 
+                              console.log("personalData",personalData.data); 
+                              console.log("collegeData",collegeData.data); 
+                              console.log("intern",intern);
+                              const formData = {
+                                id: intern.id,
+                                first_name: intern.firstName,
+                                last_name: intern.lastName,
+                                mobile: personalData.data.phone_no,
+                                dob : personalData.data.date_of_birth,
+                                gender : personalData.data.gender,
+                                collegeName : collegeData.data.college_details.college_name,
+                                collegeAddress : collegeData.data.college_details.college_address,
+                                collegeDepartment : collegeData.data.college_details.college_department,
+                                yearOfPassing : collegeData.data.college_details.year_of_passing,
+                                teamName : userData.data.team_name,
+                                assetCode : userData.data.asset_code,
+                                startDate : userData.data.start_date,
+                                endDate : userData.data.end_date,
+                                duration : userData.data.duration,
+                                workingDays : "mon-fri",
+                                shiftTiming : userData.data.shift_timing,
+                                status : intern.user_status,
+                                scheme : intern.scheme,
+                                ...userData.data,
+                                ...personalData.data,
+                                ...collegeData.data.college_details,
+                              }
+                              console.log("formData",formData);
+                              setSelectedEditData(formData); 
+                              setShowEditedForm(true); 
+                              handleMenuClose(); 
+                              }}>
                               <EditIcon fontSize="small" style={{ marginRight: 8 }} /> Edit
                             </MenuItem>
                             <MenuItem onClick={() => { handleDeleteIntern(intern.id); handleMenuClose(); }}>
@@ -1693,7 +1772,7 @@ const handleUndoDelete = async (internId) => {
           ) : !isLoading && (
             <Box sx={{
               display: 'flex',
-              justifyContent: 'space-between',
+              justifyContent: 'flex-end',
               alignItems: 'center',
               mt: 3,
               p: 2,
@@ -1701,9 +1780,6 @@ const handleUndoDelete = async (internId) => {
               borderRadius: 3,
               boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
             }}>
-              <Typography variant="body2" color="text.secondary">
-                Showing {paginatedInterns.length} of {filteredInterns.length} interns
-              </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center' }}>
                 <Typography variant="body2" sx={{ mr: 1 }} color="text.secondary">
                   Rows per page:
@@ -1728,13 +1804,27 @@ const handleUndoDelete = async (internId) => {
                     ))}
                   </Select>
                 </FormControl>
+                <Typography sx={{ ml: 2 }}>{`${(page - 1) * rowsPerPage + 1}-${Math.min(page * rowsPerPage, filteredInterns.length)} of ${filteredInterns.length}`}</Typography>
                 <Pagination
-                  count={count}
-                  page={page}
-                  onChange={handleChangePage}
-                  shape="rounded"
-                  sx={{ ml: 2 }}
-                />
+  count={count}
+  page={page}
+  onChange={handleChangePage}
+  shape="rounded"
+  renderItem={(item) => {
+    // Only render the previous and next buttons
+    if (item.type === 'previous' || item.type === 'next') {
+      return <PaginationItem {...item} />;
+    }
+    // Return null for all other items (page numbers, etc.)
+    return null;
+  }}
+  sx={{ 
+    ml: 2,
+    '& .MuiPagination-ul': {
+      justifyContent: 'flex-end'
+    }
+  }}
+/>
               </Box>
             </Box>
           )}

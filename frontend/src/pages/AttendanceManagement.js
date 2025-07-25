@@ -25,7 +25,7 @@ import {
   MenuItem,
   TextField,
 } from "@mui/material";
-import { Refresh, MoreVert, Edit, Delete } from "@mui/icons-material";
+import { Refresh, MoreVert, Event } from "@mui/icons-material";
 import axios from "axios";
 
 const AttendanceManagement = () => {
@@ -322,6 +322,17 @@ const AttendanceManagement = () => {
     handleEditDialogClose();
   };
 
+  const handleAttendanceClaim = () => {
+    if (selectedRow) {
+      // Here you can add the logic for handling attendance claim
+      console.log("Attendance Claim for:", selectedRow);
+      // Show a success message
+      alert("Attendance claim has been submitted for " + new Date(selectedRow.date).toLocaleDateString());
+      // Close the menu
+      handleCloseMenu();
+    }
+  };
+
   return (
     <Box
       sx={{ padding: { xs: 1, sm: 2, md: 3 }, maxWidth: 1200, margin: "auto" }}
@@ -550,17 +561,13 @@ const AttendanceManagement = () => {
         onClose={handleCloseMenu}
         PaperProps={{
           style: {
-            width: "150px",
+            width: "180px",
           },
         }}
       >
-        <MenuItem onClick={handleEdit}>
-          <Edit fontSize="small" sx={{ color: "#1976d2", marginRight: 1 }} />
-          Edit
-        </MenuItem>
-        <MenuItem onClick={handleDelete}>
-          <Delete fontSize="small" sx={{ color: "#d32f2f", marginRight: 1 }} />
-          Delete
+        <MenuItem onClick={handleAttendanceClaim}>
+          <Event fontSize="small" sx={{ color: "#1976d2", marginRight: 1 }} />
+          Attendance Claim
         </MenuItem>
       </Menu>
 

@@ -431,6 +431,63 @@ const AssetManagementDashboard = () => {
         fetchAssets();
     }, []);
 
+    // Add user permissions state
+    const [userPermissions, setUserPermissions] = useState({
+        hasAssetAccess: true, // Default to true since this is the Asset Dashboard
+        hasAttendanceAccess: false,
+        hasPayrollAccess: false,
+        hasInternAccess: true   // Always show Intern Dashboard
+    });
+
+    // Fetch user permissions on component mount
+    useEffect(() => {
+        const fetchUserPermissions = async () => {
+            try {
+                const token = localStorage.getItem("token");
+                const response = await axios.get("http://localhost:8000/Sims/user-permissions/", {
+                    headers: { Authorization: `Token ${token}` }
+                });
+                
+                if (response.data) {
+                    setUserPermissions(prev => ({
+                        ...prev,
+                        ...response.data,
+                        hasAssetAccess: true, // Ensure Asset Dashboard is always accessible in this component
+                        hasInternAccess: true // Always ensure Intern Dashboard is accessible
+                    }));
+                }
+            } catch (error) {
+                console.error("Error fetching user permissions:", error);
+                // Fallback to default permissions if API call fails
+                setUserPermissions(prev => ({
+                    ...prev,
+                    hasInternAccess: true // Still ensure Intern Dashboard is accessible
+                }));
+            }
+        };
+
+        fetchUserPermissions();
+    }, []);
+
+    const [userMap, setUserMap] = useState({});
+
+    // Filter assets based on search term and status filter
+    const filteredAssets = assets.filter(asset => {
+        const matchesSearch = searchTerm === '' || 
+            asset.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            asset.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (asset.assignedTo && asset.assignedTo.toLowerCase().includes(searchTerm.toLowerCase()));
+            
+        const matchesStatus = statusFilter === 'All' || asset.status === statusFilter;
+        
+        return matchesSearch && matchesStatus;
+    });
+
+    const paginatedAssets = filteredAssets.slice(
+        (page - 1) * rowsPerPage,
+        page * rowsPerPage
+    );
+
     const handleDrawerToggle = () => {
         setMobileOpen(!mobileOpen);
     };
@@ -609,45 +666,39 @@ const AssetManagementDashboard = () => {
         setDashboardAnchorEl(null);
     };
 
-    // Dashboard options for dropdown
-    const dashboardOptions = [
-        {
-            id: 'asset',
-            label: 'Asset Dashboard',
-            icon: <EngineeringIcon />,
-            current: true
-        },
-        {
-            id: 'attendance',
-            label: 'Attendance Dashboard',
-            icon: <AssignmentIcon />
-        },
-        {
-            id: 'intern',
-            label: 'Intern Dashboard',
-            icon: <PeopleIcon />
-        },
-        {
-            id: 'payroll',
-            label: 'Payroll Dashboard',
-            icon: <AttachMoneyIcon />
-        }
-    ];
+    // Get filtered dashboard options based on permissions
+    const getDashboardOptions = () => {
+        return [
+            {
+                id: 'asset',
+                label: 'Asset Dashboard',
+                icon: <EngineeringIcon />,
+                visible: userPermissions.hasAssetAccess,
+                current: true
+            },
+            {
+                id: 'attendance',
+                label: 'Attendance Dashboard',
+                icon: <AssignmentIcon />,
+                visible: userPermissions.hasAttendanceAccess
+            },
+            {
+                id: 'intern',
+                label: 'Intern Dashboard',
+                icon: <PeopleIcon />,
+                visible: true // Always show Intern Dashboard
+            },
+            {
+                id: 'payroll',
+                label: 'Payroll Dashboard',
+                icon: <AttachMoneyIcon />,
+                visible: userPermissions.hasPayrollAccess
+            }
+        ].filter(option => option.visible);
+    };
 
-    const filteredAssets = assets.filter((asset) => {
-        const matchesSearch =
-            asset.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            asset.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (asset.assignedTo && asset.assignedTo.toLowerCase().includes(searchTerm.toLowerCase()));
-        const matchesStatus = statusFilter ? asset.status === statusFilter : true;
-        const matchesType = typeFilter ? asset.type === typeFilter : true;
-        return matchesSearch && matchesStatus && matchesType;
-    });
-    const [userMap, setUserMap] = useState({});
-    const paginatedAssets = filteredAssets.slice(
-        (page - 1) * rowsPerPage,
-        page * rowsPerPage
-    );
+    // Dashboard options for dropdown - now using the filtered version
+    const dashboardOptions = getDashboardOptions();
 
     const getAssetIcon = (type) => {
         switch (type) {
