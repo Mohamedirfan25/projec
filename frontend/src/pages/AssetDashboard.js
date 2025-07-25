@@ -118,7 +118,7 @@ import {
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, LineChart, Line } from "recharts";
 import { faker } from '@faker-js/faker';
 import axios from 'axios';
-import AssetLists from "./AssetLists";
+import AssetManagement from "./AssetManagementlist";
 // Customized theme for professional appearance
 const theme = createTheme({
     palette: {
@@ -1007,7 +1007,7 @@ const AssetManagementDashboard = () => {
 
     const renderAssetList = () => (
         <Grid item xs={12}>
-            <AssetLists />
+            <AssetManagement />
           </Grid>
     );
 

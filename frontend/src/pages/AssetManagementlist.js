@@ -62,7 +62,7 @@ const AssetManagement = () => {
     const [expanded, setExpanded] = useState(false);
     const [selectedAssets, setSelectedAssets] = useState([]);
     const [page, setPage] = useState(0);
-    const [rowsPerPage, setRowsPerPage] = useState(10);
+    const [rowsPerPage, setRowsPerPage] = useState(100); // Increased default rows per page to 100
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     
@@ -95,7 +95,7 @@ const AssetManagement = () => {
         }
 
         try {
-            // Fetch assets and users in parallel
+            console.log("Fetching assets and user data...");
             const [assetResponse, userResponse] = await Promise.all([
                 fetch("http://localhost:8000/Sims/assert-stock/", {
                     headers: {
@@ -110,39 +110,68 @@ const AssetManagement = () => {
                     }
                 })
             ]);
+            
+            console.log("Asset response status:", assetResponse.status);
+            console.log("User response status:", userResponse.status);
     
-            if (!assetResponse.ok) throw new Error("Failed to fetch asset data");
-            if (!userResponse.ok) throw new Error("Failed to fetch user data");
+            if (!assetResponse.ok) {
+                const errorText = await assetResponse.text();
+                console.error("Asset API error:", errorText);
+                throw new Error(`Failed to fetch asset data: ${assetResponse.status} ${assetResponse.statusText}`);
+            }
+            if (!userResponse.ok) {
+                const errorText = await userResponse.text();
+                console.error("User API error:", errorText);
+                throw new Error(`Failed to fetch user data: ${userResponse.status} ${userResponse.statusText}`);
+            }
             
             const [assetsData, usersData] = await Promise.all([
                 assetResponse.json(),
                 userResponse.json()
             ]);
             
+            console.log("Raw assets data:", assetsData);
+            console.log("Users data:", usersData);
+            
             setUsers(usersData);
             
+            console.log('Processing assets data:', assetsData);
             // Process and return the formatted assets
-            return assetsData.map(asset => ({
-                id: asset.assert_id,
-                asset: asset.assert_model,
-                type: asset.allocated_type,
-                assignedTo: !asset.inhand ? 
-                    (() => {
-                        const assignedUser = usersData.find(user => user.id === asset.user);
-                        return assignedUser?.username 
-                            ? `${assignedUser.username} (ID: ${assignedUser.temp?.emp_id || asset.emp_id})`
-                            : asset.emp_id || 'Unassigned';
-                    })() 
-                    : 'Unassigned',
-                status: !asset.inhand ? "Assigned" : "Available",
-                createdDate: asset.created_date,
-                updatedDate: asset.updated_date,
-                inhand: asset.inhand,
-                configuration: asset.configuration,
-                department: asset.department,
-                empId: asset.emp_id,
-                userId: asset.user
-            }));
+            console.log('Raw assets data from API:', assetsData);
+            const processedAssets = assetsData.map(asset => {
+                const mappedAsset = {
+                    id: asset.assert_id,
+                    asset: asset.assert_model || 'N/A',
+                    type: asset.allocated_type || 'N/A',
+                    status: asset.inhand ? "Available" : "Assigned",
+                    createdDate: asset.created_date || 'N/A',
+                    updatedDate: asset.updated_date || 'N/A',
+                    inhand: asset.inhand || false,
+                    configuration: asset.configuration || 'N/A',
+                    department: asset.department || 'N/A',
+                    empId: asset.emp_id || null,
+                    userId: asset.user || null,
+                    assignedTo: 'Unassigned'
+                };
+
+                console.log('Mapped asset:', mappedAsset);
+
+                // Set assignedTo based on user data if available
+                if (asset.emp_id) {
+                    const assignedUser = usersData.find(user => user.temp_details?.emp_id === asset.emp_id);
+                    if (assignedUser) {
+                        mappedAsset.assignedTo = `${assignedUser.username} (ID: ${asset.emp_id})`;
+                    } else {
+                        mappedAsset.assignedTo = `ID: ${asset.emp_id}`;
+                    }
+                }
+                
+                console.log('Mapped asset:', mappedAsset);
+                return mappedAsset;
+            });
+            
+            console.log('Processed assets:', processedAssets);
+            return processedAssets;
         } catch (error) {
             console.error("Error fetching assets:", error);
             setError(error);
@@ -222,34 +251,39 @@ const AssetManagement = () => {
     }, []);
 
     // Initial data fetch
-    useEffect(() => {
-        const fetchData = async () => {
-            try {
-                setLoading(true);
-                setError(null);
-                
-                // Fetch all data in parallel
-                const [assetsData] = await Promise.all([
-                    fetchAssets(),
-                    fetchDepartments(),
-                    fetchInternList()
-                ]);
-                
-                // Update assets if we got valid data
-                if (Array.isArray(assetsData)) {
-                    setAssets(assetsData);
-                } else {
-                    console.error("Invalid assets data received:", assetsData);
-                    setError(new Error("Failed to load asset data"));
-                }
-            } catch (err) {
-                console.error("Error in initial data fetch:", err);
-                setError(err);
-            } finally {
-                setLoading(false);
+    const fetchData = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+            
+            console.log("Starting to fetch data...");
+            // Fetch all data in parallel
+            const [assetsData, depts, interns] = await Promise.all([
+                fetchAssets(),
+                fetchDepartments(),
+                fetchInternList()
+            ]);
+            
+            console.log("Fetched data:", { assetsData, depts, interns });
+            
+            // Update assets if we got valid data
+            if (Array.isArray(assetsData)) {
+                console.log(`Setting ${assetsData.length} assets to state`);
+                setAssets(assetsData);
+                console.log("Assets state should now be updated");
+            } else {
+                console.error("Invalid assets data received:", assetsData);
+                setError(new Error("Failed to load asset data"));
             }
-        };
+        } catch (err) {
+            console.error("Error in initial data fetch:", err);
+            setError(err);
+        } finally {
+            setLoading(false);
+        }
+    };
 
+    useEffect(() => {
         fetchData();
     }, [fetchAssets, fetchDepartments, fetchInternList]);
 
@@ -387,7 +421,10 @@ const AssetManagement = () => {
     };
 
     const filteredAssets = React.useMemo(() => {
-        return assets.filter(asset => {
+        console.log('Filtering assets with searchTerm:', searchTerm, 'statusFilter:', statusFilter, 'typeFilter:', typeFilter);
+        console.log('Current assets array:', assets);
+        
+        const result = assets.filter(asset => {
             if (!asset) return false;
             
             const searchLower = searchTerm.toLowerCase();
@@ -399,14 +436,34 @@ const AssetManagement = () => {
             const statusMatch = !statusFilter || (asset.status && asset.status === statusFilter);
             const typeMatch = !typeFilter || (asset.type && asset.type === typeFilter);
 
-            return searchMatch && statusMatch && typeMatch;
+            const include = searchMatch && statusMatch && typeMatch;
+            if (include) {
+                console.log('Including asset:', asset);
+            }
+            return include;
         });
+        
+        console.log('Filtered assets result:', result);
+        return result;
     }, [assets, searchTerm, statusFilter, typeFilter]);
 
     const paginatedAssets = React.useMemo(() => {
-        if (!Array.isArray(filteredAssets)) return [];
+        console.log('Calculating paginated assets...');
+        console.log('Page:', page, 'Rows per page:', rowsPerPage);
+        console.log('Filtered assets length:', filteredAssets.length);
+        
+        if (!Array.isArray(filteredAssets)) {
+            console.log('Filtered assets is not an array');
+            return [];
+        }
+        
         const startIndex = page * rowsPerPage;
-        return filteredAssets.slice(startIndex, startIndex + rowsPerPage);
+        const endIndex = startIndex + rowsPerPage;
+        console.log('Start index:', startIndex, 'End index:', endIndex);
+        
+        const paginated = filteredAssets.slice(startIndex, endIndex);
+        console.log('Paginated assets:', paginated);
+        return paginated;
     }, [filteredAssets, page, rowsPerPage]);
 
     const handleOpenModal = (asset = null) => {
@@ -512,10 +569,30 @@ const AssetManagement = () => {
           const result = await response.json();
           console.log('Success result:', result);
           
-          // Success - refresh data and close modal
-          await fetchAssets();
-          alert(currentAsset ? "Asset updated successfully!" : "Asset added successfully!");
-          handleCloseModal();
+          // Success - refresh all data and close modal
+          try {
+            // Fetch fresh data from the server
+            const [assetsData, depts, interns] = await Promise.all([
+                fetchAssets(),
+                fetchDepartments(),
+                fetchInternList()
+            ]);
+            
+            // Update the assets state with the fresh data
+            if (Array.isArray(assetsData)) {
+                console.log(`Refreshed ${assetsData.length} assets in state`);
+                setAssets(assetsData);
+            }
+            
+            // Show success message and close the modal
+            alert(currentAsset ? "Asset updated successfully!" : "Asset added successfully!");
+            handleCloseModal();
+            
+          } catch (error) {
+            console.error("Error refreshing data after submission:", error);
+            alert("Asset operation successful, but there was an error refreshing the list. Please refresh the page to see changes.");
+            handleCloseModal();
+          }
 
         } catch (error) {
           console.error("Operation failed:", error);
@@ -724,9 +801,21 @@ const AssetManagement = () => {
                         <TableBody>
                             {loading ? (
                                 // Show shimmer effect while loading
-                                Array(5).fill(0).map((_, index) => (
-                                    <ShimmerRow key={`shimmer-${index}`} columns={9} />
-                                ))
+                                <>
+                                    <TableRow>
+                                        <TableCell colSpan={9} align="center">
+                                            <CircularProgress size={24} sx={{ my: 2 }} />
+                                            <Typography>Loading assets...</Typography>
+                                            <Typography variant="caption" color="textSecondary">
+                                                {assets.length > 0 ? `Found ${assets.length} assets` : 'No assets found'}
+                                            </Typography>
+                                            <pre style={{ display: 'none' }}>{JSON.stringify(assets, null, 2)}</pre>
+                                        </TableCell>
+                                    </TableRow>
+                                    {Array(3).fill(0).map((_, index) => (
+                                        <ShimmerRow key={`shimmer-${index}`} columns={9} />
+                                    ))}
+                                </>
                             ) : error ? (
                                 <TableRow>
                                     <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
@@ -753,15 +842,14 @@ const AssetManagement = () => {
                                             />
                                         </TableCell>
                                         <TableCell>
-  <Button
-    variant="text"
-    onClick={() => fetchAssetHistory(asset.id)}
-    sx={{ textTransform: 'none', padding: 0 }}
-  >
-    {asset.id}
-  </Button>
-</TableCell>
-
+                                            <Button
+                                                variant="text"
+                                                onClick={() => fetchAssetHistory(asset.id)}
+                                                sx={{ textTransform: 'none', padding: 0 }}
+                                            >
+                                                {asset.id}
+                                            </Button>
+                                        </TableCell>
                                         <TableCell>{asset.asset}</TableCell>
                                         <TableCell>{asset.type}</TableCell>
                                         <TableCell>{asset.department || 'Not specified'}</TableCell>
@@ -788,19 +876,24 @@ const AssetManagement = () => {
                                         <Box textAlign="center">
                                             <SearchIcon sx={{ fontSize: 60, color: 'text.disabled', mb: 1 }} />
                                             <Typography variant="body1" color="textSecondary">
-                                                No assets found matching your criteria
+                                                {assets.length === 0 
+                                                    ? 'No assets found. Add your first asset using the "Add Asset" button.'
+                                                    : 'No assets match your current filters'
+                                                }
                                             </Typography>
-                                            <Button
-                                                variant="text"
-                                                onClick={() => {
-                                                    setStatusFilter("");
-                                                    setTypeFilter("");
-                                                    setSearchTerm("");
-                                                }}
-                                                sx={{ mt: 1 }}
-                                            >
-                                                Clear all filters
-                                            </Button>
+                                            {(statusFilter || typeFilter || searchTerm) && (
+                                                <Button
+                                                    variant="text"
+                                                    onClick={() => {
+                                                        setStatusFilter('');
+                                                        setTypeFilter('');
+                                                        setSearchTerm('');
+                                                    }}
+                                                    sx={{ mt: 1 }}
+                                                >
+                                                    Clear all filters
+                                                </Button>
+                                            )}
                                         </Box>
                                     </TableCell>
                                 </TableRow>
@@ -811,22 +904,31 @@ const AssetManagement = () => {
 
                 {filteredAssets.length > 0 ? (
                     <TablePagination
-                        rowsPerPageOptions={[5, 10, 25]}
-                        component="div"
-                        count={filteredAssets.length}
-                        rowsPerPage={rowsPerPage}
-                        page={page}
-                        onPageChange={(e, newPage) => setPage(newPage)}
-                        onRowsPerPageChange={(e) => {
-                            setRowsPerPage(parseInt(e.target.value, 10));
-                            setPage(0);
-                        }}
-                        labelRowsPerPage="Rows per page:"
-                        labelDisplayedRows={({ from, to, count }) => 
-                            `${from}-${to} of ${count !== -1 ? count : `more than ${to}`}`
-                        }
-                        sx={{ mt: 2 }}
-                    />
+                    rowsPerPageOptions={[25, 50, 100, { label: 'All', value: -1 }]}
+                    component="div"
+                    count={filteredAssets.length}
+                    rowsPerPage={rowsPerPage}
+                    page={page}
+                    onPageChange={(e, newPage) => setPage(newPage)}
+                    onRowsPerPageChange={(e) => {
+                        const newRowsPerPage = parseInt(e.target.value, 10);
+                        setRowsPerPage(newRowsPerPage === -1 ? filteredAssets.length : newRowsPerPage);
+                        setPage(0);
+                    }}
+                    labelRowsPerPage="Rows per page:"
+                    labelDisplayedRows={({ from, to, count }) => 
+                        rowsPerPage === -1 
+                            ? `All ${count} rows` 
+                            : `${from}-${to} of ${count}${count !== filteredAssets.length ? ` (filtered from ${filteredAssets.length})` : ''}`
+                    }
+                    sx={{ 
+                        mt: 2,
+                        '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
+                            marginTop: '0.5rem',
+                            marginBottom: '0.5rem',
+                        },
+                    }}
+                />
                 ) : !loading && (
                     <Box mt={2} textAlign="center">
                         <SearchIcon sx={{ fontSize: 60, color: 'text.disabled', mb: 1 }} />
@@ -931,10 +1033,10 @@ const AssetManagement = () => {
                                     onChange={handleDepartmentChange}
                                 >
                                     <MenuItem value="">Not specified</MenuItem>
-                                    <MenuItem value="academy">Academy</MenuItem>
-                                    <MenuItem value="recruitment">Recruitment</MenuItem>
-                                    <MenuItem value="developer">Developer</MenuItem>
-                                    <MenuItem value="hr">HR</MenuItem>
+                                    <MenuItem value="Academy">Academy</MenuItem>
+                                    <MenuItem value="Recruitment">Recruitment</MenuItem>
+                                    <MenuItem value="Developer">Developer</MenuItem>
+                                    <MenuItem value="HR">HR</MenuItem>
                                 </Select>
                             </FormControl>
                         </Grid>
