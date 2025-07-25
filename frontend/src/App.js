@@ -1,4 +1,3 @@
-
 import React from "react";
 import { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
@@ -85,6 +84,130 @@ function ProtectedRoute({ children }) {
   // If valid, render children
   return children;
 }
+
+function ProtectedDashboardRoute({ children, requiredPermission }) {
+  const [isValid, setIsValid] = useState(null);
+  const [showWarning, setShowWarning] = useState(false);
+  const [userPermissions, setUserPermissions] = useState(null);
+  
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    
+    // If no token, redirect to login
+    if (!token) {
+      setIsValid(false);
+      return;
+    }
+
+    // Fetch user data and permissions
+    Promise.all([
+      fetch("http://localhost:8000/Sims/user-data/", {
+        headers: { 
+          'Authorization': `Token ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }),
+      fetch("http://localhost:8000/Sims/user-permissions/", {
+        headers: { 
+          'Authorization': `Token ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+    ])
+    .then(([userRes, permRes]) => {
+      if (!userRes.ok || !permRes.ok) {
+        throw new Error('Failed to fetch user data or permissions');
+      }
+      return Promise.all([userRes.json(), permRes.json()]);
+    })
+    .then(([userData, permissions]) => {
+      // Check if user has the required permission
+      const hasPermission = permissions[requiredPermission];
+      
+      if (!hasPermission) {
+        setShowWarning(true);
+        // Redirect to first available dashboard after 3 seconds
+        const availableDashboard = Object.entries(permissions).find(([_, hasAccess]) => hasAccess);
+        if (availableDashboard) {
+          const [perm] = availableDashboard;
+          const dashboardPath = {
+            'hasAssetAccess': '/asset',
+            'hasAttendanceAccess': '/attendance',
+            'hasPayrollAccess': '/payroll',
+            'hasInternAccess': '/Intern'
+          }[perm];
+          
+          if (dashboardPath) {
+            setTimeout(() => {
+              window.location.href = dashboardPath;
+            }, 3000); // Redirect after 3 seconds
+          }
+        } else {
+          // If no dashboards available, redirect to home
+          setTimeout(() => {
+            window.location.href = '/';
+          }, 3000);
+        }
+      }
+      
+      setIsValid(hasPermission);
+      setUserPermissions(permissions);
+    })
+    .catch((error) => {
+      console.error('Error:', error);
+      localStorage.removeItem("token");
+      setIsValid(false);
+    });
+  }, [requiredPermission]);
+
+  // Show nothing while checking
+  if (isValid === null) {
+    return null;
+  }
+
+  // Show warning if user doesn't have permission
+  if (showWarning) {
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100vh',
+        flexDirection: 'column',
+        backgroundColor: '#f8f9fa',
+        padding: '20px',
+        textAlign: 'center'
+      }}>
+        <div style={{
+          backgroundColor: '#fff3cd',
+          color: '#856404',
+          padding: '20px',
+          borderRadius: '5px',
+          boxShadow: '0 0 10px rgba(0,0,0,0.1)',
+          maxWidth: '500px',
+          width: '100%'
+        }}>
+          <h2>Access Denied</h2>
+          <p>You don't have permission to access this dashboard. Redirecting you to an authorized dashboard...</p>
+          <div style={{ marginTop: '20px' }}>
+            <div className="spinner-border text-warning" role="status">
+              <span className="sr-only">Loading...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // If not valid, redirect to login
+  if (!isValid) {
+    return <Navigate to="/loginpage" replace />;
+  }
+
+  // If valid, render children with permissions
+  return React.cloneElement(children, { userPermissions });
+}
+
 function App() {
   return (
     <>
@@ -170,24 +293,24 @@ function App() {
           </ProtectedRoute>
         } />
         <Route path="/Intern" element={
-          <ProtectedRoute>
+          <ProtectedDashboardRoute requiredPermission="hasInternAccess">
             <InternDashboard />
-          </ProtectedRoute>
+          </ProtectedDashboardRoute>
         } />
         <Route path="/asset" element={
-          <ProtectedRoute>
+          <ProtectedDashboardRoute requiredPermission="hasAssetAccess">
             <AssetDashboard />
-          </ProtectedRoute>
+          </ProtectedDashboardRoute>
         } />
         <Route path="/attendance" element={
-          <ProtectedRoute>
+          <ProtectedDashboardRoute requiredPermission="hasAttendanceAccess">
             <AttendanceDashboard />
-          </ProtectedRoute>
+          </ProtectedDashboardRoute>
         } />
         <Route path="/payroll" element={
-          <ProtectedRoute>
+          <ProtectedDashboardRoute requiredPermission="hasPayrollAccess">
             <PayrollDashboard />
-          </ProtectedRoute>
+          </ProtectedDashboardRoute>
         } />
         <Route path="/documentsView" element={
           <ProtectedRoute>
