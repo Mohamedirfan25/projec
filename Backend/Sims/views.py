@@ -48,6 +48,8 @@ from decimal import Decimal, InvalidOperation
 
 from django.utils.timezone import now
 from django.db.models.functions import ExtractMonth
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.db.models import Q
 
 
 import json
@@ -4649,6 +4651,116 @@ from Sims.utils.email_utils import send_offer_letter_reportlab
 class DocumentView(APIView):
     permission_classes = [IsAuthenticated, StaffUserDataAccessPermission]
 
+    def get(self, request, emp_id=None):
+        try:
+            user_temp = Temp.objects.get(user=request.user, is_deleted=False)
+            user_role = user_temp.role.lower()
+            
+            if emp_id:
+                # Get a specific document
+                try:
+                    document = Document.objects.get(pk=emp_id, is_deleted=False)
+                    
+                    # Authorization checks
+                    if user_role == "intern" and document.uploader != user_temp:
+                        return Response(
+                            {"error": "You can only view your own documents"},
+                            status=status.HTTP_403_FORBIDDEN
+                        )
+                    
+                    if user_role == "staff":
+                        try:
+                            staff_dept = UserData.objects.get(user=request.user).department
+                            if document.uploader.role.lower() == "intern":
+                                intern_data = UserData.objects.get(emp_id=document.uploader)
+                                if intern_data.department != staff_dept:
+                                    return Response(
+                                        {"error": "You can only view documents from interns in your department"},
+                                        status=status.HTTP_403_FORBIDDEN
+                                    )
+                        except UserData.DoesNotExist:
+                            pass
+                    
+                    if user_role == "admin" or user_role == "hr":
+                        pass
+                    
+                    serializer = DocumentSerializer(document, context={'request': request})
+                    return Response(serializer.data)
+                    
+                except Document.DoesNotExist:
+                    return Response(
+                        {"error": "Document not found"},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+            
+            # List documents with appropriate filtering based on user role
+            documents = Document.objects.filter(is_deleted=False)
+            
+            if user_role == "intern":
+                # Interns can only see their own uploaded documents
+                documents = documents.filter(uploader=user_temp)
+            elif user_role == "staff":
+                # Staff can see documents from interns in their department
+                try:
+                    staff_dept = UserData.objects.get(user=request.user).department
+                    intern_temps = Temp.objects.filter(
+                        userdata__department=staff_dept,
+                        role__iexact='intern'
+                    )
+                    documents = documents.filter(
+                        uploader__in=intern_temps
+                    ) | documents.filter(uploader=user_temp)
+                except UserData.DoesNotExist:
+                    documents = documents.filter(uploader=user_temp)
+            # Admin and HR can see all documents (no additional filtering needed)
+            
+            # Apply additional filters from query parameters
+            status_filter = request.query_params.get('status')
+            if status_filter:
+                documents = documents.filter(status=status_filter.upper())
+                
+            uploader_filter = request.query_params.get('uploader')
+            if uploader_filter:
+                documents = documents.filter(uploader__emp_id=uploader_filter)
+                
+            receiver_filter = request.query_params.get('receiver')
+            if receiver_filter:
+                documents = documents.filter(receiver__emp_id=receiver_filter)
+            
+            # Order by creation date (newest first)
+            documents = documents.order_by('-created_at')
+            
+            # Pagination
+            page = request.query_params.get('page', 1)
+            page_size = request.query_params.get('page_size', 10)
+            paginator = Paginator(documents, page_size)
+            
+            try:
+                paginated_documents = paginator.page(page)
+            except PageNotAnInteger:
+                paginated_documents = paginator.page(1)
+            except EmptyPage:
+                paginated_documents = paginator.page(paginator.num_pages)
+                
+            serializer = DocumentSerializer(
+                paginated_documents,
+                many=True,
+                context={'request': request}
+            )
+            
+            return Response({
+                'count': paginator.count,
+                'next': paginated_documents.next_page_number() if paginated_documents.has_next() else None,
+                'previous': paginated_documents.previous_page_number() if paginated_documents.has_previous() else None,
+                'results': serializer.data
+            })
+            
+        except Exception as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
     def post(self, request):
         try:
             uploader_temp = Temp.objects.get(user=request.user)
@@ -4829,6 +4941,97 @@ class DocumentView(APIView):
             return Response({"error": "Document not found"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class DocumentByEmpView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, emp_id=None):
+        try:
+            # Get the current user's temp profile
+            try:
+                user_temp = Temp.objects.get(user=request.user, is_deleted=False)
+                user_role = user_temp.role.lower()
+            except Temp.DoesNotExist:
+                return Response(
+                    {"error": "User profile not found"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            # Get the target employee
+            try:
+                target_emp = Temp.objects.get(emp_id=emp_id, is_deleted=False)
+            except Temp.DoesNotExist:
+                return Response(
+                    {"error": "Employee not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # Authorization checks
+            if user_role == "intern" and user_temp.emp_id != emp_id:
+                return Response(
+                    {"error": "You can only view your own documents"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            if user_role == "staff":
+                try:
+                    staff_dept = UserData.objects.get(user=request.user).department
+                    if target_emp.role.lower() == "intern":
+                        intern_data = UserData.objects.get(emp_id=target_emp)
+                        if intern_data.department != staff_dept:
+                            return Response(
+                                {"error": "You can only view documents from interns in your department"},
+                                status=status.HTTP_403_FORBIDDEN
+                            )
+                except UserData.DoesNotExist:
+                    # If staff has no department, they can only see their own docs
+                    if user_temp.emp_id != emp_id:
+                        return Response(
+                            {"error": "You can only view your own documents"},
+                            status=status.HTTP_403_FORBIDDEN
+                        )
+
+            # Get documents for the employee
+            documents = Document.objects.filter(
+                receiver=target_emp,
+                is_deleted=False
+            ).order_by('-created_at')
+
+            # Apply status filter if provided
+            status_filter = request.query_params.get('status')
+            if status_filter:
+                documents = documents.filter(status=status_filter.upper())
+
+            # Pagination
+            page = request.query_params.get('page', 1)
+            page_size = request.query_params.get('page_size', 10)
+            paginator = Paginator(documents, page_size)
+
+            try:
+                paginated_documents = paginator.page(page)
+            except PageNotAnInteger:
+                paginated_documents = paginator.page(1)
+            except EmptyPage:
+                paginated_documents = paginator.page(paginator.num_pages)
+
+            serializer = DocumentSerializer(
+                paginated_documents,
+                many=True,
+                context={'request': request}
+            )
+
+            return Response({
+                'count': paginator.count,
+                'next': paginated_documents.next_page_number() if paginated_documents.has_next() else None,
+                'previous': paginated_documents.previous_page_number() if paginated_documents.has_previous() else None,
+                'results': serializer.data
+            })
+
+        except Exception as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated

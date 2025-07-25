@@ -2113,7 +2113,9 @@ const MultiStepForm = ({ internData, onClose }) => {
       reportingManager: internData.reportingManager || '',
       reportingSupervisor: internData.reportingSupervisor || ''
     } : {},
-    documentsData: {}
+    documentsData: {
+      documents: internData.documents || []
+    }
   });
   
   const steps = [

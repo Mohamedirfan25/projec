@@ -1587,9 +1587,33 @@ const handleUndoDelete = async (internId) => {
                                   },
                                 }
                               );
+                              const documentData = await axios.get(`http://localhost:8000/Sims/documents/emp/${intern.id}`,
+                                {
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Token ${localStorage.getItem('token')}`,
+                                  },
+                                }
+                              );
+                              const documents = documentData.data.results || [];
+
+                                // Create a function to find a document by title
+                                const findDocument = (title) => {
+                                  return documents.find(doc => doc.title.toLowerCase() === title.toLowerCase()) || {};
+                                };
+
+                                // Map the documents to their respective fields
+                                const documentFields = {
+                                  aadharCard: findDocument('Adhaar Card').file || '',
+                                  bonafideCertificate: findDocument('Bonafide Certificate').file || '',
+                                  collegeId: findDocument('College ID').file || '',
+                                  resume: findDocument('Resume').file || ''
+                                };
                               console.log("userData",userData.data); 
                               console.log("personalData",personalData.data); 
                               console.log("collegeData",collegeData.data); 
+                              console.log("documentData",documentData.data); 
+                              console.log("documentFields",documentFields);
                               console.log("intern",intern);
                               const formData = {
                                 id: intern.id,
@@ -1611,6 +1635,8 @@ const handleUndoDelete = async (internId) => {
                                 shiftTiming : userData.data.shift_timing,
                                 status : intern.user_status,
                                 scheme : intern.scheme,
+                                ...documentFields,  // Spread the document fields
+                                documents: documents,
                                 ...userData.data,
                                 ...personalData.data,
                                 ...collegeData.data.college_details,
