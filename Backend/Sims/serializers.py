@@ -112,6 +112,11 @@ class AssertStockSerializer(serializers.ModelSerializer):
         allow_null=True,
         required=False
     )
+    allocated_type = serializers.ChoiceField(
+        choices=AssertStock._meta.get_field('allocated_type').choices,
+        allow_null=True,
+        required=False
+    )
     
     class Meta:
         model = AssertStock

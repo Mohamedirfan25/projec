@@ -185,7 +185,7 @@ class AssertStock(models.Model):
     updated_date = models.DateField(auto_now=True)
     department = models.ForeignKey('Department', on_delete=models.CASCADE, null=True, to_field="department")
     assignment_history = models.TextField(blank=True, null=True)
-    allocated_type=models.CharField(max_length=50,null=True,choices=[('Laptop', 'Laptop'), ('Mouse', 'Mouse'),('Charger', 'Charger'),('Headphone', 'Headphone')])
+    allocated_type=models.CharField(max_length=50,null=True,choices=[('Laptop', 'Laptop'),('Desktop','Desktop'),('Mouse', 'Mouse'),('Charger', 'Charger'),('Tablet', 'Tablet'),('Headphone', 'Headphone')])
     
 
     def update_assignment_history(self, emp_id):
