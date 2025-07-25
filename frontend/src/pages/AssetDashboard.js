@@ -118,7 +118,7 @@ import {
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, LineChart, Line } from "recharts";
 import { faker } from '@faker-js/faker';
 import axios from 'axios';
-import AssetLists from "./AssetLists";
+import AssetManagement from "./AssetManagementlist";
 // Customized theme for professional appearance
 const theme = createTheme({
     palette: {
@@ -436,7 +436,7 @@ const AssetManagementDashboard = () => {
         hasAssetAccess: true, // Default to true since this is the Asset Dashboard
         hasAttendanceAccess: false,
         hasPayrollAccess: false,
-        hasInternAccess: true   // Always show Intern Dashboard
+        hasInternAccess: false   // Default to false, will be updated from backend
     });
 
     // Fetch user permissions on component mount
@@ -452,8 +452,8 @@ const AssetManagementDashboard = () => {
                     setUserPermissions(prev => ({
                         ...prev,
                         ...response.data,
-                        hasAssetAccess: true, // Ensure Asset Dashboard is always accessible in this component
-                        hasInternAccess: true // Always ensure Intern Dashboard is accessible
+                        hasAssetAccess: true // Ensure Asset Dashboard is always accessible in this component
+                        // Don't override hasInternAccess here, use the value from the backend
                     }));
                 }
             } catch (error) {
@@ -461,7 +461,7 @@ const AssetManagementDashboard = () => {
                 // Fallback to default permissions if API call fails
                 setUserPermissions(prev => ({
                     ...prev,
-                    hasInternAccess: true // Still ensure Intern Dashboard is accessible
+                    hasInternAccess: false // Default to no access if there's an error
                 }));
             }
         };
@@ -686,7 +686,7 @@ const AssetManagementDashboard = () => {
                 id: 'intern',
                 label: 'Intern Dashboard',
                 icon: <PeopleIcon />,
-                visible: true // Always show Intern Dashboard
+                visible: userPermissions.hasInternAccess 
             },
             {
                 id: 'payroll',
@@ -1007,7 +1007,7 @@ const AssetManagementDashboard = () => {
 
     const renderAssetList = () => (
         <Grid item xs={12}>
-            <AssetLists />
+            <AssetManagement />
           </Grid>
     );
 

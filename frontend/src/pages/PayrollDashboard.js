@@ -490,7 +490,7 @@ const [paymentStatusData, setPaymentStatusData] = useState([]);
     hasAssetAccess: false,
     hasAttendanceAccess: false,
     hasPayrollAccess: true, // Default to true since this is the Payroll Dashboard
-    hasInternAccess: true   // Always show Intern Dashboard
+    hasInternAccess: false  // Default to false, will be updated from backend
   });
 
   // Fetch user permissions on component mount
@@ -506,15 +506,15 @@ const [paymentStatusData, setPaymentStatusData] = useState([]);
           setUserPermissions(prev => ({
             ...prev,
             ...response.data,
-            hasInternAccess: true // Always ensure Intern Dashboard is accessible
+            // Don't override hasInternAccess, use the value from backend
           }));
         }
       } catch (error) {
         console.error("Error fetching user permissions:", error);
-        // Fallback to default permissions if API call fails
+        // On error, default to no access to Intern Dashboard
         setUserPermissions(prev => ({
           ...prev,
-          hasInternAccess: true // Still ensure Intern Dashboard is accessible
+          hasInternAccess: false
         }));
       }
     };
@@ -541,7 +541,7 @@ const [paymentStatusData, setPaymentStatusData] = useState([]);
         id: 'intern',
         label: 'Intern Dashboard',
         icon: <PeopleIcon />,
-        visible: true // Always show Intern Dashboard
+        visible: userPermissions.hasInternAccess // Use permission from state
       },
       {
         id: 'payroll',

@@ -974,6 +974,11 @@ class AssertStockView(APIView):
                 if 'department' in request_data:
                     del request_data['department']
 
+            # First update the allocated_type directly if it's in the request
+            if 'allocated_type' in request_data:
+                assert_stock.allocated_type = request_data['allocated_type']
+                assert_stock.save(update_fields=['allocated_type'])
+                
             serializer = AssertStockSerializer(assert_stock, data=request_data, partial=True)
             
             if serializer.is_valid():

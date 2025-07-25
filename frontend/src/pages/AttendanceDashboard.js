@@ -1277,7 +1277,8 @@ const AttendanceDashboard = () => {
   const [userPermissions, setUserPermissions] = useState({
     hasAssetAccess: false,
     hasAttendanceAccess: true, // Default to true since they're in the attendance dashboard
-    hasPayrollAccess: false
+    hasPayrollAccess: false,
+    hasInternAccess: false // Add this state
   });
 
   // Update the getDashboardOptions function to use the component's state
@@ -1300,7 +1301,7 @@ const AttendanceDashboard = () => {
         id: 'intern',
         label: 'Intern Dashboard',
         icon: <PeopleIcon />,
-        visible: true // Always show Intern Dashboard
+        visible: userPermissions.hasInternAccess // Changed from true to use userPermissions
       },
       {
         id: 'payroll',
@@ -1326,7 +1327,8 @@ const AttendanceDashboard = () => {
         setUserPermissions({
           hasAssetAccess: false,
           hasAttendanceAccess: true,
-          hasPayrollAccess: false
+          hasPayrollAccess: false,
+          hasInternAccess: false // Add this default value
         });
       }
     };
