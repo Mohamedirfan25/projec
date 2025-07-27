@@ -6,6 +6,7 @@ from .views import CollegeDetailsView
 from .views import UserPermissionsView
 
 urlpatterns = [
+     path("user/update/<str:emp_id>/", views.UserUpdateView.as_view(), name='user-update'),
     path("generate-completed-certificate/<str:emp_id>/",
          generate_completed_certificate, name="generate_completed_certificate"),
     path('generate-offer-letter/', generate_offer_letter_api,
@@ -122,7 +123,7 @@ urlpatterns = [
 
 
     path('documents/', views.DocumentView.as_view(), name='documents-list'),
-    path('documents/<str:emp_id>/', views.DocumentView.as_view(), name='document-detail'),
+    path('documents/<uuid:pk>/', views.DocumentView.as_view(), name='document-detail'),
     path('documents/emp/<str:emp_id>/', views.DocumentByEmpView.as_view(), name='documents-by-emp'),
 
 

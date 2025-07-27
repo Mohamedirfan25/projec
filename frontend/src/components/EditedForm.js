@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import axios from "axios";
 import {
   Container, Typography, TextField, Button, Select,
   MenuItem, InputLabel, FormControl, Grid, Box, Snackbar, Alert,
@@ -57,12 +58,16 @@ import {
   ContactPhone as FacultyIcon,
   CloudUpload,
   Delete,
-  AdminPanelSettings
+  AdminPanelSettings,
+  Description as DescriptionIcon,
+  CloudUpload as CloudUploadIcon,
+  GetApp as GetAppIcon,
 } from "@mui/icons-material";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import { createTheme, ThemeProvider } from '@mui/material/styles';
+import { toast } from 'react-toastify';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
@@ -170,7 +175,6 @@ const PersonalDetailsForm = ({ onNext, initialData, isReturning, onClose }) => {
     first_name: initialData?.first_name || "",
     last_name: initialData?.last_name || "",
     mobile: initialData?.mobile || "",
-    department: initialData?.department || "",
     role: initialData?.role || "intern",
     address1: initialData?.address1 || "",
     address2: initialData?.address2 || "",
@@ -182,7 +186,6 @@ const PersonalDetailsForm = ({ onNext, initialData, isReturning, onClose }) => {
     profilePhoto: initialData?.profilePhoto || null
   });
 
-  const [departments, setDepartments] = useState([]);
   const [errors, setErrors] = useState({});
   const [openSnackbar, setOpenSnackbar] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
@@ -211,7 +214,6 @@ const PersonalDetailsForm = ({ onNext, initialData, isReturning, onClose }) => {
         first_name: initialData?.first_name || "",
         last_name: initialData?.last_name || "",
         mobile: initialData?.mobile || "",
-        department: initialData?.department || "",
         role: initialData?.role || "intern",
         address1: initialData?.address1 || "",
         address2: initialData?.address2 || "",
@@ -225,31 +227,6 @@ const PersonalDetailsForm = ({ onNext, initialData, isReturning, onClose }) => {
     }
   }, [initialData]);
 
-  useEffect(() => {
-    const fetchDepartments = async () => {
-      try {
-        const token = localStorage.getItem("token");
-        const response = await fetch("http://localhost:8000/Sims/departments/", {
-          headers: {
-            Authorization: `Token ${token}`,
-          },
-        });
-        const data = await response.json();
-        setDepartments(data);
-      } catch (error) {
-        console.error("Error fetching departments:", error);
-        // Fallback to mock data
-        const mockDepartments = [
-          { id: 1, department: "Software Development" },
-          { id: 2, department: "Quality Assurance" },
-          { id: 3, department: "Data Science" },
-          { id: 4, department: "UX/UI Design" }
-        ];
-        setDepartments(mockDepartments);
-      }
-    };
-    fetchDepartments();
-  }, []);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -419,28 +396,6 @@ const PersonalDetailsForm = ({ onNext, initialData, isReturning, onClose }) => {
                 ),
               }}
             />
-          </Grid>
-
-          <Grid item xs={12} md={6}>
-            <FormControl fullWidth>
-              <InputLabel>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <AssignmentInd fontSize="small" color="action" /> Department
-                </Box>
-              </InputLabel>
-              <Select
-                name="department"
-                value={formData.department}
-                onChange={handleChange}
-                label="Department"
-              >
-                {departments.map((dept) => (
-                  <MenuItem key={dept.id} value={dept.department}>
-                    {dept.department}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
           </Grid>
           
           <Grid item xs={12} md={6}>
@@ -1113,6 +1068,7 @@ const CompanyDetailsForm = ({ onBack, onNext, initialData }) => {
     reportingSupervisor: initialData?.reportingSupervisor || ""
   });
   
+  const [departments, setDepartments] = useState([]);
   const [errors, setErrors] = useState({});
   const [openSnackbar, setOpenSnackbar] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
@@ -1126,20 +1082,6 @@ const CompanyDetailsForm = ({ onBack, onNext, initialData }) => {
     "AI & Machine Learning"
   ];
 
-  const departments = [
-    "Software Development",
-    "Quality Assurance",
-    "DevOps",
-    "Data Science",
-    "UX/UI Design",
-    "Product Management",
-    "Human Resources",
-    "Finance & Accounting",
-    "Marketing",
-    "Sales",
-    "Customer Support",
-    "Research & Development"
-  ];
 
   const workingDaysOptions = [
     { value: "mon-fri", label: "Monday to Friday" },
@@ -1209,6 +1151,33 @@ const CompanyDetailsForm = ({ onBack, onNext, initialData }) => {
     }
   }, [formData.startDate, formData.endDate]);
 
+  useEffect(() => {
+    const fetchDepartments = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch("http://localhost:8000/Sims/departments/", {
+          headers: {
+            Authorization: `Token ${token}`,
+          },
+        });
+        const data = await response.json();
+        console.log("Departments:", data);
+        setDepartments(data);
+      } catch (error) {
+        console.error("Error fetching departments:", error);
+        // Fallback to mock data
+        const mockDepartments = [
+          { id: 1, department: "Software Development" },
+          { id: 2, department: "Quality Assurance" },
+          { id: 3, department: "Data Science" },
+          { id: 4, department: "UX/UI Design" }
+        ];
+        setDepartments(mockDepartments);
+      }
+    };
+    fetchDepartments();
+  }, []);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -1227,7 +1196,6 @@ const CompanyDetailsForm = ({ onBack, onNext, initialData }) => {
   const validateForm = () => {
     const newErrors = {};
     if (!formData.domain) newErrors.domain = "Domain is required";
-    if (!formData.department) newErrors.department = "Department is required";
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -1240,6 +1208,14 @@ const CompanyDetailsForm = ({ onBack, onNext, initialData }) => {
         setSnackbarMessage("Company details saved! Continue to next step...");
         setSnackbarSeverity("success");
         setOpenSnackbar(true);
+
+        setFormData(prev => ({
+          ...prev,
+          companyData: {
+            ...FormData
+          }
+        }));
+        
         
         if (onNext) {
           onNext(formData);
@@ -1310,27 +1286,27 @@ const CompanyDetailsForm = ({ onBack, onNext, initialData }) => {
               </FormControl>
             </Grid>
             
-            {/* <Grid item xs={12} md={6}>
-              <FormControl fullWidth>
-                <InputLabel>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <DepartmentIcon fontSize="small" color="action" /> Department
-                  </Box>
-                </InputLabel>
-                <Select
-                  name="department"
-                  value={formData.department}
-                  onChange={handleChange}
-                  label="Department"
-                >
-                  {departments.map((dept) => (
-                    <MenuItem key={dept} value={dept}>
-                      {dept}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid> */}
+            <Grid item xs={12} md={6}>
+            <FormControl fullWidth>
+              <InputLabel>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <AssignmentInd fontSize="small" color="action" /> Department
+                </Box>
+              </InputLabel>
+              <Select
+                name="department"
+                value={formData.department}
+                onChange={handleChange}
+                label="Department"
+              >
+                {departments.map((dept) => (
+                  <MenuItem key={dept.id} value={dept.department}>
+                    {dept.department}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
             
             <Grid item xs={12}>
               <Divider>
@@ -1665,419 +1641,546 @@ const CompanyDetailsForm = ({ onBack, onNext, initialData }) => {
   );
 };
 
-const DocumentsUpload = ({ onBack, initialData, onClose }) => {
-  const [files, setFiles] = useState({
-    adhaarCard: initialData?.adhaarCard || null,
-    bonafideCertificate: initialData?.bonafideCertificate || null,
-    collegeId: initialData?.collegeId || null,
-    resume: initialData?.resume || null
-  });
-  
-  const [loading, setLoading] = useState(false);
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
-  const [snackbarKey, setSnackbarKey] = useState('');
-  const [snackbarSeverity, setSnackbarSeverity] = useState('success');
-  const [agreeToTerms, setAgreeToTerms] = useState(false);
-  const [progress, setProgress] = useState({
-    adhaarCard: 0,
-    bonafideCertificate: 0,
-    collegeId: 0,
-    resume: 0
-  });
-  const [openDialog, setOpenDialog] = useState(false);
-  
-  const documentNames = {
-    adhaarCard: "Adhaar Card",
-    bonafideCertificate: "Bonafide Certificate",
-    collegeId: "College ID",
-    resume: "Resume"
-  };
-  
-  const handleFileUpload = (e, key) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    
-    setFiles({ ...files, [key]: file });
-    simulateUploadProgress(key);
-  };
-  
-  const simulateUploadProgress = (key) => {
-    setProgress(prev => ({ ...prev, [key]: 0 }));
-    const interval = setInterval(() => {
-      setProgress(prev => {
-        const newProgress = { ...prev };
-        if (newProgress[key] === 100) {
-          clearInterval(interval);
-          showSnackbar(documentNames[key] + ' uploaded successfully!', 'success', key);
-          return newProgress;
-        }
-        newProgress[key] = Math.min(newProgress[key] + 10, 100);
-        return newProgress;
-      });
-    }, 200);
-  };
-  
-  const showSnackbar = (message, severity, key) => {
-    setSnackbarMessage(message);
-    setSnackbarSeverity(severity);
-    setSnackbarKey(key);
-    setSnackbarOpen(true);
-  };
-  
-  const handleDeleteFile = (key) => {
-    setFiles({ ...files, [key]: null });
-    setProgress(prev => ({ ...prev, [key]: 0 }));
-    showSnackbar(`${documentNames[key]} removed`, 'info', key);
-  };
-  
-  const handleSaveSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!agreeToTerms) {
-      showSnackbar('You must agree to the terms and conditions to submit.', 'error', 'submit');
-      return;
-    }
-    
-    setLoading(true);
-    
-    try {
-      // Simulate form submission
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      showSnackbar('All information saved successfully!', 'success', 'submit');
-      if (typeof onClose === 'function') {
-        setTimeout(() => onClose(), 700); // Give user a moment to see the success message
-      }
-    } catch (error) {
-      console.error("Error:", error);
-      showSnackbar('Submission failed. Please try again.', 'error', 'submit');
-    } finally {
-      setLoading(false);
+const DocumentPreview = ({ title, url, onReupload, onDelete, name }) => {
+  const fileInputRef = useRef(null);
+  const [isHovered, setIsHovered] = useState(false);
+
+  const handleClick = () => {
+    if (url) {
+      window.open(url, '_blank');
+    } else {
+      fileInputRef.current?.click();
     }
   };
-  
-  const handleSnackbarClose = () => {
-    setSnackbarOpen(false);
-  };
-  
-  const handleOpenDialog = () => {
-    setOpenDialog(true);
-  };
-  
-  const handleCloseDialog = () => {
-    setOpenDialog(false);
-  };
-  
+
   return (
-    <Paper elevation={3} sx={{ p: 4, borderRadius: 4 }}>
-      <Box sx={{
+    <Box 
+      sx={{ 
+        p: 2, 
+        border: '1px solid #ddd', 
+        borderRadius: 1, 
+        textAlign: 'center',
+        position: 'relative',
+        height: '100%',
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'center',
-        mb: 4
-      }}>
-        <Avatar sx={{
-          bgcolor: 'primary.main',
-          width: 56,
-          height: 56,
-          mb: 2
-        }}>
-          <Description fontSize="large" />
-        </Avatar>
-        <Typography
-          variant="h4"
-          align="center"
-          gutterBottom
+        '&:hover': {
+          boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+        }
+      }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      {/* Delete button - positioned at top right */}
+      {url && isHovered && (
+        <IconButton
+          size="small"
+          color="error"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(name);
+          }}
           sx={{
-            fontWeight: 'bold',
-            color: 'text.primary'
+            position: 'absolute',
+            top: 4,
+            right: 4,
+            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+            '&:hover': {
+              backgroundColor: 'rgba(255, 0, 0, 0.1)'
+            }
           }}
         >
-          Documents Upload
-        </Typography>
-        <Typography variant="body1" color="text.secondary" align="center">
-          Please upload the required documents below
-        </Typography>
-      </Box>
-    
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={6}>
-          <Box>
-            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <PictureAsPdf color="primary" /> Upload Adhaar Card
-            </Typography>
-            <Box display="flex" alignItems="center">
-              <input
-                type="file"
-                accept=".pdf"
-                onChange={(e) => handleFileUpload(e, 'adhaarCard')}
-                style={{ display: 'none' }}
-                id="upload-adhaar"
-              />
-              <label htmlFor="upload-adhaar">
-                <Tooltip title="Upload Adhaar Card">
-                  <IconButton
-                    color="primary"
-                    component="span"
-                  >
-                    <CloudUpload />
-                  </IconButton>
-                </Tooltip>
-              </label>
-              {files.adhaarCard && (
-                <LinearProgress 
-                  variant="determinate" 
-                  value={progress.adhaarCard} 
-                  sx={{ width: '100%', ml: 2 }} 
-                />
-              )}
-            </Box>
-            <Divider sx={{ my: 3 }} />
-    
-            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Description color="primary" /> Upload Bonafide Certificate
-            </Typography>
-            <Box display="flex" alignItems="center">
-              <input
-                type="file"
-                accept=".pdf"
-                onChange={(e) => handleFileUpload(e, 'bonafideCertificate')}
-                style={{ display: 'none' }}
-                id="upload-bonafide"
-              />
-              <label htmlFor="upload-bonafide">
-                <Tooltip title="Upload Bonafide Certificate">
-                  <IconButton
-                    color="primary"
-                    component="span"
-                  >
-                    <CloudUpload />
-                  </IconButton>
-                </Tooltip>
-              </label>
-              {files.bonafideCertificate && (
-                <LinearProgress 
-                  variant="determinate" 
-                  value={progress.bonafideCertificate} 
-                  sx={{ width: '100%', ml: 2 }} 
-                />
-              )}
-            </Box>
-            <Divider sx={{ my: 3 }} />
-    
-            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <PermIdentity color="primary" /> Upload College ID
-            </Typography>
-            <Box display="flex" alignItems="center">
-              <input
-                type="file"
-                accept=".pdf"
-                onChange={(e) => handleFileUpload(e, 'collegeId')}
-                style={{ display: 'none' }}
-                id="upload-college-id"
-              />
-              <label htmlFor="upload-college-id">
-                <Tooltip title="Upload College ID">
-                  <IconButton
-                    color="primary"
-                    component="span"
-                  >
-                    <CloudUpload />
-                  </IconButton>
-                </Tooltip>
-              </label>
-              {files.collegeId && (
-                <LinearProgress 
-                  variant="determinate" 
-                  value={progress.collegeId} 
-                  sx={{ width: '100%', ml: 2 }} 
-                />
-              )}
-            </Box>
-            <Divider sx={{ my: 3 }} />
-    
-            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <AssignmentInd color="primary" /> Upload Resume
-            </Typography>
-            <Box display="flex" alignItems="center">
-              <input
-                type="file"
-                accept=".pdf"
-                onChange={(e) => handleFileUpload(e, 'resume')}
-                style={{ display: 'none' }}
-                id="upload-resume"
-              />
-              <label htmlFor="upload-resume">
-                <Tooltip title="Upload Resume">
-                  <IconButton
-                    color="primary"
-                    component="span"
-                  >
-                    <CloudUpload />
-                  </IconButton>
-                </Tooltip>
-              </label>
-              {files.resume && (
-                <LinearProgress 
-                  variant="determinate" 
-                  value={progress.resume} 
-                  sx={{ width: '100%', ml: 2 }} 
-                />
-              )}
-            </Box>
-          </Box>
-        </Grid>
-    
-        <Grid item xs={12} md={6}>
-          <Box>
-            {files.adhaarCard && (
-              <Card sx={{ mb: 3 }}>
-                <Box display="flex" alignItems="center" justifyContent="space-between" p={2}>
-                  <Typography sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <PictureAsPdf color="primary" /> {files.adhaarCard.name}
-                  </Typography>
-                  <IconButton onClick={() => handleDeleteFile('adhaarCard')}>
-                    <Delete color="error" />
-                  </IconButton>
-                </Box>
-              </Card>
-            )}
-    
-            {files.bonafideCertificate && (
-              <Card sx={{ mb: 3 }}>
-                <Box display="flex" alignItems="center" justifyContent="space-between" p={2}>
-                  <Typography sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Description color="primary" /> {files.bonafideCertificate.name}
-                  </Typography>
-                  <IconButton onClick={() => handleDeleteFile('bonafideCertificate')}>
-                    <Delete color="error" />
-                  </IconButton>
-                </Box>
-              </Card>
-            )}
-    
-            {files.collegeId && (
-              <Card sx={{ mb: 3 }}>
-                <Box display="flex" alignItems="center" justifyContent="space-between" p={2}>
-                  <Typography sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <PermIdentity color="primary" /> {files.collegeId.name}
-                  </Typography>
-                  <IconButton onClick={() => handleDeleteFile('collegeId')}>
-                    <Delete color="error" />
-                  </IconButton>
-                </Box>
-              </Card>
-            )}
-    
-            {files.resume && (
-              <Card sx={{ mb: 3 }}>
-                <Box display="flex" alignItems="center" justifyContent="space-between" p={2}>
-                  <Typography sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <AssignmentInd color="primary" /> {files.resume.name}
-                  </Typography>
-                  <IconButton onClick={() => handleDeleteFile('resume')}>
-                    <Delete color="error" />
-                  </IconButton>
-                </Box>
-              </Card>
-            )}
-          </Box>
-        </Grid>
-      </Grid>
-    
-      <Box display="flex" justifyContent="center" sx={{ mt: 4 }}>
-        <FormControlLabel
-          control={
-            <Checkbox
-              checked={agreeToTerms}
-              onChange={(e) => setAgreeToTerms(e.target.checked)}
-              color="primary"
-            />
-          }
-          label="I hereby agree to the terms and conditions as outlined by VDart."
-        />
-        <Tooltip title="View Terms and Conditions">
-          <IconButton onClick={handleOpenDialog}>
-            <Info color="primary" />
-          </IconButton>
-        </Tooltip>
-      </Box>
-    
-      <Grid container spacing={2} sx={{ mt: 3 }}>
-        <Grid item xs={6}>
-          <Button
-            fullWidth
-            variant="outlined"
-            color="secondary"
-            size="large"
-            startIcon={<BackIcon />}
-            onClick={onBack}
-          >
-            Previous
-          </Button>
-        </Grid>
-        <Grid item xs={6}>
-          <Button 
-            fullWidth 
-            variant="contained" 
-            color="primary" 
-            size="large"
-            startIcon={<SaveIcon />}
-            onClick={handleSaveSubmit}
-            disabled={loading || !agreeToTerms}
-          >
-            {loading ? <CircularProgress size={24} color="inherit" /> : 'Save & Submit'}
-          </Button>
-        </Grid>
-      </Grid>
-    
-      <Snackbar 
-        open={snackbarOpen} 
-        autoHideDuration={6000} 
-        onClose={handleSnackbarClose}
-        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-        key={snackbarKey}
-      >
-        <Alert 
-          onClose={handleSnackbarClose} 
-          severity={snackbarSeverity} 
-          sx={{ width: "100%" }}
+          <DeleteIcon fontSize="small" />
+        </IconButton>
+      )}
+
+      <Box sx={{ 
+        flexGrow: 1, 
+        display: 'flex', 
+        flexDirection: 'column', 
+        justifyContent: 'center',
+        padding: 2
+      }}>
+        <IconButton 
+          onClick={handleClick} 
+          sx={{ 
+            mb: 1,
+            alignSelf: 'center',
+            '&:hover': {
+              backgroundColor: 'rgba(0, 0, 0, 0.04)'
+            }
+          }}
         >
-          {snackbarMessage}
-        </Alert>
-      </Snackbar>
-    
-      <Dialog open={openDialog} onClose={handleCloseDialog}>
-        <DialogTitle>
-          <Box display="flex" alignItems="center">
-            <VerifiedUser color="primary" sx={{ mr: 1 }} />
-            Terms and Conditions
-          </Box>
-        </DialogTitle>
-        <DialogContent>
-          <Typography>
-            By using this service, you agree to the terms and conditions outlined by VDart. Please read them carefully before proceeding.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseDialog} color="primary">
-            Close
+          {url ? (
+            <DescriptionIcon color="primary" sx={{ fontSize: 48 }} />
+          ) : (
+            <CloudUploadIcon sx={{ fontSize: 48, color: 'text.secondary' }} />
+          )}
+        </IconButton>
+        
+        <Typography variant="subtitle2" gutterBottom>
+          {title}
+        </Typography>
+        
+        {url && (
+          <Button 
+            size="small" 
+            onClick={(e) => {
+              e.stopPropagation();
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = url.split('/').pop();
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+            }}
+            startIcon={<GetAppIcon fontSize="small" />}
+            sx={{ 
+              mt: 1,
+              alignSelf: 'center'
+            }}
+          >
+            Download
           </Button>
-        </DialogActions>
-      </Dialog>
-    </Paper>
+        )}
+      </Box>
+      
+      {!url && (
+        <Button
+          variant="outlined"
+          size="small"
+          onClick={() => fileInputRef.current?.click()}
+          startIcon={<CloudUploadIcon />}
+          sx={{ mt: 1, alignSelf: 'center' }}
+        >
+          Upload
+        </Button>
+      )}
+      
+      <input
+        type="file"
+        ref={fileInputRef}
+        style={{ display: 'none' }}
+        onChange={(e) => onReupload(name, e.target.files[0])}
+        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+      />
+    </Box>
   );
 };
 
-const MultiStepForm = ({ internData, onClose }) => {
+
+// const DocumentsUpload = ({ onBack, initialData, onClose }) => {
+//   const [files, setFiles] = useState({
+//     adhaarCard: initialData?.adhaarCard || null,
+//     bonafideCertificate: initialData?.bonafideCertificate || null,
+//     collegeId: initialData?.collegeId || null,
+//     resume: initialData?.resume || null
+//   });
+  
+//   const [loading, setLoading] = useState(false);
+//   const [snackbarOpen, setSnackbarOpen] = useState(false);
+//   const [snackbarMessage, setSnackbarMessage] = useState('');
+//   const [snackbarKey, setSnackbarKey] = useState('');
+//   const [snackbarSeverity, setSnackbarSeverity] = useState('success');
+//   const [agreeToTerms, setAgreeToTerms] = useState(false);
+//   const [progress, setProgress] = useState({
+//     adhaarCard: 0,
+//     bonafideCertificate: 0,
+//     collegeId: 0,
+//     resume: 0
+//   });
+//   const [openDialog, setOpenDialog] = useState(false);
+  
+//   const documentNames = {
+//     adhaarCard: "Adhaar Card",
+//     bonafideCertificate: "Bonafide Certificate",
+//     collegeId: "College ID",
+//     resume: "Resume"
+//   };
+  
+//   const handleFileUpload = (e, key) => {
+//     const file = e.target.files[0];
+//     if (!file) return;
+    
+//     setFiles({ ...files, [key]: file });
+//     simulateUploadProgress(key);
+//   };
+  
+//   const simulateUploadProgress = (key) => {
+//     setProgress(prev => ({ ...prev, [key]: 0 }));
+//     const interval = setInterval(() => {
+//       setProgress(prev => {
+//         const newProgress = { ...prev };
+//         if (newProgress[key] === 100) {
+//           clearInterval(interval);
+//           showSnackbar(documentNames[key] + ' uploaded successfully!', 'success', key);
+//           return newProgress;
+//         }
+//         newProgress[key] = Math.min(newProgress[key] + 10, 100);
+//         return newProgress;
+//       });
+//     }, 200);
+//   };
+  
+//   const showSnackbar = (message, severity, key) => {
+//     setSnackbarMessage(message);
+//     setSnackbarSeverity(severity);
+//     setSnackbarKey(key);
+//     setSnackbarOpen(true);
+//   };
+  
+//   const handleDeleteFile = (key) => {
+//     setFiles({ ...files, [key]: null });
+//     setProgress(prev => ({ ...prev, [key]: 0 }));
+//     showSnackbar(`${documentNames[key]} removed`, 'info', key);
+//   };
+  
+//   const handleSaveSubmit = async (e) => {
+//     e.preventDefault();
+    
+//     if (!agreeToTerms) {
+//       showSnackbar('You must agree to the terms and conditions to submit.', 'error', 'submit');
+//       return;
+//     }
+    
+//     setLoading(true);
+    
+//     try {
+//       // Simulate form submission
+//       await new Promise(resolve => setTimeout(resolve, 2000));
+//       showSnackbar('All information saved successfully!', 'success', 'submit');
+//       if (typeof onClose === 'function') {
+//         setTimeout(() => onClose(), 700); // Give user a moment to see the success message
+//       }
+//     } catch (error) {
+//       console.error("Error:", error);
+//       showSnackbar('Submission failed. Please try again.', 'error', 'submit');
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+  
+//   const handleSnackbarClose = () => {
+//     setSnackbarOpen(false);
+//   };
+  
+//   const handleOpenDialog = () => {
+//     setOpenDialog(true);
+//   };
+  
+//   const handleCloseDialog = () => {
+//     setOpenDialog(false);
+//   };
+  
+//   return (
+//     <Paper elevation={3} sx={{ p: 4, borderRadius: 4 }}>
+//       <Box sx={{
+//         display: 'flex',
+//         flexDirection: 'column',
+//         alignItems: 'center',
+//         mb: 4
+//       }}>
+//         <Avatar sx={{
+//           bgcolor: 'primary.main',
+//           width: 56,
+//           height: 56,
+//           mb: 2
+//         }}>
+//           <Description fontSize="large" />
+//         </Avatar>
+//         <Typography
+//           variant="h4"
+//           align="center"
+//           gutterBottom
+//           sx={{
+//             fontWeight: 'bold',
+//             color: 'text.primary'
+//           }}
+//         >
+//           Documents Upload
+//         </Typography>
+//         <Typography variant="body1" color="text.secondary" align="center">
+//           Please upload the required documents below
+//         </Typography>
+//       </Box>
+    
+//       <Grid container spacing={3}>
+//         <Grid item xs={12} md={6}>
+//           <Box>
+//             <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+//               <PictureAsPdf color="primary" /> Upload Adhaar Card
+//             </Typography>
+//             <Box display="flex" alignItems="center">
+//               <input
+//                 type="file"
+//                 accept=".pdf"
+//                 onChange={(e) => handleFileUpload(e, 'adhaarCard')}
+//                 style={{ display: 'none' }}
+//                 id="upload-adhaar"
+//               />
+//               <label htmlFor="upload-adhaar">
+//                 <Tooltip title="Upload Adhaar Card">
+//                   <IconButton
+//                     color="primary"
+//                     component="span"
+//                   >
+//                     <CloudUpload />
+//                   </IconButton>
+//                 </Tooltip>
+//               </label>
+//               {files.adhaarCard && (
+//                 <LinearProgress 
+//                   variant="determinate" 
+//                   value={progress.adhaarCard} 
+//                   sx={{ width: '100%', ml: 2 }} 
+//                 />
+//               )}
+//             </Box>
+//             <Divider sx={{ my: 3 }} />
+    
+//             <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+//               <Description color="primary" /> Upload Bonafide Certificate
+//             </Typography>
+//             <Box display="flex" alignItems="center">
+//               <input
+//                 type="file"
+//                 accept=".pdf"
+//                 onChange={(e) => handleFileUpload(e, 'bonafideCertificate')}
+//                 style={{ display: 'none' }}
+//                 id="upload-bonafide"
+//               />
+//               <label htmlFor="upload-bonafide">
+//                 <Tooltip title="Upload Bonafide Certificate">
+//                   <IconButton
+//                     color="primary"
+//                     component="span"
+//                   >
+//                     <CloudUpload />
+//                   </IconButton>
+//                 </Tooltip>
+//               </label>
+//               {files.bonafideCertificate && (
+//                 <LinearProgress 
+//                   variant="determinate" 
+//                   value={progress.bonafideCertificate} 
+//                   sx={{ width: '100%', ml: 2 }} 
+//                 />
+//               )}
+//             </Box>
+//             <Divider sx={{ my: 3 }} />
+    
+//             <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+//               <PermIdentity color="primary" /> Upload College ID
+//             </Typography>
+//             <Box display="flex" alignItems="center">
+//               <input
+//                 type="file"
+//                 accept=".pdf"
+//                 onChange={(e) => handleFileUpload(e, 'collegeId')}
+//                 style={{ display: 'none' }}
+//                 id="upload-college-id"
+//               />
+//               <label htmlFor="upload-college-id">
+//                 <Tooltip title="Upload College ID">
+//                   <IconButton
+//                     color="primary"
+//                     component="span"
+//                   >
+//                     <CloudUpload />
+//                   </IconButton>
+//                 </Tooltip>
+//               </label>
+//               {files.collegeId && (
+//                 <LinearProgress 
+//                   variant="determinate" 
+//                   value={progress.collegeId} 
+//                   sx={{ width: '100%', ml: 2 }} 
+//                 />
+//               )}
+//             </Box>
+//             <Divider sx={{ my: 3 }} />
+    
+//             <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+//               <AssignmentInd color="primary" /> Upload Resume
+//             </Typography>
+//             <Box display="flex" alignItems="center">
+//               <input
+//                 type="file"
+//                 accept=".pdf"
+//                 onChange={(e) => handleFileUpload(e, 'resume')}
+//                 style={{ display: 'none' }}
+//                 id="upload-resume"
+//               />
+//               <label htmlFor="upload-resume">
+//                 <Tooltip title="Upload Resume">
+//                   <IconButton
+//                     color="primary"
+//                     component="span"
+//                   >
+//                     <CloudUpload />
+//                   </IconButton>
+//                 </Tooltip>
+//               </label>
+//               {files.resume && (
+//                 <LinearProgress 
+//                   variant="determinate" 
+//                   value={progress.resume} 
+//                   sx={{ width: '100%', ml: 2 }} 
+//                 />
+//               )}
+//             </Box>
+//           </Box>
+//         </Grid>
+    
+//         <Grid item xs={12} md={6}>
+//           <Box>
+//             {files.adhaarCard && (
+//               <Card sx={{ mb: 3 }}>
+//                 <Box display="flex" alignItems="center" justifyContent="space-between" p={2}>
+//                   <Typography sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+//                     <PictureAsPdf color="primary" /> {files.adhaarCard.name}
+//                   </Typography>
+//                   <IconButton onClick={() => handleDeleteFile('adhaarCard')}>
+//                     <Delete color="error" />
+//                   </IconButton>
+//                 </Box>
+//               </Card>
+//             )}
+    
+//             {files.bonafideCertificate && (
+//               <Card sx={{ mb: 3 }}>
+//                 <Box display="flex" alignItems="center" justifyContent="space-between" p={2}>
+//                   <Typography sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+//                     <Description color="primary" /> {files.bonafideCertificate.name}
+//                   </Typography>
+//                   <IconButton onClick={() => handleDeleteFile('bonafideCertificate')}>
+//                     <Delete color="error" />
+//                   </IconButton>
+//                 </Box>
+//               </Card>
+//             )}
+    
+//             {files.collegeId && (
+//               <Card sx={{ mb: 3 }}>
+//                 <Box display="flex" alignItems="center" justifyContent="space-between" p={2}>
+//                   <Typography sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+//                     <PermIdentity color="primary" /> {files.collegeId.name}
+//                   </Typography>
+//                   <IconButton onClick={() => handleDeleteFile('collegeId')}>
+//                     <Delete color="error" />
+//                   </IconButton>
+//                 </Box>
+//               </Card>
+//             )}
+    
+//             {files.resume && (
+//               <Card sx={{ mb: 3 }}>
+//                 <Box display="flex" alignItems="center" justifyContent="space-between" p={2}>
+//                   <Typography sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+//                     <AssignmentInd color="primary" /> {files.resume.name}
+//                   </Typography>
+//                   <IconButton onClick={() => handleDeleteFile('resume')}>
+//                     <Delete color="error" />
+//                   </IconButton>
+//                 </Box>
+//               </Card>
+//             )}
+//           </Box>
+//         </Grid>
+//       </Grid>
+    
+//       <Box display="flex" justifyContent="center" sx={{ mt: 4 }}>
+//         <FormControlLabel
+//           control={
+//             <Checkbox
+//               checked={agreeToTerms}
+//               onChange={(e) => setAgreeToTerms(e.target.checked)}
+//               color="primary"
+//             />
+//           }
+//           label="I hereby agree to the terms and conditions as outlined by VDart."
+//         />
+//         <Tooltip title="View Terms and Conditions">
+//           <IconButton onClick={handleOpenDialog}>
+//             <Info color="primary" />
+//           </IconButton>
+//         </Tooltip>
+//       </Box>
+    
+//       <Grid container spacing={2} sx={{ mt: 3 }}>
+//         <Grid item xs={6}>
+//           <Button
+//             fullWidth
+//             variant="outlined"
+//             color="secondary"
+//             size="large"
+//             startIcon={<BackIcon />}
+//             onClick={onBack}
+//           >
+//             Previous
+//           </Button>
+//         </Grid>
+//         <Grid item xs={6}>
+//           <Button 
+//             fullWidth 
+//             variant="contained" 
+//             color="primary" 
+//             size="large"
+//             startIcon={<SaveIcon />}
+//             onClick={handleSaveSubmit}
+//             disabled={loading || !agreeToTerms}
+//           >
+//             {loading ? <CircularProgress size={24} color="inherit" /> : 'Save & Submit'}
+//           </Button>
+//         </Grid>
+//       </Grid>
+    
+//       <Snackbar 
+//         open={snackbarOpen} 
+//         autoHideDuration={6000} 
+//         onClose={handleSnackbarClose}
+//         anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+//         key={snackbarKey}
+//       >
+//         <Alert 
+//           onClose={handleSnackbarClose} 
+//           severity={snackbarSeverity} 
+//           sx={{ width: "100%" }}
+//         >
+//           {snackbarMessage}
+//         </Alert>
+//       </Snackbar>
+    
+//       <Dialog open={openDialog} onClose={handleCloseDialog}>
+//         <DialogTitle>
+//           <Box display="flex" alignItems="center">
+//             <VerifiedUser color="primary" sx={{ mr: 1 }} />
+//             Terms and Conditions
+//           </Box>
+//         </DialogTitle>
+//         <DialogContent>
+//           <Typography>
+//             By using this service, you agree to the terms and conditions outlined by VDart. Please read them carefully before proceeding.
+//           </Typography>
+//         </DialogContent>
+//         <DialogActions>
+//           <Button onClick={handleCloseDialog} color="primary">
+//             Close
+//           </Button>
+//         </DialogActions>
+//       </Dialog>
+//     </Paper>
+//   );
+// };
+
+const MultiStepForm = ({ internData, onClose, onSave }) => {
   const [step, setStep] = useState(0);
   const [formData, setFormData] = useState({
     personalData: internData ? {
       email: internData.email || '',
-      first_name: internData.firstName || internData.first_name || '',
-      last_name: internData.lastName || internData.last_name || '',
+      first_name: internData.first_name || '',
+      last_name: internData.last_name || '',
       mobile: internData.mobile || '',
-      department: internData.department || '',
       role: 'intern',
       address1: internData.address1 || '',
       address2: internData.address2 || '',
@@ -2113,8 +2216,12 @@ const MultiStepForm = ({ internData, onClose }) => {
       reportingManager: internData.reportingManager || '',
       reportingSupervisor: internData.reportingSupervisor || ''
     } : {},
-    documentsData: {
-      documents: internData.documents || []
+    documents: {
+      aadharCard: internData?.aadharCard || '',
+      bonafideCertificate: internData?.bonafideCertificate || '',
+      collegeId: internData?.collegeId || '',
+      resume: internData?.resume || '',
+      allDocuments: internData?.documents || []
     }
   });
   
@@ -2122,15 +2229,267 @@ const MultiStepForm = ({ internData, onClose }) => {
     'Personal Details',
     'College Information',
     'Company Details',
-    'Documents Upload'
+    'Documents'
   ];
+
+  const handleDocumentUpload = (fieldName, file) => {
+    if (!file) return;
+    
+    // For immediate preview
+    const fileUrl = URL.createObjectURL(file);
+    
+    setFormData(prev => ({
+      ...prev,
+      documents: {
+        ...prev.documents,
+        [fieldName]: fileUrl,
+        // Keep track of the actual file for submission
+        [`${fieldName}File`]: file
+      }
+    }));
+  };
+
+  const handleDeleteDocument = (fieldName) => {
+    setFormData(prev => ({
+      ...prev,
+      documents: {
+        ...prev.documents,
+        [fieldName]: ''
+      }
+    }));
+  };
+
+  const handleSubmit = async () => {
+    console.log("Form data:", formData);
+    const formDataToSend = new FormData();
+    let hasUpdates = false;
+    let successCount = 0;
+    let errorCount = 0;
+  
+    // Show loading toast
+    const toastId = toast.loading("Saving changes...");
+  
+    // Handle document uploads first
+    const documentFields = ['aadharCard', 'bonafideCertificate', 'collegeId', 'resume'];
+  
+    const personalDataToSend = {
+      phone_no: formData.personalData.mobile, // Map mobile to phone_no
+      date_of_birth: formData.personalData.dob, // Map dob to date_of_birth
+      gender: formData.personalData.gender,
+      address1: formData.personalData.address1,
+      address2: formData.personalData.address2 || '',
+      pincode: formData.personalData.pincode,
+      first_Graduation: formData.personalData.isFirstGraduate, // Map isFirstGraduate to first_Graduation
+      aadhar_number: formData.personalData.aadharNumber, // Map aadharNumber to aadhar_number
+      // Include any other fields that need to be mapped
+    };
+    console.log("Personal data to send:", personalDataToSend);
+
+    // For college data
+const collegeDataToSend = {
+  college_name: formData.collegeData.collegeName,
+  college_address: formData.collegeData.collegeAddress,
+  college_email_id: formData.collegeData.collegeEmail || null,
+  degree_type: formData.collegeData.degreeType,
+  degree: formData.collegeData.degree,
+  department: formData.collegeData.collegeDepartment, // Assuming this is the department field
+  year_of_passing: formData.collegeData.yearOfPassing,
+  cgpa: formData.collegeData.cgpa ? parseFloat(formData.collegeData.cgpa) : null,
+  faculty_number: formData.collegeData.facultyNumber || null
+};
+console.log("College data to send:", collegeDataToSend);
+
+// For company data
+const companyDataToSend = {
+  domain: formData.companyData.domain,
+  department: formData.companyData.department,
+  scheme: formData.companyData.scheme,
+  team_name: formData.companyData.teamName,
+  asset_code: formData.companyData.assetCode || null,
+  duration: formData.companyData.duration,
+  start_date: formData.companyData.startDate ? 
+    new Date(formData.companyData.startDate).toISOString().split('T')[0] : 
+    null,
+  end_date: formData.companyData.endDate ? 
+    new Date(formData.companyData.endDate).toISOString().split('T')[0] : 
+    null,
+  working_days: formData.companyData.workingDays,
+  shift_timing: formData.companyData.shiftTiming,
+  status: formData.companyData.status,
+  reporting_manager: formData.companyData.reportingManager || null,
+  reporting_supervisor: formData.companyData.reportingSupervisor || null
+};
+console.log("Company data to send:", companyDataToSend);
+
+    // First, handle document uploads
+    for (const field of documentFields) {
+      const file = formData.documents[`${field}File`];
+      if (file) {
+        const docFormData = new FormData();
+        docFormData.append('file', file);
+        docFormData.append('document_type', field);
+        
+        try {
+          await axios.patch(
+            `http://localhost:8000/Sims/documents/emp/${formData.emp_id || internData.emp_id}/`,
+            docFormData,
+            {
+              headers: {
+                'Content-Type': 'multipart/form-data',
+                'Authorization': `Token ${localStorage.getItem('token')}`
+              }
+            }
+          );
+          successCount++;
+        } catch (error) {
+          console.error(`Error uploading ${field}:`, error.response?.data || error.message);
+          errorCount++;
+        }
+        hasUpdates = true;
+      }
+    }
+  
+    // Handle other form data updates
+    try {
+      if (formData.personalData.first_name || formData.personalData.last_name || formData.personalData.email) {
+        const userUpdateData = {
+          first_name: formData.personalData.first_name,
+          last_name: formData.personalData.last_name,
+          email: formData.personalData.email
+        };
+  
+        await axios.patch(
+          `http://localhost:8000/Sims/user/update/${formData.emp_id || internData.emp_id}/`,
+          userUpdateData,
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Token ${localStorage.getItem('token')}`
+            }
+          }
+        );
+      }
+      // Update personal data if it exists
+      if (formData.personalData) {
+    // Filter out null/undefined values
+    const filteredPersonalData = Object.fromEntries(
+          Object.entries(personalDataToSend).filter(([_, v]) => v != null)
+        );
+        
+        console.log("Mapped personal data to send:", filteredPersonalData);
+        const personalDataResponse = await axios.put(
+          `http://localhost:8000/Sims/personal-data/${formData.emp_id || internData.emp_id}/`,
+          filteredPersonalData,
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Token ${localStorage.getItem('token')}`
+            }
+          }
+        );
+        console.log("Personal data response:", personalDataResponse);
+        successCount++;
+        hasUpdates = true;
+      }
+  
+      // Update college data if it exists
+      if (formData.collegeData) {
+        // Create a clean object with only the fields that have values
+        const filteredCollegeData = Object.fromEntries(
+          Object.entries(collegeDataToSend).filter(([_, v]) => v != null)
+        );
+        console.log("College data to send:", filteredCollegeData);
+        const collegeDataResponse = await axios.put(
+          `http://localhost:8000/Sims/college-details/${formData.emp_id || internData.emp_id}/`,
+          filteredCollegeData,
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Token ${localStorage.getItem('token')}`
+            }
+          }
+        );
+        console.log("Mapped college data to send:", filteredCollegeData);
+        successCount++;
+        hasUpdates = true;
+      }
+  
+      // Update company data if it exists
+      if (formData.companyData) {
+        // Create a clean object with only the fields that have values
+        const filteredCompanyData = Object.fromEntries(
+          Object.entries(companyDataToSend).filter(([_, v]) => v != null)
+        );
+        console.log("Company data to send:", filteredCompanyData);
+        const companyDataResponse = await axios.put(
+          `http://localhost:8000/Sims/user-data/${formData.emp_id || internData.emp_id}/`,
+          filteredCompanyData,
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Token ${localStorage.getItem('token')}`
+            }
+          }
+        );
+        console.log("Mapped company data to send:", );
+        successCount++;
+        hasUpdates = true;
+      }
+  
+      // Rest of the toast handling remains the same...
+      if (hasUpdates) {
+        if (errorCount > 0) {
+          toast.update(toastId, {
+            render: `Updated ${successCount} items. Failed to update ${errorCount} items.`,
+            type: "warning",
+            isLoading: false,
+            autoClose: 5000,
+            closeButton: true,
+          });
+        } else {
+          toast.update(toastId, {
+            render: "All changes saved successfully!",
+            type: "success",
+            isLoading: false,
+            autoClose: 3000,
+            closeButton: true,
+          });
+        }
+      } else {
+        toast.update(toastId, {
+          render: "No changes to save",
+          type: "info",
+          isLoading: false,
+          autoClose: 3000,
+          closeButton: true,
+        });
+      }
+      
+      if (onClose) {
+        // Give some time for the user to see the success message
+        setTimeout(() => onClose(), 1500);
+      }
+      if (onSave) {
+        onSave();
+      }
+    } catch (error) {
+      console.error('Error updating data:', error.response?.data || error.message);
+      toast.update(toastId, {
+        render: `Error: ${error.response?.data?.error || 'Failed to save changes'}`,
+        type: "error",
+        isLoading: false,
+        autoClose: 5000,
+        closeButton: true,
+      });
+    }
+  };
   
   const handleNext = (data) => {
     const newFormData = { ...formData };
     if (step === 0) newFormData.personalData = data;
     if (step === 1) newFormData.collegeData = data;
     if (step === 2) newFormData.companyData = data;
-    if (step === 3) newFormData.documentsData = data;
+    if (step === 3) newFormData.documents = data;
     
     setFormData(newFormData);
     setStep(step + 1);
@@ -2147,9 +2506,69 @@ const MultiStepForm = ({ internData, onClose }) => {
       case 1:
         return <CollegeInfoForm onBack={handleBack} onNext={handleNext} initialData={formData.collegeData} />;
       case 2:
-        return <CompanyDetailsForm onBack={handleBack} onNext={handleNext} initialData={formData.companyData} />;
+        return <CompanyDetailsForm onBack={handleBack} onNext={handleNext} initialData={formData.companyData}/>;
       case 3:
-        return <DocumentsUpload onBack={handleBack} initialData={formData.documentsData} onClose={onClose} />;
+        return (
+          <Box sx={{ mt: 3, mb: 4 }}>
+            <Typography variant="h6" gutterBottom>
+              Documents
+              </Typography>
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={6} lg={3}>
+                  <DocumentPreview
+                    title="Aadhar Card"
+                    url={formData.documents.aadharCard}
+                    onReupload={handleDocumentUpload}
+                    onDelete={handleDeleteDocument}
+                    name="aadharCard"
+                  />
+                </Grid>
+                <Grid item xs={12} md={6} lg={3}>
+                  <DocumentPreview
+                    title="Bonafide Certificate"
+                    url={formData.documents.bonafideCertificate}
+                    onReupload={handleDocumentUpload}
+                    onDelete={handleDeleteDocument}
+                    name="bonafideCertificate"
+                  />
+                </Grid>
+                <Grid item xs={12} md={6} lg={3}>
+                  <DocumentPreview
+                    title="College ID"
+                    url={formData.documents.collegeId}
+                    onReupload={handleDocumentUpload}
+                    onDelete={handleDeleteDocument}
+                    name="collegeId"
+                  />
+                </Grid>
+                <Grid item xs={12} md={6} lg={3}>
+                  <DocumentPreview
+                    title="Resume"
+                    url={formData.documents.resume}
+                    onReupload={handleDocumentUpload}
+                    onDelete={handleDeleteDocument}
+                    name="resume"
+                  />
+                </Grid>
+              </Grid>
+              
+              <Box sx={{ mt: 4, display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
+                <Button
+                  variant="outlined"
+                  onClick={handleBack}
+                >
+                  Back
+                </Button>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={handleSubmit}
+                >
+                  Save Changes
+                </Button>
+              </Box>
+            </Box>
+          );
       default:
         return null;
     }
@@ -2200,14 +2619,19 @@ const EditedForm = ({ initialData, onClose, onSave }) => {
       const fetchFullInternData = async () => {
         try {
           const token = localStorage.getItem("token");
-          const [collegeRes] = await Promise.all([
-            fetch(`http://localhost:8000/Sims/college-details/`, {
+          const [collegeRes, documentsRes] = await Promise.all([
+            axios.get(`http://localhost:8000/Sims/college-details/`, {
+              headers: { Authorization: `Token ${token}` }
+            }),
+            axios.get(`http://localhost:8000/Sims/documents/`, {
               headers: { Authorization: `Token ${token}` }
             })
           ]);
-          const collegeData = await collegeRes.json();
+          const collegeData = collegeRes.data;
           const collegeRecord = collegeData.find(data => data.emp_id === internData.id);
-          setFullInternData({ ...internData, collegeName: collegeRecord?.college_name || '' });
+          const documentsData = documentsRes.data;
+          const documentsRecord = documentsData.find(data => data.emp_id === internData.id);
+          setFullInternData({ ...internData, collegeName: collegeRecord?.college_name || '', documents: documentsRecord || {} });
         } catch (error) {
           setFullInternData(internData);
         } finally {
@@ -2245,7 +2669,7 @@ const EditedForm = ({ initialData, onClose, onSave }) => {
         <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold', mb: 4 }}>
           Edit Intern: {internData.name}
         </Typography>
-        <MultiStepForm internData={fullInternData} onClose={onClose} />
+        <MultiStepForm internData={fullInternData} onClose={onClose} onSave={onSave} />
       </Container>
     </ThemeProvider>
   );

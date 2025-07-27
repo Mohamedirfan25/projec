@@ -561,6 +561,45 @@ class UserDataView(APIView):
         user_data.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+class UserUpdateView(APIView):
+    def patch(self, request, emp_id):
+        try:
+            # Get the Temp instance
+            temp = Temp.objects.get(emp_id=emp_id)
+            user = temp.user  # Get the related User instance
+            
+            # Update User model fields
+            if 'first_name' in request.data:
+                user.first_name = request.data['first_name']
+            if 'last_name' in request.data:
+                user.last_name = request.data['last_name']
+            if 'email' in request.data:
+                user.email = request.data['email']
+
+            user.save()
+            
+            return Response({
+                'status': 'success',
+                'message': 'User updated successfully',
+                'data': {
+                    'first_name': user.first_name,
+                    'last_name': user.last_name,
+                    'email': user.email,
+                    'username': user.username
+                }
+            }, status=status.HTTP_200_OK)
+            
+        except Temp.DoesNotExist:
+            return Response({
+                'status': 'error',
+                'message': 'User not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
 
 class PersonalDataView(APIView):
     permission_classes = [IsAuthenticated]
@@ -5032,6 +5071,54 @@ class DocumentByEmpView(APIView):
                 'results': serializer.data
             })
 
+        except Exception as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    def patch(self, request, emp_id):
+        try:
+            document_type = request.data.get('document_type')
+            file = request.FILES.get('file')
+            
+            if not document_type or not file:
+                return Response(
+                    {"error": "Both document_type and file are required"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Get the Temp instance for the employee
+            try:
+                temp_user = Temp.objects.get(emp_id=emp_id)
+                uploader_temp = Temp.objects.get(user=request.user)
+            except Temp.DoesNotExist:
+                return Response(
+                    {"error": "Employee not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Update or create the document
+            document, created = Document.objects.update_or_create(
+                receiver=temp_user,
+                title=document_type,
+                defaults={
+                    'file': file,
+                    'uploader': uploader_temp,
+                    'status': 'SUBMITTED'  # Or whatever default status you want
+                }
+            )
+            
+            file_url = request.build_absolute_uri(document.file.url) if document.file else None
+            
+            return Response({
+                "id": str(document.id),
+                "emp_id": temp_user.emp_id,
+                "title": document.title,
+                "file": file_url,
+                "uploaded_at": document.created_at,
+                "uploaded_by": document.uploader.user.username if document.uploader else None
+            }, status=status.HTTP_200_OK if not created else status.HTTP_201_CREATED)
+            
         except Exception as e:
             return Response(
                 {"error": str(e)},
