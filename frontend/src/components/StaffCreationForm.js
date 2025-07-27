@@ -54,7 +54,7 @@ const StaffCreationForm = ({ switchToRegister, formData }) => {
     staffId: '',
     staffName: '',
     teamName: '',
-    role: '',
+    department: '',
     workUndertaken: [], // Initialize as empty array
     mobileNumber: '',
     email: '',
@@ -75,6 +75,8 @@ const StaffCreationForm = ({ switchToRegister, formData }) => {
   const [snackbarSeverity, setSnackbarSeverity] = useState('success');
   const [confirmationOpen, setConfirmationOpen] = useState(false);
   const [domainOptions, setDomainOptions] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  
 
   useEffect(() => {
     const fetchDomains = async () => {
@@ -94,6 +96,33 @@ const StaffCreationForm = ({ switchToRegister, formData }) => {
   
     fetchDomains();
   }, []);
+
+    useEffect(() => {
+      const fetchDepartments = async () => {
+        try {
+          const token = localStorage.getItem("token");
+          const response = await fetch("http://localhost:8000/Sims/departments/", {
+            headers: {
+              Authorization: `Token ${token}`,
+            },
+          });
+          const data = await response.json();
+          console.log("Departments:", data);
+          setDepartments(data);
+        } catch (error) {
+          console.error("Error fetching departments:", error);
+          // Fallback to mock data
+          const mockDepartments = [
+            { id: 1, department: "Software Development" },
+            { id: 2, department: "Quality Assurance" },
+            { id: 3, department: "Data Science" },
+            { id: 4, department: "UX/UI Design" }
+          ];
+          setDepartments(mockDepartments);
+        }
+      };
+      fetchDepartments();
+    }, []);
   
   useEffect(() => {
     if (formData) {
@@ -101,7 +130,7 @@ const StaffCreationForm = ({ switchToRegister, formData }) => {
         staffId: formData.staffId || '',
         staffName: formData.staffName || '',
         teamName: formData.teamName || '',
-        role: formData.role || '',
+        department: formData.department || '',
         workUndertaken: formData.workUndertaken || [], // Ensure array exists
         mobileNumber: formData.mobileNumber || '',
         email: formData.email || '',
@@ -149,7 +178,7 @@ const StaffCreationForm = ({ switchToRegister, formData }) => {
       staffData.staffId &&
       staffData.staffName &&
       staffData.teamName &&
-      staffData.role &&
+      staffData.department &&
       staffData.workUndertaken.length > 0 &&
       staffData.mobileNumber &&
       staffData.email &&
@@ -192,15 +221,16 @@ const StaffCreationForm = ({ switchToRegister, formData }) => {
         staffName: data.username || "",
         email: data.temp_details?.email || "",
         staffDomain: data.domain_name || data.domain || "",
+        department: data.department || "",
         staffTiming: data.shift_timing || "",
         teamName: data.team_name || "",
         joinDate: data.start_date ? new Date(data.start_date) : null,
         endDate: data.end_date ? new Date(data.end_date) : null,
         workUndertaken: [
-          ...(data.is_attendance_access ? ["Attendance"] : []),
-          ...(data.is_payroll_access ? ["Payroll"] : []),
+          ...(data.is_attendance_access ? ["Attendance Management"] : []),
+          ...(data.is_payroll_access ? ["Payment Management"] : []),
           ...(data.is_internmanagement_access ? ["Intern Management"] : []),
-          ...(data.is_assert_access ? ["Assets"] : []),
+          ...(data.is_assert_access ? ["Asset Management"] : []),
         ],
         loginTime: prev.loginTime,
         dob: prev.dob,
@@ -235,14 +265,13 @@ const StaffCreationForm = ({ switchToRegister, formData }) => {
         days: "mon-fri",
         scheme: "FREE",
         user_status: "active",
-        department: "Academy",
-        role: staffData.role || "intern",
+        department: staffData.department || "Academy",
         reporting_manager_username: "staff1",
         reporting_supervisor_username: "staff1",
-        is_attendance_access: staffData.workUndertaken.includes("Attendance"),
-        is_payroll_access: staffData.workUndertaken.includes("Payroll"),
+        is_attendance_access: staffData.workUndertaken.includes("Attendance Management"),
+        is_payroll_access: staffData.workUndertaken.includes("Payment Management"),
         is_internmanagement_access: staffData.workUndertaken.includes("Intern Management"),
-        is_assert_access: staffData.workUndertaken.includes("Assets"),
+        is_assert_access: staffData.workUndertaken.includes("Asset Management"),
       };
       
       await axios.patch(
@@ -302,7 +331,7 @@ const StaffCreationForm = ({ switchToRegister, formData }) => {
               }}
             >
               <PersonIcon fontSize="large" style={{ color: '#3f51b5', marginRight: '10px' }} />
-              Staff Creation
+              Edit Staff Details
             </Typography>
             <form>
               <Grid container spacing={3}>
@@ -314,14 +343,14 @@ const StaffCreationForm = ({ switchToRegister, formData }) => {
                     value={staffData.staffId}
                     onChange={handleChange}
                   />
-                  <Button
+                  {/* <Button
                     variant="outlined"
                     color="primary"
                     onClick={handleFetchStaffData}
                     sx={{ mt: 1 }}
                   >
                     Fetch Staff Info
-                  </Button>
+                  </Button> */}
                 </Grid>
 
                 <Grid item xs={12} md={6}>
@@ -358,21 +387,21 @@ const StaffCreationForm = ({ switchToRegister, formData }) => {
                 </Grid>
                 <Grid item xs={12} md={6}>
                   <Typography variant="h6" gutterBottom>
-                    <Work fontSize="small" /> Role
+                    <Work fontSize="small" /> Department
                   </Typography>
                   <FormControl fullWidth>
-                    <InputLabel>Role</InputLabel>
+                    <InputLabel>Department</InputLabel>
                     <Select
-                      name="role"
-                      value={staffData.role}
+                      name="department"
+                      value={staffData.department}
                       onChange={handleChange}
-                      label="Role"
+                      label="Department"
                     >
-                      <MenuItem value="Trainer">Trainer</MenuItem>
-                      <MenuItem value="Software Developer">Software Developer</MenuItem>
-                      <MenuItem value="Data Analyst">Data Analyst</MenuItem>
-                      <MenuItem value="Project Manager">Project Manager</MenuItem>
-                      <MenuItem value="HR Manager">HR Manager</MenuItem>
+                      {departments.map((department) => (
+                        <MenuItem key={department.id} value={department.department}>
+                          {department.department}
+                        </MenuItem>
+                      ))}
                     </Select>
                   </FormControl>
                 </Grid>
@@ -391,15 +420,15 @@ const StaffCreationForm = ({ switchToRegister, formData }) => {
                         control={
                           <Checkbox
                             name="workUndertaken"
-                            value="Payroll"
-                            checked={staffData.workUndertaken.includes('Payroll')}
+                            value="Payment Management"
+                            checked={staffData.workUndertaken.includes('Payment Management')}
                             onChange={handleCheckboxChange}
                           />
                         }
                         label={
                           <Box display="flex" alignItems="center">
                             <AttachMoney fontSize="small" style={{ marginRight: '8px' }} />
-                            Payroll
+                            Payment Management
                           </Box>
                         }
                       />
@@ -409,15 +438,15 @@ const StaffCreationForm = ({ switchToRegister, formData }) => {
                         control={
                           <Checkbox
                             name="workUndertaken"
-                            value="Creation"
-                            checked={staffData.workUndertaken.includes('Creation')}
+                            value="Intern Management"
+                            checked={staffData.workUndertaken.includes('Intern Management')}
                             onChange={handleCheckboxChange}
                           />
                         }
                         label={
                           <Box display="flex" alignItems="center">
                             <Create fontSize="small" style={{ marginRight: '8px' }} />
-                            Creation & Update
+                            Intern Management
                           </Box>
                         }
                       />
@@ -427,15 +456,15 @@ const StaffCreationForm = ({ switchToRegister, formData }) => {
                         control={
                           <Checkbox
                             name="workUndertaken"
-                            value="Attendance"
-                            checked={staffData.workUndertaken.includes('Attendance')}
+                            value="Attendance Management"
+                            checked={staffData.workUndertaken.includes('Attendance Management')}
                             onChange={handleCheckboxChange}
                           />
                         }
                         label={
                           <Box display="flex" alignItems="center">
                                     <People fontSize="small" style={{ marginRight: '8px' }} />
-                                    Attendance
+                                    Attendance Management
                                   </Box>
                                 }
                               />
@@ -445,15 +474,15 @@ const StaffCreationForm = ({ switchToRegister, formData }) => {
                         control={
                           <Checkbox
                             name="workUndertaken"
-                            value="Assets"
-                            checked={staffData.workUndertaken.includes('Assets')}
+                            value="Asset Management"
+                            checked={staffData.workUndertaken.includes('Asset Management')}
                             onChange={handleCheckboxChange}
                           />
                         }
                         label={
                           <Box display="flex" alignItems="center">
                             <BusinessCenter fontSize="small" style={{ marginRight: '8px' }} />
-                            Asset
+                            Asset Management
                           </Box>
                         }
                       />

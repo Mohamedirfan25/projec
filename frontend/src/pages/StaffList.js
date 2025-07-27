@@ -36,6 +36,7 @@ import StaffCreationForm from "../components/StaffCreationForm";
 import { useColorMode } from '../index';
 import { useTheme } from '@mui/material/styles';
 
+
 const shimmer = keyframes`
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
@@ -62,6 +63,23 @@ const StaffList = () => {
     const [staff, setStaff] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [staffData, setStaffData] = useState({
+        staffId: '',
+        staffName: '',
+        teamName: '',
+        department: '',
+        workUndertaken: [], // Initialize as empty array
+        mobileNumber: '',
+        email: '',
+        staffDomain: '',
+        staffTiming: '',
+        loginTime: null,
+        joinDate: null,
+        endDate: null,
+        dob: null,
+        gender: '',
+        location: '',
+      });
     const [filters, setFilters] = useState({
         role: '',
         domain: '',
@@ -73,6 +91,9 @@ const StaffList = () => {
     const [editStaffId, setEditStaffId] = useState(null);
     const { colorMode } = useColorMode();
     const theme = useTheme();
+    const [snackbarOpen, setSnackbarOpen] = useState(false);
+    const [snackbarMessage, setSnackbarMessage] = useState('');
+    const [snackbarSeverity, setSnackbarSeverity] = useState('success');
 
     const fetchStaffData = useCallback(async () => {
         setIsLoading(true);
@@ -106,6 +127,58 @@ const StaffList = () => {
     useEffect(() => {
         fetchStaffData();
     }, [fetchStaffData]);
+
+
+    const handleFetchStaffData = async (employeeId) => {
+        try {
+          const token = localStorage.getItem("token");
+          const response = await axios.get(
+            `http://localhost:8000/Sims/user-data/${employeeId}/`,
+            {
+              headers: {
+                Authorization: `Token ${token}`,
+              },
+            }
+          );
+    
+          const data = response.data;
+          console.log("staff data:",data)
+    
+          setStaffData((prev) => ({
+            ...prev,
+            staffName: data.username || "",
+            email: data.temp_details?.email || "",
+            staffDomain: data.domain_name || data.domain || "",
+            department: data.department || "",
+            staffTiming: data.shift_timing || "",
+            teamName: data.team_name || "",
+            joinDate: data.start_date ? new Date(data.start_date) : null,
+            endDate: data.end_date ? new Date(data.end_date) : null,
+            workUndertaken: [
+              ...(data.is_attendance_access ? ["Attendance Management"] : []),
+              ...(data.is_payroll_access ? ["Payment Management"] : []),
+              ...(data.is_internmanagement_access ? ["Intern Management"] : []),
+              ...(data.is_assert_access ? ["Asset Management"] : []),
+            ],
+            loginTime: prev.loginTime,
+            dob: prev.dob,
+            gender: prev.gender,
+            location: prev.location,
+            mobileNumber: prev.mobileNumber,
+          }));
+          setEditStaffId(employeeId); // Make sure to set the edit ID
+          setFormMode('edit'); // Make sure form is in edit mode         
+          
+          setSnackbarMessage("Staff data loaded successfully.");
+          setSnackbarSeverity("success");
+          setSnackbarOpen(true);
+        } catch (err) {
+          setSnackbarMessage("Staff not found.");
+          setSnackbarSeverity("error");
+          setSnackbarOpen(true);
+          console.error("Fetch error:", err.response?.data || err.message);
+        }
+      };
 
     const handleSearch = (e) => {
         setSearchTerm(e.target.value);
@@ -181,8 +254,9 @@ const StaffList = () => {
                     <StaffCreationForm 
                         switchToRegister={() => setFormMode('add')}
                         formData={{
+                            ...staffData,
                             staffId: editStaffId,
-                            workUndertaken: [],
+                            workUndertaken: staffData.workUndertaken,
                             ...staff.find(e => e.id === editStaffId)
                         }}
                     />
@@ -429,7 +503,10 @@ const StaffList = () => {
                                         </TableCell>
                                         <TableCell>
                                             <IconButton
-                                                onClick={() => handleEditStaff(employee.id)}
+                                                onClick={() => {
+                                                    handleEditStaff(employee.id);
+                                                    handleFetchStaffData(employee.id);
+                                                }}
                                                 color="primary"
                                                 aria-label="edit"
                                             >

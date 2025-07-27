@@ -77,11 +77,11 @@ const StaffRegistrationForm = ({ switchToUpdate, setFormDataForUpdate }) => {
   });
 
   const [departments, setDepartments] = useState([
-    { id: 1, department: "HR" },
-    { id: 2, department: "IT" },
-    { id: 3, department: "Finance" },
-    { id: 4, department: "Operations" },
-    { id: 5, department: "Marketing" }
+    { id: 1, department: "Academy" },
+    { id: 2, department: "Recruitment" },
+    { id: 3, department: "General" },
+    { id: 4, department: "Finance" },
+    { id: 5, department: "Operations" }
   ]);
 
   const [errors, setErrors] = useState({});
@@ -117,13 +117,6 @@ const StaffRegistrationForm = ({ switchToUpdate, setFormDataForUpdate }) => {
       setFormData(formData);
     }
   }, [formData]);
-
-  const roles = [
-    { value: "intern", label: "Intern" },
-    { value: "staff", label: "Staff" },
-    { value: "admin", label: "Admin" },
-    { value: "hr", label: "HR" },
-  ];
 
   const apiUrl = "http://localhost:8000/Sims/register/";
 
@@ -181,8 +174,8 @@ const StaffRegistrationForm = ({ switchToUpdate, setFormDataForUpdate }) => {
     if (!formData.first_name) newErrors.first_name = "First name is required";
     if (!formData.last_name) newErrors.last_name = "Last name is required";
 
-    if (formData.role === "intern" && !formData.department) {
-      newErrors.department = "Department is required for interns";
+    if (formData.role === "staff" && !formData.department) {
+      newErrors.department = "Department is required for staff";
     }
 
     if (!formData.teamName) newErrors.teamName = "Team name is required";
@@ -228,7 +221,7 @@ const StaffRegistrationForm = ({ switchToUpdate, setFormDataForUpdate }) => {
         email: formData.email,
         first_name: formData.first_name,
         last_name: formData.last_name,
-        role: formData.role,
+        role: "staff",
       };
 
       const registerResponse = await axios.post(apiUrl, postData, {
@@ -250,8 +243,8 @@ const StaffRegistrationForm = ({ switchToUpdate, setFormDataForUpdate }) => {
         days: "mon-fri",
         scheme: "FREE",
         user_status: "active",
-        department: "Academy",
-        role: formData.role || "intern",
+        department: formData.department,
+        role: formData.role || "staff",
         reporting_manager_username: "staff1",
         reporting_supervisor_username: "staff1",
         is_attendance_access: formData.workUndertaken.includes("Attendance"),
@@ -302,7 +295,7 @@ const StaffRegistrationForm = ({ switchToUpdate, setFormDataForUpdate }) => {
         last_name: "",
         mobile: "",
         department: "",
-        role: "intern",
+        role: "staff",
         teamName: "",
         workUndertaken: [],
         staffDomain: "",
@@ -526,7 +519,6 @@ const StaffRegistrationForm = ({ switchToUpdate, setFormDataForUpdate }) => {
                     value={formData.department}
                     onChange={handleChange}
                     label="Department"
-                    disabled={formData.role !== "intern"}
                     sx={{ textAlign: 'left' }}
                   >
                     {departments.map((dept) => (
@@ -540,30 +532,6 @@ const StaffRegistrationForm = ({ switchToUpdate, setFormDataForUpdate }) => {
                       {errors.department}
                     </Typography>
                   )}
-                </FormControl>
-              </Grid>
-
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth>
-                  <InputLabel id="role-label">
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                      <AssignmentInd fontSize="small" /> Role
-                    </Box>
-                  </InputLabel>
-                  <Select
-                    labelId="role-label"
-                    name="role"
-                    value={formData.role}
-                    onChange={handleChange}
-                    label="Role"
-                    sx={{ textAlign: 'left' }}
-                  >
-                    {roles.map((role) => (
-                      <MenuItem key={role.value} value={role.value} sx={{ minHeight: '36px' }}>
-                        {role.label}
-                      </MenuItem>
-                    ))}
-                  </Select>
                 </FormControl>
               </Grid>
             </Grid>
@@ -650,7 +618,7 @@ const StaffRegistrationForm = ({ switchToUpdate, setFormDataForUpdate }) => {
                           label={
                             <Box display="flex" alignItems="center">
                               <AttachMoney fontSize="small" style={{ marginRight: "8px" }} />
-                              Payroll
+                              Payment Management
                             </Box>
                           }
                         />
@@ -668,7 +636,7 @@ const StaffRegistrationForm = ({ switchToUpdate, setFormDataForUpdate }) => {
                           label={
                             <Box display="flex" alignItems="center">
                               <Create fontSize="small" style={{ marginRight: "8px" }} />
-                              Creation & Update
+                              Intern Management
                             </Box>
                           }
                         />
@@ -686,7 +654,7 @@ const StaffRegistrationForm = ({ switchToUpdate, setFormDataForUpdate }) => {
                           label={
                             <Box display="flex" alignItems="center">
                               <People fontSize="small" style={{ marginRight: "8px" }} />
-                              Attendance
+                              Attendance Management
                             </Box>
                           }
                         />
@@ -704,7 +672,7 @@ const StaffRegistrationForm = ({ switchToUpdate, setFormDataForUpdate }) => {
                           label={
                             <Box display="flex" alignItems="center">
                               <BusinessCenter fontSize="small" style={{ marginRight: "8px" }} />
-                              Asset
+                              Asset Management
                             </Box>
                           }
                         />
