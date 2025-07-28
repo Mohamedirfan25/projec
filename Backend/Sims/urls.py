@@ -162,4 +162,9 @@ urlpatterns = [
 
     path('deleted-users/', views.DeletedUsersView.as_view(), name='deleted-users'),
     path('user-permissions/', UserPermissionsView.as_view(), name='user-permissions'),
+    
+    # Attendance Claim URLs
+    path('attendance-claims/', views.AttendanceClaimView.as_view(), name='attendance-claims-list'),
+    path('attendance-claims/<uuid:claim_id>/', views.AttendanceClaimView.as_view(), name='attendance-claim-detail'),
+    path('attendance-claims/<uuid:claim_id>/<str:action>/', views.AttendanceClaimActionView.as_view(), name='attendance-claim-action'),
 ]

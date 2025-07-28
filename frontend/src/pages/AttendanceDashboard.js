@@ -111,7 +111,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from 'react-router-dom';
+import AttendanceClaimRequests from './AttendanceClaimRequests';
 import axios from "axios";
 import LeaveList from './LeaveList';
 
@@ -2235,6 +2236,8 @@ const AttendanceDashboard = () => {
         return renderTable();
       case "leave":
         return <LeaveList userRole="staff" />;
+      case "attendance-claims":
+        return <AttendanceClaimRequests onBack={() => setActiveView('dashboard')} />;
       case "profile":
         return renderProfile();
       default:
@@ -2309,6 +2312,10 @@ const AttendanceDashboard = () => {
                 <ToggleButton value="leave">
                   <AssignmentIcon sx={{ mr: 1 }} />
                   Leave List
+                </ToggleButton>
+                <ToggleButton value="attendance-claims">
+                  <AssignmentIcon sx={{ mr: 1 }} />
+                  Attendance Claim Requests
                 </ToggleButton>
               </ToggleButtonGroup>
 

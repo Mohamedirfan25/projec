@@ -627,13 +627,51 @@ class DocumentVersion(models.Model):
     changes = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True,null=True)
 
-    class Meta:
-        unique_together = ('document', 'version_number')
-
     def __str__(self):
-        return f"{self.document.uploader.emp_id} - {self.document.declaration_number} - {self.document.title} - 'version' - {self.version_number}- {self.document.receiver.emp_id if self.document.receiver else 'N/A'}"
+        return f"{self.document.title} - v{self.version_number}"
 
 
+class AttendanceClaim(models.Model):
+    CLAIM_TYPES = [
+        ('MISSING_PUNCH', 'Missing Punch'),
+        ('LEAVE', 'Leave'),
+        ('HALF_DAY', 'Half Day'),
+        ('FULL_DAY', 'Full Day'),
+        ('OTHER', 'Other')
+    ]
+    
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('APPROVED', 'Approved'),
+        ('REJECTED', 'Rejected')
+    ]
+    
+    is_deleted = models.BooleanField(default=False)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='attendance_claims')
+    claim_type = models.CharField(max_length=20, choices=CLAIM_TYPES)
+    date = models.DateField()
+    check_in = models.TimeField(null=True, blank=True)
+    check_out = models.TimeField(null=True, blank=True)
+    reason = models.TextField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewed_claims')
+    review_notes = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-date', '-created_at']
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.get_claim_type_display()} - {self.date}"
+    
+    def save(self, *args, **kwargs):
+        # If claim is approved/rejected, set the reviewed_by field
+        if self.status in ['APPROVED', 'REJECTED'] and not self.reviewed_by:
+            # This should be set by the view when processing the request
+            pass
+        super().save(*args, **kwargs)
 
 
 class AttendanceLog(models.Model):

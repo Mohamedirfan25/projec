@@ -14,8 +14,12 @@ from django.db import transaction
 import logging
 from django.db import IntegrityError
 from django.contrib.auth.decorators import login_required
-from django.db.models import Count
-from django.db.models.functions import ExtractMonth, ExtractYear  # <-- Add this import
+from django.db.models import Count, Q, F, Sum, Case, When, Value, IntegerField
+from django.db.models.functions import ExtractMonth, ExtractYear
+
+# Import specific models and serializers needed for attendance claims
+from .models import AttendanceClaim, Attendance, AttendanceLog, AttendanceEntries, UserData, Department, Temp, Document, DocumentVersion, Log
+from .serializers import AttendanceClaimSerializer, AttendanceSerializer, AttendanceLogSerializer, AttendanceEntriesSerializer, UserDataSerializer, DepartmentSerializer, TempSerializer, DocumentSerializer, DocumentVersionSerializer
 
 
 from django.db.models import OuterRef, Subquery  # <-- Add this line
@@ -35,8 +39,12 @@ from django.db.models import Window, F
 from django.db.models.functions import RowNumber
 
 
-from .models import PasswordResetOTP
-from .serializers import ResetPasswordOTPRequestSerializer, VerifyOTPSerializer  # ✅ Use the correct names
+from .models import PasswordResetOTP, AttendanceClaim
+from .serializers import (
+    ResetPasswordOTPRequestSerializer, 
+    VerifyOTPSerializer,
+    AttendanceClaimSerializer
+)
 
 from django.db.models import Count, Q
 from django.db.models import Q 
@@ -62,8 +70,32 @@ import random
 
 logger = logging.getLogger(__name__)
 
+def get_client_ip(request):
+    """Helper function to get client IP address"""
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0]
+    else:
+        ip = request.META.get('REMOTE_ADDR')
+    return ip
+
 def log_activity(user, action, entity_type, entity_id, description, request):
+    """
+    Helper function to log user activities.
+    """
     try:
+        # Handle cases where entity_id might be a UUID object
+        if hasattr(entity_id, 'hex'):
+            entity_id_str = str(entity_id)
+        else:
+            entity_id_str = str(entity_id) if entity_id is not None else ""
+            
+        # Truncate description if it's too long
+        max_length = 1000  # Based on Log model's TextField
+        if len(description) > max_length:
+            description = description[:max_length-3] + '...'
+            
+        # Create log entry
         Log.objects.create(
             user_id=user,
             table_name=entity_type,
@@ -72,12 +104,11 @@ def log_activity(user, action, entity_type, entity_id, description, request):
             new_data=description,
             user_name=user.username
         )
-        logger.info(f"Activity logged: User {user.username} {action} {entity_type} {entity_id} - {description}")
+        logger.info(f"Activity logged: User {user.username} {action} {entity_type} {entity_id_str} - {description}")
         return True
     except Exception as e:
-        logger.error(f"Error logging activity: {e}")
+        logger.error(f"Error logging activity: {str(e)}")
         return False
-
 
 
 def generate_emp_id(role, department=None):
@@ -4429,14 +4460,6 @@ class AttendanceView(APIView):
         - Staff can only update for assigned interns
         - Admin can update any attendance record
         """
-        def get_client_ip(request):
-            """Helper function to get client IP address"""
-            x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-            if x_forwarded_for:
-                ip = x_forwarded_for.split(',')[0]
-            else:
-                ip = request.META.get('REMOTE_ADDR')
-            return ip
         user = request.user
         try:
             user_temp = Temp.objects.get(user=user)
@@ -4708,19 +4731,15 @@ class AttendanceView(APIView):
 
 
 #-------------------------------------------Changes----------------------------------------------------#
-# from django.db import transaction
-# from django.db.models import OuterRef, Subquery  # <-- Add this line
-
-# from .models import Document, DocumentVersion, Temp
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
 from django.db import transaction
-from django.db.models import OuterRef, Subquery, F
-
-from Sims.models import Document, DocumentVersion, Temp, UserData
-from Sims.serializers import DocumentSerializer, DocumentVersionSerializer
+from django.db.models import OuterRef, Subquery, Q, Sum, F, Count, Case, When, Value, IntegerField
+from django.utils import timezone
+from datetime import datetime, timedelta, date
+import logging
+import json
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from .models import AttendanceClaim
+from .serializers import AttendanceClaimSerializer, DocumentVersionSerializer
 from Sims.permissions import StaffUserDataAccessPermission
 from Sims.utils.email_utils import send_offer_letter_reportlab
 
@@ -5990,6 +6009,256 @@ from io import BytesIO
 
 
 User = get_user_model()
+
+class AttendanceClaimView(APIView):
+    """
+    API View for handling attendance claims.
+    - GET: List all claims (filtered by user role)
+    - POST: Create a new attendance claim
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, claim_id=None):
+        user = request.user
+        
+        # Check user role and filter claims accordingly
+        if user.is_staff or user.is_superuser:
+            # Staff/Admin can see all claims
+            claims = AttendanceClaim.objects.all()
+        else:
+            # Regular users can only see their own claims
+            claims = AttendanceClaim.objects.filter(user=user)
+        
+        # Filter by status if provided
+        status_param = request.query_params.get('status')
+        if status_param:
+            claims = claims.filter(status=status_param.lower())
+        
+        # Filter by date range if provided
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        if start_date and end_date:
+            claims = claims.filter(
+                date__range=[start_date, end_date]
+            )
+        
+        # Get specific claim if ID is provided
+        if claim_id:
+            claims = claims.filter(id=claim_id)
+            if not claims.exists():
+                return Response(
+                    {"detail": "Claim not found or access denied"}, 
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        
+        # Pagination
+        page = request.query_params.get('page', 1)
+        page_size = request.query_params.get('page_size', 10)
+        paginator = Paginator(claims, page_size)
+        
+        try:
+            claims_page = paginator.page(page)
+        except (PageNotAnInteger, EmptyPage):
+            claims_page = paginator.page(1)
+        
+        serializer = AttendanceClaimSerializer(claims_page, many=True)
+        
+        return Response({
+            'count': paginator.count,
+            'total_pages': paginator.num_pages,
+            'current_page': claims_page.number,
+            'results': serializer.data
+        })
+    
+    def post(self, request):
+        """
+        Create a new attendance claim.
+        Required fields: attendance_id, claim_date, reason
+        """
+        user = request.user
+        data = request.data.copy()
+        data['user'] = user.id
+        
+        # Validate attendance exists and belongs to user
+        attendance_id = data.get('attendance')
+        try:
+            attendance = Attendance.objects.get(id=attendance_id)
+            if attendance.user != user and not (user.is_staff or user.is_superuser):
+                return Response(
+                    {"detail": "You can only create claims for your own attendance"}, 
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        except Attendance.DoesNotExist:
+            return Response(
+                {"detail": "Attendance record not found"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check for duplicate pending claims
+        existing_claim = AttendanceClaim.objects.filter(
+            attendance=attendance,
+            status='pending'
+        ).exists()
+        
+        if existing_claim:
+            return Response(
+                {"detail": "A pending claim already exists for this attendance"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        serializer = AttendanceClaimSerializer(data=data)
+        if serializer.is_valid():
+            claim = serializer.save()
+            
+            # Log the activity
+            log_activity(
+                user=user,
+                action='create',
+                entity_type='AttendanceClaim',
+                entity_id=claim.id,
+                description=f"Created attendance claim for {attendance.date}",
+                request=request
+            )
+            
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class AttendanceClaimActionView(APIView):
+    """
+    API View for approving or rejecting attendance claims.
+    PATCH /api/attendance-claims/<claim_id>/<action>/
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def patch(self, request, claim_id, action):
+        user = request.user
+        
+        # Validate action
+        if action not in ['approve', 'reject']:
+            return Response(
+                {"detail": "Invalid action. Must be 'approve' or 'reject'"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get the claim
+        try:
+            claim = AttendanceClaim.objects.get(id=claim_id)
+        except AttendanceClaim.DoesNotExist:
+            return Response(
+                {"detail": "Claim not found"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check permissions
+        if not (user.is_staff or user.is_superuser):
+            return Response(
+                {"detail": "You do not have permission to perform this action"}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Check if claim is already processed
+        if claim.status != 'pending':
+            return Response(
+                {"detail": f"This claim has already been {claim.status}"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Process the action
+        if action == 'approve':
+            claim.status = 'approved'
+            
+            # Get or create the attendance record
+            from django.utils import timezone
+            from datetime import datetime, time as datetime_time
+            
+            # Get the user's Temp record
+            try:
+                temp = Temp.objects.get(user=claim.user)
+            except Temp.DoesNotExist:
+                return Response(
+                    {"detail": "User profile not found"}, 
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Create or update the attendance record
+            attendance, created = Attendance.objects.get_or_create(
+                user=claim.user,
+                date=claim.date,
+                defaults={
+                    'check_in': claim.check_in or datetime_time(9, 0),  # Default check-in at 9 AM
+                    'check_out': claim.check_out or datetime_time(18, 0),  # Default check-out at 6 PM
+                    'status': 'present',
+                    'created_by': claim.user,
+                    'updated_by': claim.user,
+                    'emp_id': temp
+                }
+            )
+            
+            # Update the attendance record with claimed values
+            if claim.check_in:
+                attendance.check_in = claim.check_in
+            if claim.check_out:
+                attendance.check_out = claim.check_out
+            attendance.status = 'present'
+            attendance.updated_by = user
+            attendance.updated_at = timezone.now()
+            attendance.save()
+            
+            # Create attendance log entries
+            if claim.check_in:
+                AttendanceLog.objects.create(
+                    attendance=attendance,
+                    emp_id=temp,
+                    time=datetime.combine(claim.date, claim.check_in),
+                    reason='CLAIM_APPROVED',
+                    is_in=True,
+                    ip_address=get_client_ip(request)
+                )
+                
+            if claim.check_out:
+                AttendanceLog.objects.create(
+                    attendance=attendance,
+                    emp_id=temp,
+                    time=datetime.combine(claim.date, claim.check_out),
+                    reason='CLAIM_APPROVED',
+                    is_in=False,
+                    ip_address=get_client_ip(request)
+                )
+            
+            message = "Claim approved and attendance record updated successfully"
+        else:  # reject
+            claim.status = 'rejected'
+            # Require a reason for rejection
+            reason = request.data.get('reason')
+            if not reason:
+                return Response(
+                    {"detail": "Reason is required when rejecting a claim"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            claim.review_notes = reason
+            message = "Claim rejected"
+        
+        claim.reviewed_by = user
+        claim.reviewed_at = timezone.now()
+        claim.save()
+        
+        # Log the activity
+        log_activity(
+            user=user,
+            action=action,
+            entity_type='AttendanceClaim',
+            entity_id=claim.id,
+            description=f"{action.capitalize()}d attendance claim for {claim.attendance.date}",
+            request=request
+        )
+        
+        return Response({
+            "message": message,
+            "claim": AttendanceClaimSerializer(claim).data
+        })
+
 
 def generate_completed_certificate(request, emp_id):
     try:

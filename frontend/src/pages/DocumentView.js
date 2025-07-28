@@ -85,49 +85,79 @@ const DocumentView = ({ darkMode }) => {
           },
         }
       );
+      console.log("Temp Data:", response.data);
       setCurrentUser(response.data);
+      localStorage.setItem("emp_id", response.data.emp_id);
     } catch (error) {
       console.error("Error fetching user data:", error);
       alert("Failed to load user information");
     }
   };
 
+  // Document type mapping for display names and filtering
+const DOCUMENT_TYPES = {
+  'Resume': 'Resume',
+  'Adhaar Card': 'Adhaar Card',
+  'Bonafide Certificate': 'Bonafide Certificate',
+  'College ID': 'College ID'
+};
+
   // Fetch documents from backend
   const fetchDocuments = async () => {
     const token = localStorage.getItem("token");
+    const emp_id = localStorage.getItem("emp_id");
     try {
       const response = await axios.get(
-        "http://localhost:8000/Sims/documents/",
+        `http://localhost:8000/Sims/documents/emp/${emp_id}/`,
         {
           headers: {
             Authorization: `Token ${token}`,
-            "Content-Type": "application/json",
+            'Content-Type': 'application/json',
           },
         }
       );
+      console.log("Documents Data:", response.data);
 
-      const data = response.data;
-      const formattedDocs = data.map((doc) => ({
-        id: doc.id,
-        name: doc.title,
-        type: getFileType(doc.file_name || "unknown.txt"),
-        uploaded: new Date(doc.created_at).toLocaleDateString(),
-        size: formatFileSize(doc.file_size),
-        file_name: doc.file_name,
-        file_url: `http://localhost:8000${doc.file}`,
-      }));
+      // Transform the response data to match the expected format
+    // Filter and transform the response data
+    const formattedDocs = response.data.results
+      .filter(doc => {
+        // Check if document title matches any of our required types
+        return Object.values(DOCUMENT_TYPES).includes(doc.title);
+      })
+      .map(doc => {
+        // Get file extension for type detection
+        const fileExt = doc.file ? doc.file.split('.').pop().toLowerCase() : '';
+        const fileName = doc.file ? doc.file.split('/').pop() : 'No file name';
+        
+        return {
+          ...doc,
+          id: doc.id,
+          fileName: doc.title, // Use the title as the display name
+          originalFileName: fileName,
+          fileType: getFileType(fileName),
+          fileSize: doc.file_size ? formatFileSize(doc.file_size) : '0 Bytes',
+          uploadedAt: new Date(doc.created_at).toLocaleDateString(),
+          fileUrl: doc.file,
+          status: doc.status
+        };
+      });
 
-      setDocuments(formattedDocs);
-    } catch (error) {
-      console.error("Error fetching documents:", error);
-      alert("Failed to load documents");
-    }
-  };
+    // Sort documents by title for consistent ordering
+    formattedDocs.sort((a, b) => a.fileName.localeCompare(b.fileName));
+    
+    setDocuments(formattedDocs);
+  } catch (error) {
+    console.error("Error fetching documents:", error);
+    alert("Failed to load documents. Please try again later.");
+  }
+};
 
   // Fetch on component mount
   useEffect(() => {
     fetchCurrentUser();
     fetchDocuments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const getFileIcon = (type) => {
@@ -336,7 +366,7 @@ const DocumentView = ({ darkMode }) => {
               flexShrink: 0,
             }}
           >
-            {getFileIcon(params.row.type)}
+            {getFileIcon(params.row.fileType)}
           </Avatar>
           <Box sx={{ overflow: "hidden" }}>
             <Typography
@@ -357,14 +387,14 @@ const DocumentView = ({ darkMode }) => {
               variant="caption"
               sx={{ color: darkMode ? "#A1A1AA" : "#64748B" }}
             >
-              {params.row.size}
+              {params.row.fileSize}
             </Typography>
           </Box>
         </Box>
       ),
     },
     {
-      field: "uploaded",
+      field: "uploadedAt",
       headerName: "Upload Date",
       flex: 1,
       minWidth: 150,
