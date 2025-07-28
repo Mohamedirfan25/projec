@@ -249,7 +249,7 @@ const StaffRegistrationForm = ({ switchToUpdate, setFormDataForUpdate }) => {
         reporting_supervisor_username: "staff1",
         is_attendance_access: formData.workUndertaken.includes("Attendance"),
         is_payroll_access: formData.workUndertaken.includes("Payroll"),
-        is_internmanagement_access: formData.workUndertaken.includes("Intern Management"),
+        is_internmanagement_access: formData.workUndertaken.includes("Creation"),
         is_assert_access: formData.workUndertaken.includes("Assets"),
         certicate_sent: "false",
       };
