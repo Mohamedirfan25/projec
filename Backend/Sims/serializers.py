@@ -543,3 +543,37 @@ class AssertAssignmentLogSerializer(serializers.ModelSerializer):
         model = AssertAssignmentLog
         fields = '__all__'
         read_only_fields = ('timestamp',)
+
+
+class AttendanceClaimSerializer(serializers.ModelSerializer):
+    user = serializers.CharField(source='user.username', read_only=True)
+    reviewed_by_username = serializers.CharField(source='reviewed_by.username', read_only=True)
+    
+    class Meta:
+        model = AttendanceClaim
+        fields = [
+            'id', 'user', 'claim_type', 'date', 'check_in', 'check_out', 
+            'reason', 'status', 'reviewed_by', 'reviewed_by_username', 
+            'review_notes', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'user', 'created_at', 'updated_at', 'reviewed_by']
+    
+    def validate(self, data):
+        """
+        Validate that check_in is before check_out when both are provided.
+        """
+        check_in = data.get('check_in')
+        check_out = data.get('check_out')
+        
+        if check_in and check_out and check_in >= check_out:
+            raise serializers.ValidationError("Check-out time must be after check-in time.")
+            
+        return data
+    
+    def create(self, validated_data):
+        """
+        Create and return a new AttendanceClaim instance, given the validated data.
+        """
+        # Set the current user as the claim creator
+        validated_data['user'] = self.context['request'].user
+        return super().create(validated_data)

@@ -65,10 +65,14 @@ const AttendanceManagement = () => {
   // Attendance Claim Dialog State
   const [claimDialogOpen, setClaimDialogOpen] = useState(false);
   const [claimForm, setClaimForm] = useState({
-    date: new Date(),
+    fromDate: new Date(),
+    fromDayType: 'full',
+    fromHalfDayType: 'first',
+    toDate: new Date(),
+    toDayType: 'full',
+    toHalfDayType: 'first',
     forPeriod: '',
-    dayType: 'full',
-    halfDayType: 'first',
+    comment: '',
   });
   const [formErrors, setFormErrors] = useState({});
 
@@ -402,9 +406,17 @@ const AttendanceManagement = () => {
     const selectedYearValue = year || currentYear;
     const formattedPeriod = `${selectedMonthValue} ${selectedYearValue}`;
     
+    // Set default values for fromDate and toDate
+    const today = new Date();
     setClaimForm(prev => ({
       ...prev,
-      forPeriod: formattedPeriod
+      fromDate: today,
+      toDate: today,
+      forPeriod: formattedPeriod,
+      fromDayType: 'full',
+      fromHalfDayType: 'first',
+      toDayType: 'full',
+      toHalfDayType: 'first'
     }));
     
     setClaimDialogOpen(true);
@@ -412,11 +424,16 @@ const AttendanceManagement = () => {
 
   const handleClaimDialogClose = () => {
     setClaimDialogOpen(false);
+    const today = new Date();
     setClaimForm({
-      date: new Date(),
+      fromDate: today,
+      toDate: today,
       forPeriod: '',
-      dayType: 'full',
-      halfDayType: 'first',
+      fromDayType: 'full',
+      fromHalfDayType: 'first',
+      toDayType: 'full',
+      toHalfDayType: 'first',
+      comment: ''
     });
     setFormErrors({});
   };
@@ -433,8 +450,14 @@ const AttendanceManagement = () => {
     if (!claimForm.forPeriod.trim()) {
       errors.forPeriod = 'For Period is required';
     }
-    if (!claimForm.date) {
-      errors.date = 'Date is required';
+    if (!claimForm.fromDate) {
+      errors.fromDate = 'From Date is required';
+    }
+    if (!claimForm.toDate) {
+      errors.toDate = 'To Date is required';
+    }
+    if (claimForm.fromDate && claimForm.toDate && claimForm.fromDate > claimForm.toDate) {
+      errors.dateRange = 'From Date cannot be after To Date';
     }
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
@@ -909,26 +932,8 @@ const AttendanceManagement = () => {
         <form onSubmit={handleClaimSubmit}>
           <DialogContent sx={{ p: 3 }}>
             <Grid container spacing={3}>
-              {/* Current Date */}
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Date"
-                  value={new Date().toLocaleDateString('en-US', { 
-                    year: 'numeric', 
-                    month: 'long', 
-                    day: 'numeric' 
-                  })}
-                  InputProps={{
-                    readOnly: true,
-                  }}
-                  variant="outlined"
-                  size="small"
-                />
-              </Grid>
-              
               {/* For Period */}
-              <Grid item xs={12} sm={6}>
+              <Grid item xs={12}>
                 <TextField
                   fullWidth
                   label="For Period"
@@ -943,20 +948,24 @@ const AttendanceManagement = () => {
                 />
               </Grid>
               
-              {/* Date Picker */}
+              {/* From Date and Day Type */}
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'medium' }}>From</Typography>
+              </Grid>
+              
               <Grid item xs={12} sm={6}>
                 <LocalizationProvider dateAdapter={AdapterDateFns}>
                   <DatePicker
-                    label="Select Date"
-                    value={claimForm.date}
-                    onChange={(date) => handleClaimFormChange('date', date)}
+                    label="From Date"
+                    value={claimForm.fromDate}
+                    onChange={(date) => handleClaimFormChange('fromDate', date)}
                     renderInput={(params) => (
                       <TextField
                         {...params}
                         fullWidth
                         size="small"
-                        error={!!formErrors.date}
-                        helperText={formErrors.date}
+                        error={!!formErrors.fromDate}
+                        helperText={formErrors.fromDate}
                         required
                       />
                     )}
@@ -964,14 +973,13 @@ const AttendanceManagement = () => {
                 </LocalizationProvider>
               </Grid>
               
-              {/* Day Type */}
               <Grid item xs={12} sm={6}>
                 <FormControl fullWidth size="small">
-                  <InputLabel>Day</InputLabel>
+                  <InputLabel>Day Type</InputLabel>
                   <Select
-                    value={claimForm.dayType}
-                    onChange={(e) => handleClaimFormChange('dayType', e.target.value)}
-                    label="Day"
+                    value={claimForm.fromDayType}
+                    onChange={(e) => handleClaimFormChange('fromDayType', e.target.value)}
+                    label="Day Type"
                   >
                     <MenuItem value="full">Full Day</MenuItem>
                     <MenuItem value="half">Half Day</MenuItem>
@@ -979,15 +987,15 @@ const AttendanceManagement = () => {
                 </FormControl>
               </Grid>
               
-              {/* Half Day Type (conditional) */}
-              {claimForm.dayType === 'half' && (
+              {/* From Half Day Type (conditional) */}
+              {claimForm.fromDayType === 'half' && (
                 <Grid item xs={12}>
                   <FormControl fullWidth size="small">
-                    <InputLabel>Half Day</InputLabel>
+                    <InputLabel>Half Day Type</InputLabel>
                     <Select
-                      value={claimForm.halfDayType}
-                      onChange={(e) => handleClaimFormChange('halfDayType', e.target.value)}
-                      label="Half Day"
+                      value={claimForm.fromHalfDayType}
+                      onChange={(e) => handleClaimFormChange('fromHalfDayType', e.target.value)}
+                      label="Half Day Type"
                     >
                       <MenuItem value="first">First Half</MenuItem>
                       <MenuItem value="second">Second Half</MenuItem>
@@ -995,6 +1003,77 @@ const AttendanceManagement = () => {
                   </FormControl>
                 </Grid>
               )}
+              
+              {/* To Date and Day Type */}
+              <Grid item xs={12} sx={{ mt: 2 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'medium' }}>To</Typography>
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <LocalizationProvider dateAdapter={AdapterDateFns}>
+                  <DatePicker
+                    label="To Date"
+                    value={claimForm.toDate}
+                    onChange={(date) => handleClaimFormChange('toDate', date)}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        fullWidth
+                        size="small"
+                        error={!!formErrors.toDate}
+                        helperText={formErrors.toDate || (formErrors.dateRange || '')}
+                        required
+                      />
+                    )}
+                  />
+                </LocalizationProvider>
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Day Type</InputLabel>
+                  <Select
+                    value={claimForm.toDayType}
+                    onChange={(e) => handleClaimFormChange('toDayType', e.target.value)}
+                    label="Day Type"
+                  >
+                    <MenuItem value="full">Full Day</MenuItem>
+                    <MenuItem value="half">Half Day</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              
+              {/* To Half Day Type (conditional) */}
+              {claimForm.toDayType === 'half' && (
+                <Grid item xs={12}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel>Half Day Type</InputLabel>
+                    <Select
+                      value={claimForm.toHalfDayType}
+                      onChange={(e) => handleClaimFormChange('toHalfDayType', e.target.value)}
+                      label="Half Day Type"
+                    >
+                      <MenuItem value="first">First Half</MenuItem>
+                      <MenuItem value="second">Second Half</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+              )}
+              
+              {/* Comment Box */}
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Comments (Optional)"
+                  value={claimForm.comment}
+                  onChange={(e) => handleClaimFormChange('comment', e.target.value)}
+                  variant="outlined"
+                  size="small"
+                  multiline
+                  rows={3}
+                  placeholder="Add any additional comments here..."
+                />
+              </Grid>
             </Grid>
           </DialogContent>
           
