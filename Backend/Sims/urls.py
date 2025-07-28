@@ -21,6 +21,7 @@ urlpatterns = [
     path('personal-data/<str:emp_id>/', views.PersonalDataView.as_view(),
          name='personal-data-detail'),  # Corrected
 
+    path('all-user-data/', views.AllUserDataView.as_view(), name='all-user-data'),
     path('user-data/', views.UserDataView.as_view(), name='user-data-list'),
     path('user-data/<str:emp_id>/', views.UserDataView.as_view(),
          name='user-data-detail'),  # Corrected

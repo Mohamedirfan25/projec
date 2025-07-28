@@ -561,6 +561,49 @@ class UserDataView(APIView):
         user_data.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+class AllUserDataView(APIView):
+    """
+    Simple API endpoint that returns all user data from UserData model
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            # Get all users from UserData model
+            user = request.user
+            user_temp = Temp.objects.get(user=user,is_deleted=False)
+            
+            users = UserData.objects.filter(is_deleted=False).select_related('user')
+            
+            # Serialize the data
+            user_data = []
+            for user in users:
+                user_data.append({
+                    'id': user.user.id,
+                    'username': user.user.username,
+                    'email': user.user.email,
+                    'is_active': user.user.is_active,
+                    'role': user_temp.role,
+                    'access_rights': {
+                        'is_attendance_access': getattr(user, 'is_attendance_access', False),
+                        'is_payroll_access': getattr(user, 'is_payroll_access', False),
+                        'is_internmanagement_access': getattr(user, 'is_internmanagement_access', False),
+                        'is_assert_access': getattr(user, 'is_assert_access', False)
+                    }
+                })
+            
+            return Response({
+                'status': 'success',
+                'count': len(user_data),
+                'users': user_data
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 class UserUpdateView(APIView):
     def patch(self, request, emp_id):
         try:

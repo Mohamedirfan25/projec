@@ -30,100 +30,89 @@ const LoginPage = () => {
     e.preventDefault();
     setLoading(true);
     setError('');
-
+  
     if (!username || !password) {
       setError('Both fields are required');
       setLoading(false);
       return;
     }
-
+  
     try {
-      const response = await axios.post('http://localhost:8000/Sims/login/', {
+      // 1. Get authentication token
+      const loginResponse = await axios.post('http://localhost:8000/Sims/login/', {
         username,
         password,
       });
-
-      if (response.data?.token) {
-        localStorage.setItem('token', response.data.token);
-        const token = localStorage.getItem('token');
-        console.log(token);
-        try {
-          const responseUser = await axios.get(
-            'http://localhost:8000/Sims/temps/',
-            { headers: { Authorization: `Token ${token}` } }
-          );
-      
-          const responseUserData = await axios.get(
-            'http://localhost:8000/Sims/user-data/',
-            { headers: { Authorization: `Token ${token}` } }
-          );
-      
-          const usersArray = Array.isArray(responseUser.data) ? responseUser.data : [];
-          const matchingUsers = usersArray.filter(user => user.username === username);
-      
-          if (matchingUsers.length > 0) {
-            const userRoles = matchingUsers.map(user => user.role.toLowerCase());
-      
-            // 👇 store access flags for dashboard visibility
-            const currentUserData = responseUserData.data.find(user => user.username === username);
-            if (currentUserData) {
-              localStorage.setItem("access_rights", JSON.stringify({
-                is_attendance_access: currentUserData.is_attendance_access,
-                is_payroll_access: currentUserData.is_payroll_access,
-                is_internmanagement_access: currentUserData.is_internmanagement_access,
-                is_assert_access: currentUserData.is_assert_access,
-              }));
-            }
-      
-            if (userRoles.includes('admin')) {
-              navigate('/AdminDashboard');
-            } else if (userRoles.includes('staff')) {
-              navigate('/Intern');
-            } else {
-              navigate('/Dash');
-            }
-          } else {
-            navigate('/Dash');
-          }
-        } catch (err) {
-          setError('Failed to fetch user data');
-          localStorage.removeItem('token');
-        }
-        if (!token) {
-          setError('Authentication failed');
-          return;
-        }
-
-        try {
-          const responseUser = await axios.get(
-            'http://localhost:8000/Sims/temps/',
-            { headers: { Authorization: `Token ${token}` } }
-          );
-
-          const usersArray = Array.isArray(responseUser.data) ? responseUser.data : [];
-          const matchingUsers = usersArray.filter(user => user.username === username);
-
-          if (matchingUsers.length > 0) {
-            const userRoles = matchingUsers.map(user => user.role.toLowerCase());
-            if (userRoles.includes('admin')) {
-              navigate('/AdminDashboard');
-            } else if (userRoles.includes('staff')) {
-              navigate('/Intern');
-            } else {
-              navigate('/Dash');
-            }
-          } else {
-            navigate('/Dash');
-          }
-        } catch (err) {
-          setError('Failed to fetch user data');
-          localStorage.removeItem('token');
+  
+      if (!loginResponse.data?.token) {
+        throw new Error('No token received');
+      }
+  
+      const { token } = loginResponse.data;
+      localStorage.setItem('token', token);
+      localStorage.setItem('username', username);
+      localStorage.setItem('isLoggedIn', 'true');
+  
+      // 2. Get user data including access rights
+      const userDataResponse = await axios.get(
+        'http://localhost:8000/Sims/all-user-data/',
+        { headers: { Authorization: `Token ${token}` } }
+      );
+      console.log("userDataResponse",userDataResponse.data);
+  
+      if (userDataResponse.data.status !== 'success') {
+        throw new Error('Failed to fetch user data');
+      }
+  
+      // 3. Find current user in the response
+      const currentUser = userDataResponse.data.users.find(
+        (u) => u.username === username
+      );
+      console.log( "currentUser",currentUser);
+  
+      if (!currentUser) {
+        throw new Error('User data not found');
+      }
+  
+      // 4. Store user data in localStorage
+      localStorage.setItem('userData', JSON.stringify(currentUser));
+      localStorage.setItem('access_rights', JSON.stringify(currentUser.access_rights || {}));
+      localStorage.setItem('role', currentUser.role || 'user');
+      localStorage.setItem('is_staff', currentUser.is_staff ? 'true' : 'false');
+  
+      // 5. Redirect based on role and access rights
+      if (currentUser.role === 'admin') {
+        navigate('/AdminDashboard');
+      } else if (currentUser.role === 'staff') {
+        // For staff, check access rights
+        const { access_rights } = currentUser;
+        
+        if (access_rights.is_internmanagement_access) {
+          navigate('/Intern');
+        } else if (access_rights.is_attendance_access) {
+          navigate('/attendance');
+        } else if (access_rights.is_payroll_access) {
+          navigate('/payroll');
+        } else if (access_rights.is_assert_access) {
+          navigate('/asset');
+        } else {
+          navigate('/Dash');
         }
       } else {
-        setError(response.data?.message || 'Invalid email or password');
+        // For other roles (including interns)
+        navigate('/Dash');
       }
-    } catch (err) {
-      setError(err.response?.data?.message || 'Invalid email or password');
+  
+    } catch (error) {
+      console.error('Login error:', error);
+      setError(
+        error.response?.data?.message ||
+        error.message ||
+        'Invalid username or password. Please try again.'
+      );
+      localStorage.removeItem('token');
+      localStorage.removeItem('username');
+      localStorage.removeItem('isLoggedIn');
     } finally {
       setLoading(false);
     }
