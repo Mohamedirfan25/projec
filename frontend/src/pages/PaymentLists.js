@@ -31,7 +31,9 @@ import {
   ListItemIcon,
   ListItemText,
   Menu,
-  Divider
+  Divider,
+  Skeleton,
+  TableRow as MuiTableRow
 } from '@mui/material';
 import { 
   Search as SearchIcon, 
@@ -47,6 +49,42 @@ import {
   AttachFile as AttachFileIcon,
   Close as CloseIcon
 } from '@mui/icons-material';
+
+const ShimmerRow = ({ columns }) => (
+  <MuiTableRow>
+    {Array(columns.length).fill().map((_, index) => (
+      <TableCell key={index}>
+        <Skeleton variant="rectangular" width="100%" height={20} animation="wave" />
+      </TableCell>
+    ))}
+  </MuiTableRow>
+);
+
+const ShimmerTable = ({ rows = 5, columns = 7 }) => (
+  <TableContainer component={Paper} sx={{ 
+    borderRadius: 3, 
+    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+    border: '1px solid',
+    borderColor: 'divider'
+  }}>
+    <Table>
+      <TableHead>
+        <TableRow>
+          {Array(columns).fill().map((_, index) => (
+            <TableCell key={index}>
+              <Skeleton variant="text" width="80%" height={24} animation="wave" />
+            </TableCell>
+          ))}
+        </TableRow>
+      </TableHead>
+      <TableBody>
+        {Array(rows).fill().map((_, rowIndex) => (
+          <ShimmerRow key={rowIndex} columns={columns} />
+        ))}
+      </TableBody>
+    </Table>
+  </TableContainer>
+);
 
 const PaymentLists = () => {
   const [activeTab, setActiveTab] = useState('InProgress');
@@ -80,7 +118,7 @@ const PaymentLists = () => {
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [rowMenuAnchorEl, setRowMenuAnchorEl] = useState(null);
   const [selectedRow, setSelectedRow] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const [paymentForm, setPaymentForm] = useState({
@@ -109,6 +147,7 @@ const PaymentLists = () => {
   useEffect(() => {
     const fetchInterns = async () => {
       try {
+        setLoading(true);
         const token = localStorage.getItem("token");
     
         // Fetch all required data in parallel
@@ -184,8 +223,11 @@ const PaymentLists = () => {
         });
     
         setInterns(formatted);
+        setLoading(false);
       } catch (error) {
         console.error("Failed to fetch interns:", error);
+        setLoading(false);
+        setError("Failed to load interns. Please try again later.");
       }
     };
     
@@ -598,18 +640,71 @@ const PaymentLists = () => {
   const menuOpen = Boolean(anchorEl);
   const rowMenuOpen = Boolean(rowMenuAnchorEl);
 
+  const handleTabChange = (event, newValue) => {
+    setActiveTab(newValue);
+    setPage(1); // Reset to first page when changing tabs
+  };
+
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <Typography variant="h6">Loading...</Typography>
+      <Box sx={{ p: 3, maxWidth: 1400, margin: '0 auto' }}>
+        {/* Shimmer for search and filter bar */}
+        <Box sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          mb: 3,
+          backgroundColor: 'background.paper',
+          p: 3,
+          borderRadius: 3,
+          boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
+            <Skeleton variant="rectangular" width={200} height={40} animation="wave" />
+            <Skeleton variant="rectangular" width={350} height={40} animation="wave" />
+            <Skeleton variant="circular" width={40} height={40} animation="wave" />
+          </Box>
+          <Skeleton variant="rectangular" width={150} height={40} animation="wave" />
+        </Box>
+        
+        {/* Shimmer for tabs */}
+        <Box sx={{ mb: 3 }}>
+          <Tabs 
+            value={activeTab} 
+            onChange={handleTabChange} 
+            sx={{ 
+              '& .MuiTabs-indicator': { 
+                height: 3,
+                borderRadius: '3px 3px 0 0'
+              } 
+            }}
+          >
+            {['InProgress', 'Completed', 'Discontinued'].map((tab) => (
+              <Tab 
+                key={tab}
+                value={tab}
+                label={tab}
+                sx={{ 
+                  textTransform: 'none', 
+                  minWidth: 'auto',
+                  px: 3,
+                  '&.Mui-selected': { color: 'primary.main' }
+                }}
+              />
+            ))}
+          </Tabs>
+        </Box>
+        
+        {/* Shimmer for table */}
+        <ShimmerTable rows={5} columns={columns.length} />
       </Box>
     );
   }
 
   if (error) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <Typography variant="h6" color="error">{error}</Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
+        <Typography color="error">{error}</Typography>
       </Box>
     );
   }
@@ -778,10 +873,7 @@ const PaymentLists = () => {
 
       <Tabs 
         value={activeTab} 
-        onChange={(e, newValue) => {
-          setActiveTab(newValue);
-          setPage(1); // Reset to first page when changing tabs
-        }}
+        onChange={handleTabChange}
         sx={{ 
           mb: 3,
           '& .MuiTabs-indicator': {
@@ -858,7 +950,13 @@ const PaymentLists = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {paginatedInterns.length > 0 ? (
+            {loading ? (
+              // Show shimmer rows when loading
+              Array(rowsPerPage).fill().map((_, index) => (
+                <ShimmerRow key={`shimmer-${index}`} columns={columns.length} />
+              ))
+            ) : paginatedInterns.length > 0 ? (
+              // Show actual data when loaded
               paginatedInterns.map((intern) => (
                 <TableRow 
                   key={intern.id} 
@@ -1129,71 +1227,79 @@ const PaymentLists = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {paginatedPayments.map((payment) => (
-                  <TableRow 
-                    key={payment.id}
-                    hover
-                    sx={{ 
-                      '&:hover': {
-                        backgroundColor: 'action.hover'
-                      }
-                    }}
-                  >
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <Avatar 
-                          sx={{ 
-                            width: 36, 
-                            height: 36, 
-                            mr: 2,
-                            bgcolor: 'primary.main',
-                            color: 'common.white'
+                {loading ? (
+                  // Show shimmer rows when loading payments
+                  Array(paymentRowsPerPage).fill().map((_, index) => (
+                    <ShimmerRow key={`shimmer-${index}`} columns={paymentColumns.length} />
+                  ))
+                ) : paginatedPayments.length > 0 ? (
+                  // Show actual data when loaded
+                  paginatedPayments.map((payment) => (
+                    <TableRow 
+                      key={payment.id}
+                      hover
+                      sx={{ 
+                        '&:hover': {
+                          backgroundColor: 'action.hover'
+                        }
+                      }}
+                    >
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                          <Avatar 
+                            sx={{ 
+                              width: 36, 
+                              height: 36, 
+                              mr: 2,
+                              bgcolor: 'primary.main',
+                              color: 'common.white'
+                            }}
+                          >
+                            {payment.internName[0]}
+                          </Avatar>
+                          <Typography fontWeight={600}>
+                            {payment.internName}
+                          </Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell>{payment.internId}</TableCell>
+                      <TableCell>₹{payment.amount}</TableCell>
+                      <TableCell>{payment.date}</TableCell>
+                      <TableCell>{payment.method}</TableCell>
+                      <TableCell>
+                        <Chip
+                          label={payment.status}
+                          size="small"
+                          sx={{
+                            backgroundColor: statusColors[payment.status]?.bg || '#f5f5f5',
+                            color: statusColors[payment.status]?.text || 'text.primary',
+                            fontWeight: 500
                           }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <IconButton 
+                          color="primary"
+                          onClick={() => handleEditPayment(payment)}
                         >
-                          {payment.internName[0]}
-                        </Avatar>
-                        <Typography fontWeight={600}>
-                          {payment.internName}
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell>{payment.internId}</TableCell>
-                    <TableCell>₹{payment.amount}</TableCell>
-                    <TableCell>{payment.date}</TableCell>
-                    <TableCell>{payment.method}</TableCell>
-                    <TableCell>
-                      <Chip
-                        label={payment.status}
-                        size="small"
-                        sx={{
-                          backgroundColor: statusColors[payment.status]?.bg || '#f5f5f5',
-                          color: statusColors[payment.status]?.text || 'text.primary',
-                          fontWeight: 500
-                        }}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <IconButton 
-                        color="primary"
-                        onClick={() => handleEditPayment(payment)}
-                      >
-                        <EditIcon />
-                      </IconButton>
+                          <EditIcon />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={paymentColumns.length} sx={{ textAlign: 'center', py: 4 }}>
+                      <Typography variant="body1" color="text.secondary">
+                        No payments found
+                      </Typography>
                     </TableCell>
                   </TableRow>
-                ))}
+                )}
               </TableBody>
             </Table>
           </TableContainer>
-          {filteredPayments.length === 0 ? (
-            <Box sx={{ 
-              textAlign: 'center', 
-              p: 5, 
-              color: 'text.secondary'
-            }}>
-              <Typography variant="h6">No payments found</Typography>
-            </Box>
-          ) : (
+          {filteredPayments.length > 0 && (
             <Box sx={{ 
               display: 'flex', 
               justifyContent: 'space-between', 
