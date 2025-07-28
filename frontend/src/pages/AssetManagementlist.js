@@ -28,7 +28,8 @@ import {
     Modal,
     CircularProgress,
     Skeleton,
-    TablePagination
+    TablePagination,
+    Menu
 } from '@mui/material';
 import {
     Add as AddIcon,
@@ -36,18 +37,18 @@ import {
     Search as SearchIcon,
     FilterList as FilterListIcon,
     Delete as DeleteIcon,
-    MoreVert as MoreVertIcon
+    MoreVert as MoreVertIcon,
+    Edit as EditIcon
 } from '@mui/icons-material';
 
 // Shimmer loading component
 const ShimmerRow = ({ columns = 9 }) => (
     <TableRow>
-        <TableCell padding="checkbox">
-            <Skeleton variant="rectangular" width={20} height={20} />
-        </TableCell>
-        {Array(columns - 1).fill(0).map((_, index) => (
+        {Array(columns).fill(0).map((_, index) => (
             <TableCell key={index}>
-                <Skeleton variant="text" width="80%" height={24} />
+                <Box sx={{ py: 1 }}>
+                    <Skeleton variant="rectangular" width="100%" height={20} />
+                </Box>
             </TableCell>
         ))}
     </TableRow>
@@ -62,8 +63,9 @@ const AssetManagement = () => {
     const [expanded, setExpanded] = useState(false);
     const [selectedAssets, setSelectedAssets] = useState([]);
     const [page, setPage] = useState(0);
-    const [rowsPerPage, setRowsPerPage] = useState(100); // Increased default rows per page to 100
+    const [rowsPerPage, setRowsPerPage] = useState(100); 
     const [loading, setLoading] = useState(true);
+    const [initialLoad, setInitialLoad] = useState(true);
     const [error, setError] = useState(null);
     
     // Modal and form states
@@ -85,12 +87,22 @@ const AssetManagement = () => {
     const [historyData, setHistoryData] = useState([]);
     const [selectedAssetId, setSelectedAssetId] = useState('');
 
+    // Action menu states
+    const [actionMenuAnchorEl, setActionMenuAnchorEl] = useState(null);
+    const [currentActionAsset, setCurrentActionAsset] = useState(null);
+
     // Fetch assets data
     const fetchAssets = useCallback(async () => {
+        if (initialLoad) {
+            setLoading(true);
+        }
+        
         const token = localStorage.getItem("token");
         if (!token) {
             console.error("No authentication token found");
             setError(new Error("Authentication required"));
+            setLoading(false);
+            setInitialLoad(false);
             return [];
         }
 
@@ -176,8 +188,11 @@ const AssetManagement = () => {
             console.error("Error fetching assets:", error);
             setError(error);
             return [];
+        } finally {
+            setLoading(false);
+            setInitialLoad(false);
         }
-    }, []);
+    }, [initialLoad]);
 
     // Fetch departments
     const fetchDepartments = useCallback(async () => {
@@ -284,8 +299,10 @@ const AssetManagement = () => {
     };
 
     useEffect(() => {
-        fetchData();
-    }, [fetchAssets, fetchDepartments, fetchInternList]);
+        fetchAssets().then(assets => {
+            setAssets(assets);
+        });
+    }, [fetchAssets]);
 
     const fetchAssetHistory = async (assetId) => {
         if (!assetId) {
@@ -333,7 +350,7 @@ const AssetManagement = () => {
     const fetchAvailableInterns = useCallback((department) => {
         const available = assets
             .filter(asset => 
-                asset.inhand &&  // Changed to filter inhand: true
+                asset.inhand &&  
                 asset.department === department && 
                 asset.empId
             )
@@ -616,6 +633,17 @@ const AssetManagement = () => {
         }
     };
 
+    const handleActionMenuOpen = (event, asset) => {
+        event.stopPropagation();
+        setCurrentActionAsset(asset);
+        setActionMenuAnchorEl(event.currentTarget);
+    };
+
+    const handleActionMenuClose = () => {
+        setActionMenuAnchorEl(null);
+        setCurrentActionAsset(null);
+    };
+
     const renderAssetList = () => (
         <Card>
             <CardContent>
@@ -768,7 +796,12 @@ const AssetManagement = () => {
                             size="small"
                             disabled={loading}
                         >
-                            {loading ? <CircularProgress size={24} /> : 'Delete Selected'}
+                            {loading ? (
+                                <>
+                                    <CircularProgress size={24} />
+                                    Processing...
+                                </>
+                            ) : 'Delete Selected'}
                         </Button>
                     </Box>
                 )}
@@ -802,17 +835,7 @@ const AssetManagement = () => {
                             {loading ? (
                                 // Show shimmer effect while loading
                                 <>
-                                    <TableRow>
-                                        <TableCell colSpan={9} align="center">
-                                            <CircularProgress size={24} sx={{ my: 2 }} />
-                                            <Typography>Loading assets...</Typography>
-                                            <Typography variant="caption" color="textSecondary">
-                                                {assets.length > 0 ? `Found ${assets.length} assets` : 'No assets found'}
-                                            </Typography>
-                                            <pre style={{ display: 'none' }}>{JSON.stringify(assets, null, 2)}</pre>
-                                        </TableCell>
-                                    </TableRow>
-                                    {Array(3).fill(0).map((_, index) => (
+                                    {Array(5).fill(0).map((_, index) => (
                                         <ShimmerRow key={`shimmer-${index}`} columns={9} />
                                     ))}
                                 </>
@@ -825,7 +848,10 @@ const AssetManagement = () => {
                                         <Button 
                                             variant="contained" 
                                             color="primary" 
-                                            onClick={() => window.location.reload()}
+                                            onClick={() => {
+                                                setInitialLoad(true);
+                                                fetchAssets();
+                                            }}
                                             sx={{ mt: 2 }}
                                         >
                                             Retry
@@ -864,9 +890,39 @@ const AssetManagement = () => {
                                             />
                                         </TableCell>
                                         <TableCell>
-                                            <IconButton onClick={() => handleOpenModal(asset)} size="small">
+                                            <IconButton 
+                                                onClick={(e) => handleActionMenuOpen(e, asset)} 
+                                                size="small"
+                                                aria-label="asset actions"
+                                            >
                                                 <MoreVertIcon />
                                             </IconButton>
+                                            <Menu
+                                                anchorEl={actionMenuAnchorEl}
+                                                open={Boolean(actionMenuAnchorEl)}
+                                                onClose={handleActionMenuClose}
+                                                onClick={(e) => e.stopPropagation()}
+                                                anchorOrigin={{
+                                                    vertical: 'bottom',
+                                                    horizontal: 'right',
+                                                }}
+                                                transformOrigin={{
+                                                    vertical: 'top',
+                                                    horizontal: 'right',
+                                                }}
+                                            >
+                                                <MenuItem 
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleOpenModal(currentActionAsset);
+                                                        handleActionMenuClose();
+                                                    }}
+                                                    disableRipple
+                                                >
+                                                    <EditIcon fontSize="small" sx={{ mr: 1 }} />
+                                                    Edit
+                                                </MenuItem>
+                                            </Menu>
                                         </TableCell>
                                     </TableRow>
                                 ))
@@ -885,9 +941,9 @@ const AssetManagement = () => {
                                                 <Button
                                                     variant="text"
                                                     onClick={() => {
-                                                        setStatusFilter('');
-                                                        setTypeFilter('');
-                                                        setSearchTerm('');
+                                                        setStatusFilter("");
+                                                        setTypeFilter("");
+                                                        setSearchTerm("");
                                                     }}
                                                     sx={{ mt: 1 }}
                                                 >
@@ -1110,7 +1166,7 @@ const AssetManagement = () => {
                         >
                             {submitting ? (
                                 <>
-                                    <CircularProgress size={20} sx={{ mr: 1 }} />
+                                    <CircularProgress size={20} />
                                     Processing...
                                 </>
                             ) : currentAsset ? (
