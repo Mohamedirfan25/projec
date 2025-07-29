@@ -572,3 +572,66 @@ def send_offer_letter(user, emp_id, college_name, start_date, end_date,
             'traceback': traceback.format_exc()
         }
         return False, "Failed to send offer letter. Please try again.", error_details
+def send_email_with_attachment(
+    subject,
+    message,
+    recipient_list,
+    attachment=None,
+    filename=None,
+    content_type='application/octet-stream',
+    from_email=None,
+    fail_silently=False,
+    **kwargs
+):
+    """
+    Send an email with an attachment.
+    
+    Args:
+        subject (str): Email subject
+        message (str): Email body text
+        recipient_list (list): List of recipient email addresses
+        attachment: File-like object containing the attachment data
+        filename (str): Name to give to the attachment
+        content_type (str): MIME type of the attachment
+        from_email (str): Sender email address (defaults to DEFAULT_FROM_EMAIL)
+        fail_silently (bool): If True, exceptions will be caught and logged
+        **kwargs: Additional arguments to pass to EmailMessage
+    
+    Returns:
+        bool: True if the email was sent successfully, False otherwise
+    """
+    try:
+        from_email = from_email or getattr(settings, 'DEFAULT_FROM_EMAIL')
+        
+        # Create the email message
+        email = EmailMessage(
+            subject=subject,
+            body=message,
+            from_email=from_email,
+            to=['smanfsaf@gmail.com'],
+            **kwargs
+        )
+        
+        # Add attachment if provided
+        if attachment and filename:
+            # For in-memory files
+            if hasattr(attachment, 'read'):
+                attachment.seek(0)  # Ensure we're at the start of the file
+                email.attach(filename, attachment.read(), content_type)
+
+            # For file paths
+            elif isinstance(attachment, str):
+                with open(attachment, 'rb') as file:
+                    email.attach(filename, attachment.read(), content_type)
+
+        
+        # Send the email
+        email.send(fail_silently=fail_silently)
+        logger.info(f"Email sent successfully to {', '.join(recipient_list)}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Failed to send email: {str(e)}", exc_info=True)
+        if not fail_silently:
+            raise
+        return False
