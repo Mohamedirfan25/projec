@@ -5210,7 +5210,7 @@ from rest_framework import status
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def generate_offer_letter_api(request):
-    """API endpoint to generate and send an offer letter."""
+    """API endpoint to generate and send an offer letter using Word template."""
     logger = logging.getLogger(__name__)
     error_details = {
         'step': 'Initialization',
@@ -5286,9 +5286,13 @@ def generate_offer_letter_api(request):
             # Log the request details
             logger.info(f"Generating offer letter with data: {json.dumps(offer_data, indent=2)}")
 
-            # 5. Generate and Send Offer Letter
+            # 5. Generate and Send Offer Letter using Word template
             error_details['step'] = 'Generate and Send Offer Letter'
-            success, message, error_info = send_offer_letter_reportlab(
+            
+            # Import the send_offer_letter function from email_utils
+            from .utils.email_utils import send_offer_letter
+            
+            success, message, error_info = send_offer_letter(
                 user=intern_temp.user,
                 emp_id=intern_temp.emp_id,
                 **offer_data
@@ -5338,6 +5342,11 @@ def generate_offer_letter_api(request):
             {"success": False, "error": "An unexpected error occurred", "details": str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+# class LeaveHistoryView(APIView):
+#     permission_classes = [IsAuthenticated]
+# 
+#     def get(self, request, emp_id=None):
 # class LeaveHistoryView(APIView):
 #     permission_classes = [IsAuthenticated]
 

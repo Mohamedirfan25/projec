@@ -8,6 +8,10 @@ from django.conf import settings
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from dateutil import parser
+from docx import Document
+import tempfile
+import uuid
+from datetime import date
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -69,7 +73,7 @@ def send_offer_letter_reportlab(user, emp_id, college_name, start_date, end_date
                 end_date = parser.parse(end_date).strftime("%d-%b-%Y")
             logger.debug(f"Parsed dates - Start: {start_date}, End: {end_date}")
         except Exception as e:
-            error_msg = f"Invalid date format. Please use YYYY-MM-DD. Error: {str(e)}"
+            error_msg = "Invalid date format. Please use YYYY-MM-DD. Error: {str(e)}"
             log_error('DATE_ERROR', error_msg, {'start_date': start_date, 'end_date': end_date})
             return False, error_msg, error_details
 
@@ -266,3 +270,305 @@ def send_offer_letter_reportlab(user, emp_id, college_name, start_date, end_date
             'traceback': traceback.format_exc()
         })
         return False, "An unexpected error occurred", error_details
+
+
+def generate_offer_letter_docx(user, emp_id, college_name, start_date, end_date,
+                            position_title="FullStack Intern",
+                            domain="VDart Academy",
+                            shift_time="9:00 AM to 1:00 PM IST",
+                            shift_days="Monday to Friday",
+                            work_location="VDart, Global Capability Center, Mannarpuram",
+                            reporting_to="Derrick Alex"):
+    """
+    Generate an offer letter using a Word template with the following placeholders:
+    - {{intern_prefix}}{{intern_name}}
+    - {{intern_id}}, {{intern_college}}
+    - {{intern_name}}, {{intern_domain}}
+    - {{intern_start_date}}
+    - {{intern_end_date}}
+    - {{intern_shift_time}}
+    - {{intern_shift_days}}
+    
+    Returns:
+        tuple: (success: bool, message: str, file_path: str, error_details: dict)
+    """
+    logger = logging.getLogger(__name__)
+    error_details = {
+        'step': 'Initialization',
+        'error_type': None,
+        'message': None
+    }
+    
+    try:
+        # Define the template path
+        template_path = r'C:\Users\User\projec\Backend\media\word docs\VDart_Offer_Letter_ACA030 (1).docx'
+        
+        # Check if template exists
+        if not os.path.exists(template_path):
+            error_msg = f"Template file not found at {template_path}"
+            logger.error(error_msg)
+            error_details.update({
+                'step': 'Template Validation',
+                'error_type': 'File Not Found',
+                'message': error_msg,
+                'template_path': template_path,
+                'template_exists': False
+            })
+            return False, error_msg, None, error_details
+            
+        # Create temp directory if it doesn't exist
+        temp_dir = os.path.join(settings.MEDIA_ROOT, 'temp_offer_letters')
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        # Generate output file path
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_filename = f"Offer_Letter_{emp_id}_{timestamp}.docx"
+        output_path = os.path.join(temp_dir, output_filename)
+        
+        try:
+            # Load the template
+            doc = Document(template_path)
+            
+            # Define placeholder mapping - these must match exactly with the template
+            full_name = f"{user.first_name} {user.last_name}"
+            
+            # 1. Get gender prefix - using direct query to PersonalData
+            gender_prefix = 'Ms.'  # Default prefix
+            try:
+                from ..models import PersonalData  # Adjusted import path
+                personal_data = PersonalData.objects.filter(user_id=user.id).first()
+                if personal_data and personal_data.gender == 'M':
+                    gender_prefix = 'Mr.'
+                logger.info(f"Gender prefix set to: {gender_prefix} for user {user.id}")
+            except Exception as e:
+                logger.error(f"Error getting gender prefix: {str(e)}", exc_info=True)
+            
+            # 2. Format dates
+            def format_date(date_val):
+                if not date_val:
+                    return ""
+                try:
+                    # If it's a string, parse it to datetime
+                    if isinstance(date_val, str):
+                        try:
+                            # Try parsing with dateutil.parser which handles multiple formats
+                            date_val = parser.parse(date_val)
+                        except Exception as e:
+                            logger.warning(f"Could not parse date string: {date_val}. Error: {str(e)}")
+                            return date_val  # Return as is if can't parse
+                    
+                    # If it's a date/datetime object, format it
+                    if hasattr(date_val, 'strftime'):
+                        return date_val.strftime('%d-%b-%Y')  # Format as 30-Jul-2025
+                    
+                    return str(date_val)
+                except Exception as e:
+                    logger.error(f"Error formatting date {date_val}: {str(e)}", exc_info=True)
+                    return str(date_val)
+            
+            # 3. Format shift days
+            def format_shift_days(days):
+                if not days:
+                    return "Monday to Friday"  # Default value
+                try:
+                    # Convert to string and clean up
+                    days = str(days).strip()
+                    if not days:
+                        return "Monday to Friday"
+                        
+                    # If already in a range format, capitalize properly
+                    if any(sep in days.lower() for sep in [' to ', '-']):
+                        # Capitalize first letter of each word
+                        return ' '.join(word.capitalize() for word in days.split())
+                    
+                    # Handle comma-separated days
+                    days_list = [d.strip().capitalize() for d in days.split(',') if d.strip()]
+                    if len(days_list) > 1:
+                        return f"{days_list[0]} to {days_list[-1]}"
+                    elif days_list:
+                        return days_list[0]
+                        
+                    return "Monday to Friday"  # Fallback
+                except Exception as e:
+                    logger.error(f"Error formatting shift days '{days}': {str(e)}", exc_info=True)
+                    return "Monday to Friday"
+            
+            # Format the values
+            formatted_start_date = format_date(start_date)
+            formatted_end_date = format_date(end_date)
+            formatted_shift_days = format_shift_days(shift_days)
+            
+            logger.info(f"""
+                Placeholder values before replacement:
+                - Gender Prefix: {gender_prefix}
+                - Start Date: {start_date} -> {formatted_start_date}
+                - End Date: {end_date} -> {formatted_end_date}
+                - Shift Days: {shift_days} -> {formatted_shift_days}
+            """)
+            
+            placeholder_map = {
+                '{{intern_prefix}}': gender_prefix,
+                '{{intern_name}}': full_name,
+                '{{intern_id}}': str(emp_id),
+                '{{intern_college}}': str(college_name),
+                '{{intern_domain}}': str(domain),
+                '{{intern_start_date}}': formatted_start_date,
+                '{{intern_end_date}}': formatted_end_date,
+                '{{intern_shift_time}}': str(shift_time or "9:00 AM to 1:00 PM IST"),
+                '{{intern_shift_days}}': formatted_shift_days,
+                '{{intern_work_location}}': str(work_location),
+                '{{intern_reporting_to}}': str(reporting_to)
+            }
+            
+            # Replace placeholders in paragraphs
+            for paragraph in doc.paragraphs:
+                for placeholder, value in placeholder_map.items():
+                    if placeholder in paragraph.text:
+                        paragraph.text = paragraph.text.replace(placeholder, str(value))
+            
+            # Replace placeholders in tables
+            for table in doc.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        for placeholder, value in placeholder_map.items():
+                            if placeholder in cell.text:
+                                cell.text = cell.text.replace(placeholder, str(value))
+            
+            # Save the document
+            doc.save(output_path)
+            
+            logger.info(f"Successfully generated offer letter at {output_path}")
+            return True, "Offer letter generated successfully", output_path, None
+            
+        except Exception as e:
+            error_msg = f"Error generating offer letter: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            error_details.update({
+                'step': 'Document Generation',
+                'error_type': 'Document Processing Error',
+                'message': str(e),
+                'template_path': template_path,
+                'template_exists': True,
+                'traceback': traceback.format_exc(),
+                'placeholders_used': list(placeholder_map.keys()) if 'placeholder_map' in locals() else 'Not available',
+                'placeholders_found': 'Check template for exact placeholder usage',
+                'template_sample': 'Check for placeholders in the Word template document'
+            })
+            return False, error_msg, None, error_details
+            
+    except Exception as e:
+        error_msg = f"Unexpected error in generate_offer_letter_docx: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        error_details.update({
+            'step': 'Unexpected Error',
+            'error_type': 'Unexpected Error',
+            'message': str(e),
+            'template_path': template_path if 'template_path' in locals() else 'Not determined',
+            'template_exists': os.path.exists(template_path) if 'template_path' in locals() else False,
+            'traceback': traceback.format_exc(),
+            'placeholders_expected': [
+                '{{intern_prefix}}{{intern_name}}',
+                '{{intern_id}}',
+                '{{intern_college}}',
+                '{{intern_name}}',
+                '{{intern_domain}}',
+                '{{intern_start_date}}',
+                '{{intern_end_date}}',
+                '{{intern_shift_time}}',
+                '{{intern_shift_days}}',
+                '{{intern_work_location}}',
+                '{{intern_reporting_to}}'
+            ]
+        })
+        return False, error_msg, None, error_details
+
+
+def send_offer_letter(user, emp_id, college_name, start_date, end_date,
+                    position_title="FullStack Intern",
+                    domain="VDart Academy",
+                    shift_time="9:00 AM to 1:00 PM IST",
+                    shift_days="Monday to Friday",
+                    work_location="VDart, Global Capability Center, Mannarpuram",
+                    reporting_to="Derrick Alex"):
+    """
+    Main function to generate and send offer letter using Word template.
+    
+    Returns:
+        tuple: (success: bool, message: str, error_details: dict)
+    """
+    # First generate the offer letter
+    success, message, file_path, error_details = generate_offer_letter_docx(
+        user=user,
+        emp_id=emp_id,
+        college_name=college_name,
+        start_date=start_date,
+        end_date=end_date,
+        position_title=position_title,
+        domain=domain,
+        shift_time=shift_time,
+        shift_days=shift_days,
+        work_location=work_location,
+        reporting_to=reporting_to
+    )
+    
+    if not success:
+        return success, message, error_details
+    
+    # If generation was successful, send the email
+    try:
+        email_subject = f"Internship Offer Letter - {user.get_full_name()}"
+        email_body = f"""
+        Dear {user.get_full_name()},
+        
+        Please find attached your internship offer letter.
+        
+        Best regards,
+        VDart HR Team
+        """
+        
+        email = EmailMessage(
+            email_subject,
+            email_body,
+            settings.DEFAULT_FROM_EMAIL,
+            [user.email],
+            cc=[settings.HR_EMAIL] if hasattr(settings, 'HR_EMAIL') else None
+        )
+        
+        # Attach the offer letter
+        with open(file_path, 'rb') as f:
+            email.attach(
+                f"Offer_Letter_{emp_id}.docx",
+                f.read(),
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            )
+        
+        # Send the email
+        email.send(fail_silently=False)
+        
+        # Clean up the temporary file
+        try:
+            os.remove(file_path)
+        except Exception as e:
+            logger.warning(f"Failed to delete temporary file {file_path}: {str(e)}")
+        
+        logger.info(f"Successfully sent offer letter to {user.email}")
+        return True, "Offer letter has been sent successfully.", None
+        
+    except Exception as e:
+        error_msg = f"Failed to send email: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        
+        # Clean up the temporary file even if sending failed
+        try:
+            if file_path and os.path.exists(file_path):
+                os.remove(file_path)
+        except Exception as cleanup_error:
+            logger.warning(f"Failed to delete temporary file {file_path}: {str(cleanup_error)}")
+        
+        error_details = {
+            'step': 'Email Sending',
+            'error_type': 'Email Error',
+            'message': str(e),
+            'traceback': traceback.format_exc()
+        }
+        return False, "Failed to send offer letter. Please try again.", error_details
