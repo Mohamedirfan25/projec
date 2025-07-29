@@ -628,43 +628,49 @@ class DocumentVersion(models.Model):
     created_at = models.DateTimeField(auto_now_add=True,null=True)
 
     def __str__(self):
-        return f"{self.document.title} - v{self.version_number}"
+        return f"Version {self.version_number} of {self.document.title}"
 
 
 class AttendanceClaim(models.Model):
-    CLAIM_TYPES = [
-        ('MISSING_PUNCH', 'Missing Punch'),
-        ('LEAVE', 'Leave'),
-        ('HALF_DAY', 'Half Day'),
-        ('FULL_DAY', 'Full Day'),
-        ('OTHER', 'Other')
-    ]
-    
     STATUS_CHOICES = [
         ('PENDING', 'Pending'),
         ('APPROVED', 'Approved'),
-        ('REJECTED', 'Rejected')
+        ('REJECTED', 'Rejected'),
     ]
     
-    is_deleted = models.BooleanField(default=False)
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    DAY_TYPE_CHOICES = [
+        ('full', 'Full Day'),
+        ('half', 'Half Day'),
+    ]
+    
+    HALF_DAY_CHOICES = [
+        ('first', 'First Half'),
+        ('second', 'Second Half'),
+    ]
+    
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='attendance_claims')
-    claim_type = models.CharField(max_length=20, choices=CLAIM_TYPES)
-    date = models.DateField()
-    check_in = models.TimeField(null=True, blank=True)
-    check_out = models.TimeField(null=True, blank=True)
-    reason = models.TextField()
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
-    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewed_claims')
-    review_notes = models.TextField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, 
+                                   related_name='reviewed_attendance_claims')
+    for_period = models.CharField(max_length=50)  # e.g., "July 2024"
+    from_date = models.DateField()
+    to_date = models.DateField()
+    from_day_type = models.CharField(max_length=10, choices=DAY_TYPE_CHOICES, default='full')
+    from_half_day_type = models.CharField(max_length=10, choices=HALF_DAY_CHOICES, default='first', 
+                                        null=True, blank=True)
+    to_day_type = models.CharField(max_length=10, choices=DAY_TYPE_CHOICES, default='full')
+    to_half_day_type = models.CharField(max_length=10, choices=HALF_DAY_CHOICES, default='first', 
+                                      null=True, blank=True)
+    comments = models.TextField(blank=True, null=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='PENDING')
+    rejection_reason = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        ordering = ['-date', '-created_at']
+        ordering = ['-created_at']
     
     def __str__(self):
-        return f"{self.user.username} - {self.get_claim_type_display()} - {self.date}"
+        return f"{self.user.username} - {self.for_period} ({self.status})"
     
     def save(self, *args, **kwargs):
         # If claim is approved/rejected, set the reviewed_by field

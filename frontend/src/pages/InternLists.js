@@ -282,7 +282,6 @@ const InternLists = ({ setActiveComponent, showAddForm: externalShowAddForm, onF
     try {
       setIsLoading(true);
     // Declare intern status arrays
-    const allInterns = [];
     const inProgressInterns = [];
     const completedInterns = [];
     const yetToJoinInterns = [];
@@ -1690,7 +1689,6 @@ const handleUndoDelete = async (internId) => {
                             anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
                             transformOrigin={{ vertical: 'top', horizontal: 'left' }}
                           >
-                            <MenuItem onClick={() => { handleSetStatusAll(); setActionSubMenuAnchorEl(null); handleMenuClose(); }}>All Interns</MenuItem>
                             <MenuItem onClick={() => { handleSetStatus(intern.id, 'In Progress'); setActionSubMenuAnchorEl(null); handleMenuClose(); }}>In Progress</MenuItem>
                             <MenuItem onClick={() => { handleSetStatus(intern.id, 'Completed'); setActionSubMenuAnchorEl(null); handleMenuClose(); }}>Completed</MenuItem>
                             <MenuItem onClick={() => { handleSetStatus(intern.id, 'Yet to Join'); setActionSubMenuAnchorEl(null); handleMenuClose(); }}>Yet to Join</MenuItem>

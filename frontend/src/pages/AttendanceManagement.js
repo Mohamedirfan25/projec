@@ -30,6 +30,8 @@ import {
   Pagination,
   Grid,
   FormHelperText,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import { Refresh, MoreVert, Event, Close } from "@mui/icons-material";
 import { DatePicker, LocalizationProvider } from "@mui/x-date-pickers";
@@ -75,6 +77,150 @@ const AttendanceManagement = () => {
     comment: '',
   });
   const [formErrors, setFormErrors] = useState({});
+  const [claimSuccess, setClaimSuccess] = useState(false);
+
+  // Handle attendance claim form field changes
+  const handleClaimFormChange = (field, value) => {
+    setClaimForm(prev => ({
+      ...prev,
+      [field]: value
+    }));
+    
+    // Clear error when field is updated
+    if (formErrors[field]) {
+      setFormErrors(prev => ({
+        ...prev,
+        [field]: ''
+      }));
+    }
+  };
+
+  // Open attendance claim dialog
+  const handleOpenClaimDialog = () => {
+    const selectedMonthValue = month || currentMonth;
+    const selectedYearValue = year || currentYear;
+    const formattedPeriod = `${selectedMonthValue} ${selectedYearValue}`;
+    
+    const today = new Date();
+    setClaimForm({
+      fromDate: today,
+      fromDayType: 'full',
+      fromHalfDayType: 'first',
+      toDate: today,
+      toDayType: 'full',
+      toHalfDayType: 'first',
+      forPeriod: formattedPeriod,
+      comment: '',
+    });
+    setFormErrors({});
+    setClaimDialogOpen(true);
+  };
+
+  // Close attendance claim dialog
+  const handleClaimDialogClose = () => {
+    setClaimDialogOpen(false);
+    setClaimSuccess(false);
+    setFormErrors({});
+  };
+
+  // Validate attendance claim form
+  const validateClaimForm = () => {
+    const errors = {};
+    let isValid = true;
+
+    if (!claimForm.forPeriod) {
+      errors.forPeriod = 'Period is required';
+      isValid = false;
+    }
+
+    if (!claimForm.fromDate) {
+      errors.fromDate = 'From date is required';
+      isValid = false;
+    }
+
+    if (!claimForm.toDate) {
+      errors.toDate = 'To date is required';
+      isValid = false;
+    } else if (claimForm.fromDate && new Date(claimForm.fromDate) > new Date(claimForm.toDate)) {
+      errors.dateRange = 'To date must be after from date';
+      isValid = false;
+    }
+
+    setFormErrors(errors);
+    return isValid;
+  };
+
+  // Handle attendance claim form submission
+  const handleClaimSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!validateClaimForm()) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        alert('Authentication token is missing! Please log in.');
+        return;
+      }
+
+      const claimData = {
+        for_period: claimForm.forPeriod,
+        from_date: claimForm.fromDate.toISOString().split('T')[0],
+        to_date: claimForm.toDate.toISOString().split('T')[0],
+        from_day_type: claimForm.fromDayType,
+        from_half_day_type: claimForm.fromDayType === 'half' ? claimForm.fromHalfDayType : null,
+        to_day_type: claimForm.toDayType,
+        to_half_day_type: claimForm.toDayType === 'half' ? claimForm.toHalfDayType : null,
+        comments: claimForm.comment || '',
+      };
+
+      const response = await axios.post(
+        'http://localhost:8000/Sims/attendance-claims/',
+        claimData,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Token ${token}`
+          }
+        }
+      );
+
+      if (response.status === 201) {
+        setClaimSuccess(true);
+        // Close the dialog after a short delay
+        setTimeout(() => {
+          handleClaimDialogClose();
+        }, 1500);
+      }
+    } catch (error) {
+      console.error('Error submitting attendance claim:', error);
+      let errorMessage = 'Failed to submit attendance claim. Please try again.';
+      
+      if (error.response) {
+        // Handle validation errors from the server
+        if (error.response.data) {
+          const serverErrors = error.response.data;
+          const fieldErrors = {};
+          
+          // Map server errors to form fields
+          Object.keys(serverErrors).forEach(field => {
+            fieldErrors[field] = Array.isArray(serverErrors[field]) 
+              ? serverErrors[field][0]
+              : serverErrors[field];
+          });
+          
+          setFormErrors(fieldErrors);
+          return;
+        }
+        
+        errorMessage = error.response.data.detail || errorMessage;
+      }
+      
+      alert(errorMessage);
+    }
+  };
 
   const months = [
     "January",
@@ -400,77 +546,7 @@ const AttendanceManagement = () => {
   };
 
   const handleAttendanceClaim = () => {
-    // Format the period as "Month Year" (e.g., "July 2024")
-    // Use current month and year if none selected
-    const selectedMonthValue = month || currentMonth;
-    const selectedYearValue = year || currentYear;
-    const formattedPeriod = `${selectedMonthValue} ${selectedYearValue}`;
-    
-    // Set default values for fromDate and toDate
-    const today = new Date();
-    setClaimForm(prev => ({
-      ...prev,
-      fromDate: today,
-      toDate: today,
-      forPeriod: formattedPeriod,
-      fromDayType: 'full',
-      fromHalfDayType: 'first',
-      toDayType: 'full',
-      toHalfDayType: 'first'
-    }));
-    
-    setClaimDialogOpen(true);
-  };
-
-  const handleClaimDialogClose = () => {
-    setClaimDialogOpen(false);
-    const today = new Date();
-    setClaimForm({
-      fromDate: today,
-      toDate: today,
-      forPeriod: '',
-      fromDayType: 'full',
-      fromHalfDayType: 'first',
-      toDayType: 'full',
-      toHalfDayType: 'first',
-      comment: ''
-    });
-    setFormErrors({});
-  };
-
-  const handleClaimFormChange = (field, value) => {
-    setClaimForm(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
-  const validateForm = () => {
-    const errors = {};
-    if (!claimForm.forPeriod.trim()) {
-      errors.forPeriod = 'For Period is required';
-    }
-    if (!claimForm.fromDate) {
-      errors.fromDate = 'From Date is required';
-    }
-    if (!claimForm.toDate) {
-      errors.toDate = 'To Date is required';
-    }
-    if (claimForm.fromDate && claimForm.toDate && claimForm.fromDate > claimForm.toDate) {
-      errors.dateRange = 'From Date cannot be after To Date';
-    }
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  const handleClaimSubmit = (e) => {
-    e.preventDefault();
-    if (validateForm()) {
-      // Handle form submission
-      console.log('Submitting claim:', claimForm);
-      // Add your API call here
-      handleClaimDialogClose();
-    }
+    handleOpenClaimDialog();
   };
 
   return (
@@ -578,7 +654,11 @@ const AttendanceManagement = () => {
         </Button>
         <Button
           variant="outlined"
-          onClick={() => navigate('/LeaveManagement')}
+          onClick={() => {
+            // This will be handled by the parent component (Dash.js)
+            // The parent will handle showing the LeaveManagement component
+            window.dispatchEvent(new CustomEvent('showLeaveManagement'));
+          }}
           startIcon={<Event />}
           sx={{
             textTransform: 'none',
@@ -902,6 +982,18 @@ const AttendanceManagement = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Success Snackbar */}
+      <Snackbar
+        open={claimSuccess}
+        autoHideDuration={6000}
+        onClose={() => setClaimSuccess(false)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setClaimSuccess(false)} severity="success" sx={{ width: '100%' }}>
+          Attendance claim submitted successfully!
+        </Alert>
+      </Snackbar>
 
       {/* Attendance Claim Dialog */}
       <Dialog 

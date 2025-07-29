@@ -552,21 +552,25 @@ class AttendanceClaimSerializer(serializers.ModelSerializer):
     class Meta:
         model = AttendanceClaim
         fields = [
-            'id', 'user', 'claim_type', 'date', 'check_in', 'check_out', 
-            'reason', 'status', 'reviewed_by', 'reviewed_by_username', 
-            'review_notes', 'created_at', 'updated_at'
+            'id', 'user', 'for_period', 'from_date', 'to_date', 
+            'from_day_type', 'from_half_day_type', 'to_day_type', 'to_half_day_type',
+            'comments', 'status', 'reviewed_by_username', 'rejection_reason',
+            'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'user', 'created_at', 'updated_at', 'reviewed_by']
+        read_only_fields = [
+            'id', 'user', 'status', 'reviewed_by_username', 'reviewed_by',
+            'rejection_reason', 'created_at', 'updated_at'
+        ]
     
     def validate(self, data):
         """
-        Validate that check_in is before check_out when both are provided.
+        Validate that from_date is before or equal to to_date.
         """
-        check_in = data.get('check_in')
-        check_out = data.get('check_out')
+        from_date = data.get('from_date')
+        to_date = data.get('to_date')
         
-        if check_in and check_out and check_in >= check_out:
-            raise serializers.ValidationError("Check-out time must be after check-in time.")
+        if from_date and to_date and from_date > to_date:
+            raise serializers.ValidationError("From date cannot be after to date.")
             
         return data
     
@@ -577,3 +581,22 @@ class AttendanceClaimSerializer(serializers.ModelSerializer):
         # Set the current user as the claim creator
         validated_data['user'] = self.context['request'].user
         return super().create(validated_data)
+    
+    def update(self, instance, validated_data):
+        """
+        Update and return an existing AttendanceClaim instance, given the validated data.
+        Only staff users can update the status and rejection_reason.
+        """
+        user = self.context['request'].user
+        status = validated_data.get('status')
+        
+        # Only allow staff to update status and rejection_reason
+        if status and not user.is_staff:
+            validated_data.pop('status')
+            validated_data.pop('rejection_reason', None)
+        
+        # If status is being updated to APPROVED/REJECTED, set reviewed_by
+        if status in ['APPROVED', 'REJECTED'] and not instance.reviewed_by:
+            validated_data['reviewed_by'] = user
+        
+        return super().update(instance, validated_data)
