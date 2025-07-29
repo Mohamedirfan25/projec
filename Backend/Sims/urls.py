@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from . import views_attendance_claim
 from .views import generate_offer_letter_api
 from .views import generate_completed_certificate
 from .views import CollegeDetailsView
@@ -164,7 +165,26 @@ urlpatterns = [
     path('user-permissions/', UserPermissionsView.as_view(), name='user-permissions'),
     
     # Attendance Claim URLs
-    path('attendance-claims/', views.AttendanceClaimView.as_view(), name='attendance-claims-list'),
-    path('attendance-claims/<uuid:claim_id>/', views.AttendanceClaimView.as_view(), name='attendance-claim-detail'),
-    path('attendance-claims/<uuid:claim_id>/<str:action>/', views.AttendanceClaimActionView.as_view(), name='attendance-claim-action'),
+    path('attendance-claims/', views_attendance_claim.AttendanceClaimViewSet.as_view({
+        'get': 'list',
+        'post': 'create'
+    }), name='attendance-claims-list'),
+    path('attendance-claims/<uuid:pk>/', views_attendance_claim.AttendanceClaimViewSet.as_view({
+        'get': 'retrieve',
+        'put': 'update',
+        'patch': 'partial_update',
+        'delete': 'destroy'
+    }), name='attendance-claim-detail'),
+    path('attendance-claims/<uuid:pk>/approve/', views_attendance_claim.AttendanceClaimViewSet.as_view({
+        'post': 'approve'
+    }), name='attendance-claim-approve'),
+    path('attendance-claims/<uuid:pk>/reject/', views_attendance_claim.AttendanceClaimViewSet.as_view({
+        'post': 'reject'
+    }), name='attendance-claim-reject'),
+    path('attendance-claims/my-claims/', views_attendance_claim.AttendanceClaimViewSet.as_view({
+        'get': 'my_claims'
+    }), name='my-attendance-claims'),
+    path('attendance-claims/pending-approval/', views_attendance_claim.AttendanceClaimViewSet.as_view({
+        'get': 'pending_approval'
+    }), name='pending-attendance-claims'),
 ]

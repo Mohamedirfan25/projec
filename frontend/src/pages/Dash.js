@@ -1,46 +1,20 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
+import dayjs from 'dayjs';
+import { styled } from '@mui/material/styles';
+
+// Material-UI Components
 import {
-  Box,
-  Drawer,
-  List,
-  ListItem,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
-  Button,
-  Typography,
-  Divider,
-  IconButton,
-  Snackbar,
-  Alert,
-  CircularProgress,
-  Grid,
-  Card,
-  CardContent,
-  Avatar,
-  AppBar,
-  Toolbar,
-  Badge,
-  Menu,
-  MenuItem,
-  CssBaseline,
-  ThemeProvider,
-  createTheme,
-  Switch,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
-  DialogTitle,
-  Collapse,
-  TextField,
-  Paper,
-  Fab,
-  InputAdornment,
-  Slide,
-  Chip,
+  Box, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText,
+  Button, Typography, Divider, IconButton, Snackbar, Alert, CircularProgress,
+  Grid, Card, CardContent, Avatar, AppBar, Toolbar, Badge, Menu, MenuItem,
+  CssBaseline, ThemeProvider, createTheme, Switch, Dialog, DialogActions,
+  DialogContent, DialogContentText, DialogTitle, Collapse, TextField, Paper,
+  Fab, InputAdornment, Slide, Chip
 } from "@mui/material";
+
+// Chart.js
 import { Bar, Line, Doughnut, Pie } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -54,6 +28,8 @@ import {
   Tooltip,
   Legend,
 } from "chart.js";
+
+// Material-UI Icons
 import HomeWorkIcon from "@mui/icons-material/HomeWork";
 import ArticleIcon from "@mui/icons-material/Article";
 import PersonIcon from "@mui/icons-material/Person";
@@ -68,7 +44,31 @@ import Brightness7Icon from "@mui/icons-material/Brightness7";
 import LogoutIcon from "@mui/icons-material/Logout";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
-import LeaveManagement from "./LeaveManagement";
+import SearchIcon from '@mui/icons-material/Search';
+import DeleteIcon from '@mui/icons-material/Delete';
+import InfoIcon from '@mui/icons-material/Info';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import EditIcon from '@mui/icons-material/Edit';
+import CheckIcon from '@mui/icons-material/Check';
+import DescriptionIcon from "@mui/icons-material/Description";
+import SendIcon from "@mui/icons-material/Send";
+import ChatIcon from "@mui/icons-material/Chat";
+import SmartToyIcon from "@mui/icons-material/SmartToy";
+import EventAvailableIcon from "@mui/icons-material/EventAvailable";
+import HelpIcon from "@mui/icons-material/Help";
+import EventIcon from "@mui/icons-material/Event";
+import AccessTimeIcon from "@mui/icons-material/AccessTime";
+import WorkIcon from "@mui/icons-material/Work";
+import MicIcon from "@mui/icons-material/Mic";
+import AssessmentIcon from "@mui/icons-material/Assessment";
+import SchoolIcon from "@mui/icons-material/School";
+
+// Date Pickers
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { DatePicker, TimePicker } from '@mui/x-date-pickers';
+
+// Custom Components
 import Tasks from "./Tasks";
 import Create from "./Create";
 import vdart from "../assets/vdart.jpeg";
@@ -77,23 +77,38 @@ import AssetReport from "./AssetReport";
 import PerformancePage from "./PerformancePage";
 import InternProfile from "./InternProfile";
 import AttendanceManagement from "./AttendanceManagement";
-import axios from "axios";
 import PaymentStatusPage from "./PaymentStatusPage";
 import DocumentView from "./DocumentView";
-import DescriptionIcon from "@mui/icons-material/Description";
 import PerformanceFeedback from "./PerformanceFeedbackList";
-import SendIcon from "@mui/icons-material/Send";
-import ChatIcon from "@mui/icons-material/Chat";
-import MicIcon from "@mui/icons-material/Mic";
-import SearchIcon from "@mui/icons-material/Search";
-import SmartToyIcon from "@mui/icons-material/SmartToy";
-import HelpIcon from "@mui/icons-material/Help";
-import InfoIcon from "@mui/icons-material/Info";
-import EventIcon from "@mui/icons-material/Event";
-import AccessTimeIcon from "@mui/icons-material/AccessTime";
-import WorkIcon from "@mui/icons-material/Work";
-import SchoolIcon from "@mui/icons-material/School";
-import AssessmentIcon from "@mui/icons-material/Assessment";
+import LeaveManagement from "./LeaveManagement";
+
+
+const RedDeleteIcon = styled(DeleteIcon)(({ theme }) => ({
+    color: 'red',
+}));
+
+const StyledMoreVertIcon = styled(MoreVertIcon)(({ theme }) => ({
+    color: '#777',
+}));
+
+const StyledCard = styled(Card)(({ theme }) => ({
+    boxShadow: theme.shadows[3],
+    borderRadius: theme.spacing(1),
+    marginBottom: theme.spacing(3),
+    transition: 'transform 0.2s ease-in-out',
+    '&:hover': {
+        transform: 'scale(1.02)',
+    },
+}));
+
+const StyledButton = styled(Button)(({ theme }) => ({
+    margin: theme.spacing(1),
+    textTransform: 'none',
+    borderRadius: '25px',
+    padding: theme.spacing(1, 3),
+    transition: 'all 0.3s ease',
+}));
+// All imports have been moved to the top of the file
 
 // Speech recognition setup
 const SpeechRecognition =
@@ -154,6 +169,7 @@ const App = () => {
     { id: 0, message: "N/A" },
   ]);
   const [currentPage, setCurrentPage] = useState("Dashboard");
+  const [showLeaveManagement, setShowLeaveManagement] = useState(false);
   const [showPerformanceOverview, setShowPerformanceOverview] = useState(false);
   const [showHoursCalculator, setShowHoursCalculator] = useState(false);
   const [showStatusBarDetails, setShowStatusBarDetails] = useState(true);
@@ -290,6 +306,20 @@ const App = () => {
 
     return () => clearInterval(timer);
   }, [timerActive]);
+
+  // Add event listener for showing leave management
+  useEffect(() => {
+    const handleShowLeaveManagement = () => {
+      setShowLeaveManagement(true);
+      setCurrentPage('Leave Management');
+    };
+
+    window.addEventListener('showLeaveManagement', handleShowLeaveManagement);
+
+    return () => {
+      window.removeEventListener('showLeaveManagement', handleShowLeaveManagement);
+    };
+  }, []);
 
   // VDart company information
   const vdartInfo = {
@@ -1125,7 +1155,36 @@ const App = () => {
   const postAttendance = async () => {
     try {
       const token = localStorage.getItem("token");
-      const today = new Date().toISOString().split("T")[0];
+      const now = new Date();
+      const today = now.toISOString().split("T")[0];
+      const currentHour = now.getHours();
+      const currentMinutes = now.getMinutes();
+      
+      // Determine attendance status based on current time
+      let attendanceStatus = "Present";
+      let firstHalfStatus = "Absent";
+      let secondHalfStatus = "Absent";
+      
+      // Check if current time is within first half (9:00 AM - 1:00 PM)
+      const isFirstHalf = (currentHour > 9 || (currentHour === 9 && currentMinutes >= 0)) && 
+                         (currentHour < 13 || (currentHour === 13 && currentMinutes === 0));
+      
+      // Check if current time is within second half (2:00 PM - 6:00 PM)
+      const isSecondHalf = (currentHour > 14 || (currentHour === 14 && currentMinutes >= 0)) && 
+                          (currentHour < 18 || (currentHour === 18 && currentMinutes === 0));
+      
+      if (isFirstHalf) {
+        firstHalfStatus = "Present";
+      } else if (isSecondHalf) {
+        secondHalfStatus = "Present";
+      }
+      
+      // Mark as present if either half is present
+      if (firstHalfStatus === "Present" || secondHalfStatus === "Present") {
+        attendanceStatus = "Present";
+      } else {
+        attendanceStatus = "Absent";
+      }
 
       const res = await axios.post(
         "http://localhost:8000/Sims/attendance/",
@@ -1133,9 +1192,11 @@ const App = () => {
           emp_id: personalInfo.emp_id,
           name: personalInfo.name,
           date: today,
-          check_in: new Date().toISOString(),
+          check_in: now.toISOString(),
           status: "Pending",
-          present_status: "Present",
+          present_status: attendanceStatus,
+          first_half_status: firstHalfStatus,
+          second_half_status: secondHalfStatus,
         },
         {
           headers: { Authorization: `Token ${token}` },
@@ -1165,6 +1226,37 @@ const App = () => {
 
     try {
       const token = localStorage.getItem("token");
+      const now = new Date();
+      const currentHour = now.getHours();
+      const currentMinutes = now.getMinutes();
+      
+      // Determine if this is a check-out action
+      const isCheckOut = data.check_out !== undefined;
+      
+      // Only update first_half_status and second_half_status if not already set
+      if (isCheckOut && (!data.first_half_status || !data.second_half_status)) {
+        // If checking out in the first half (before 1 PM)
+        if (currentHour < 13) {
+          data.first_half_status = "Present";
+          data.second_half_status = "Absent";
+        } 
+        // If checking out in the second half (after 2 PM)
+        else if (currentHour >= 14) {
+          // If first half status wasn't already set, mark it as present if check-in was before 1 PM
+          if (!data.first_half_status) {
+            data.first_half_status = "Present";
+          }
+          data.second_half_status = "Present";
+        }
+        
+        // Update present_status based on half day status
+        if (data.first_half_status === "Present" || data.second_half_status === "Present") {
+          data.present_status = "Present";
+        } else {
+          data.present_status = "Absent";
+        }
+      }
+      
       const res = await axios.patch(
         `http://localhost:8000/Sims/attendance/${attendanceId}/`,
         data,
@@ -1205,6 +1297,7 @@ const App = () => {
 
     fetchLeaveBalance();
   }, []);
+
   const timeStringToSeconds = (timeStr) => {
     const [hours, minutes, seconds] = timeStr.split(":").map(Number);
     return hours * 3600 + minutes * 60 + seconds;
@@ -1612,6 +1705,7 @@ const App = () => {
 
   const handlePageChange = (page) => {
     setCurrentPage(page);
+    setShowLeaveManagement(page === "Leave Management");
     setShowHoursCalculator(false);
     setShowPerformanceOverview(false);
   };
@@ -2132,7 +2226,7 @@ const App = () => {
                 <ListItem disablePadding>
                   <ListItemButton
                     onClick={() => {
-                      navigate('/profile');
+                      setCurrentPage("Profile");
                       handleProfileMenuClose();
                     }}
                     sx={{
@@ -2322,7 +2416,7 @@ const App = () => {
                 />
               ) : currentPage === "Asset Report Issue" ? (
                 <AssetReport />
-              ) : currentPage === "Leave Management" ? (
+              ) : currentPage === "Leave Management" || showLeaveManagement ? (
                 <LeaveManagement />
               ) : currentPage === "Asset Report" ? (
                 <AssetReport />
