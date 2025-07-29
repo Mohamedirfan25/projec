@@ -60,6 +60,8 @@ const StaffRegistrationForm = ({ switchToUpdate, setFormDataForUpdate }) => {
   // Registration Form State
   const [formData, setFormData] = useState({
     staffId: '',
+    username: '',
+    password: '',
     staffName: '',
     teamName: '',
     role: '',
@@ -136,7 +138,7 @@ const StaffRegistrationForm = ({ switchToUpdate, setFormDataForUpdate }) => {
     const { name, value } = e.target;
     setFormData({
       ...formData,
-      [name]: name === "mobile" ? value.replace(/\D/g, "") : value,
+      [name]: name === "mobileNumber" ? value.replace(/\D/g, "") : value,
     });
 
     if (errors[name]) {
@@ -187,6 +189,13 @@ const StaffRegistrationForm = ({ switchToUpdate, setFormDataForUpdate }) => {
     if (!formData.dob) newErrors.dob = "Date of birth is required";
     if (!formData.gender) newErrors.gender = "Gender is required";
     if (!formData.location) newErrors.location = "Location is required";
+
+    if (formData.mobileNumber && formData.mobileNumber.trim() !== '') {
+      const phoneNumber = formData.mobileNumber.replace(/\D/g, '');
+      if (phoneNumber.length < 10) {
+        newErrors.mobileNumber = 'Phone number must be at least 10 digits';
+      }
+    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -257,6 +266,32 @@ const StaffRegistrationForm = ({ switchToUpdate, setFormDataForUpdate }) => {
       await axios.patch(
         `http://localhost:8000/Sims/user-data/${registerResponse.data.emp_id}/`,
         staffPayload,
+        {
+          headers: {
+            Authorization: `Token ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      const personalDataPayload = {
+        emp_id: registerResponse.data.emp_id,
+        gender: formData.gender === 'male' ? 'M' : formData.gender === 'female' ? 'F' : 'M',
+        date_of_birth: formData.dob ? new Date(formData.dob).toISOString().split('T')[0] : null, // Format as YYYY-MM-DD
+        phone_no: formData.mobileNumber ? parseInt(formData.mobileNumber.replace(/\D/g, ''), 10) : 0, // Default value
+        address1: formData.location || "",
+      };
+
+      // Add phone number if valid
+      if (formData.mobileNumber && formData.mobileNumber.trim() !== '') {
+        const phoneNumber = parseInt(formData.mobileNumber.replace(/\D/g, ''), 10);
+        if (!isNaN(phoneNumber) && phoneNumber.toString().length >= 10) {
+          personalDataPayload.phone_no = phoneNumber;
+        }
+      }
+      console.log("personalDataPayload", personalDataPayload);
+      await axios.post(
+        `http://localhost:8000/Sims/personal-data/`,
+        personalDataPayload,
         {
           headers: {
             Authorization: `Token ${token}`,
@@ -490,18 +525,44 @@ const StaffRegistrationForm = ({ switchToUpdate, setFormDataForUpdate }) => {
                 <TextField
                   fullWidth
                   label="Mobile (Optional)"
-                  name="mobile"
-                  value={formData.mobile}
-                  onChange={handleChange}
-                  error={!!errors.mobile}
-                  helperText={errors.mobile}
+                  name="mobileNumber"
+                  value={formData.mobileNumber}
+                  onChange={(e) => {
+                    // Only allow numbers and limit to 10 digits
+                    const value = e.target.value.replace(/\D/g, '').slice(0, 10);
+                    setFormData({
+                      ...formData,
+                      mobileNumber: value
+                    });
+                    
+                    // Clear error if exists
+                    if (errors.mobileNumber) {
+                      setErrors({
+                        ...errors,
+                        mobileNumber: ''
+                      });
+                    }
+                  }}
+                  error={!!errors.mobileNumber}
+                  helperText={errors.mobileNumber || 'Enter 10-digit mobile number'}
                   variant="outlined"
+                  margin="normal"
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">
                         <PhoneIcon />
                       </InputAdornment>
                     ),
+                  }}
+                  InputLabelProps={{
+                    shrink: true,
+                  }}
+                  placeholder="9876543210"
+                  type="tel"
+                  inputProps={{
+                    inputMode: 'numeric',
+                    pattern: '[0-9]*',
+                    maxLength: 10,
                   }}
                 />
               </Grid>

@@ -140,14 +140,24 @@ const StaffList = () => {
               },
             }
           );
+          const response2 = await axios.get(
+            `http://localhost:8000/Sims/personal-data/${employeeId}/`,
+            {
+              headers: {
+                Authorization: `Token ${token}`,
+              },
+            }
+          );
     
           const data = response.data;
           console.log("staff data:",data)
+          const data2 = response2.data;
+          console.log("personal data:",data2)
     
           setStaffData((prev) => ({
             ...prev,
             staffName: data.username || "",
-            email: data.temp_details?.email || "",
+            email: data2.email || "",
             staffDomain: data.domain_name || data.domain || "",
             department: data.department || "",
             staffTiming: data.shift_timing || "",
@@ -161,10 +171,10 @@ const StaffList = () => {
               ...(data.is_assert_access ? ["Asset Management"] : []),
             ],
             loginTime: prev.loginTime,
-            dob: prev.dob,
-            gender: prev.gender,
-            location: prev.location,
-            mobileNumber: prev.mobileNumber,
+            dob: data2.date_of_birth ? new Date(data2.date_of_birth) : null,
+            gender: data2.gender || "",
+            location: data2.address1 || "",
+            mobileNumber: data2.phone_no || "",
           }));
           setEditStaffId(employeeId); // Make sure to set the edit ID
           setFormMode('edit'); // Make sure form is in edit mode         

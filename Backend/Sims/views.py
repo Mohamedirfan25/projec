@@ -678,11 +678,12 @@ class UserUpdateView(APIView):
 class PersonalDataView(APIView):
     permission_classes = [IsAuthenticated]
     def get(self, request, emp_id=None):
-        user = Temp.objects.get(user=request.user,is_deleted=False)
+        user = Temp.objects.get(user=request.user, is_deleted=False)
         
-        if user.role == "intern":
+        # If user is an intern, they can only see their own data
+        if user.role.lower() == "intern":
             try:
-                personal_data = PersonalData.objects.get(emp_id__emp_id=user.emp_id,is_deleted=False)
+                personal_data = PersonalData.objects.get(emp_id__emp_id=user.emp_id, is_deleted=False)
                 serializer = PersonalDataSerializer(personal_data)
                 return Response(serializer.data)
             except PersonalData.DoesNotExist:
@@ -690,31 +691,45 @@ class PersonalDataView(APIView):
 
         if emp_id:
             try:
-                # Staff department check
-                if user.role.lower() == 'staff':
-                    staff_data = UserData.objects.get(user=request.user,is_deleted=False)
-                    intern_userdata = UserData.objects.get(emp_id__emp_id=emp_id,is_deleted=False)
-                    
-                    if intern_userdata.department != staff_data.department:
-                        return Response({"error": "Intern not in your department"}, 
-                                      status=status.HTTP_403_FORBIDDEN)
+                target_user = Temp.objects.get(emp_id=emp_id, is_deleted=False)
+                
+                # If target is staff
+                if target_user.role.lower() == 'staff':
+                    # Only allow access if requesting user is admin or the same staff member
+                    if user.role.lower() != 'admin' and user.emp_id != emp_id:
+                        return Response(
+                            {"error": "You can only access your own staff data"},
+                            status=status.HTTP_403_FORBIDDEN
+                        )
+                # If target is intern
+                else:
+                    if user.role.lower() == 'staff':
+                        staff_data = UserData.objects.get(user=request.user, is_deleted=False)
+                        intern_userdata = UserData.objects.get(emp_id__emp_id=emp_id, is_deleted=False)
+                        
+                        if intern_userdata.department != staff_data.department:
+                            return Response(
+                                {"error": "Intern not in your department"}, 
+                                status=status.HTTP_403_FORBIDDEN
+                            )
 
-                personal_data = PersonalData.objects.get(emp_id__emp_id=emp_id,is_deleted=False)
+                personal_data = PersonalData.objects.get(emp_id__emp_id=emp_id, is_deleted=False)
                 serializer = PersonalDataSerializer(personal_data)
                 return Response(serializer.data)
-            except PersonalData.DoesNotExist:
-                return Response(status=status.HTTP_404_NOT_FOUND)
+                
+            except (Temp.DoesNotExist, PersonalData.DoesNotExist):
+                return Response({"error": "PersonalData not found"},status=status.HTTP_404_NOT_FOUND)
 
         else:
+            # Rest of the method remains the same
             if user.role.lower() == 'admin':
                 personal_data = PersonalData.objects.filter(is_deleted=False)
             elif user.role.lower() == 'staff':
-                # Get interns in same department
-                staff_data = UserData.objects.get(user=request.user,is_deleted=False)
+                staff_data = UserData.objects.get(user=request.user, is_deleted=False)
                 interns_in_dept = UserData.objects.filter(
-                    department=staff_data.department,is_deleted=False
+                    department=staff_data.department, is_deleted=False
                 ).values_list('emp_id', flat=True)
-                personal_data = PersonalData.objects.filter(emp_id__in=interns_in_dept,is_deleted=False)
+                personal_data = PersonalData.objects.filter(emp_id__in=interns_in_dept, is_deleted=False)
             else:
                 personal_data = PersonalData.objects.none()
 

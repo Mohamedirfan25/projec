@@ -202,54 +202,6 @@ const StaffCreationForm = ({ switchToRegister, formData }) => {
     }
   };
 
-  const handleFetchStaffData = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      const response = await axios.get(
-        `http://localhost:8000/Sims/user-data/${staffData.staffId}/`,
-        {
-          headers: {
-            Authorization: `Token ${token}`,
-          },
-        }
-      );
-
-      const data = response.data;
-
-      setStaffData((prev) => ({
-        ...prev,
-        staffName: data.username || "",
-        email: data.temp_details?.email || "",
-        staffDomain: data.domain_name || data.domain || "",
-        department: data.department || "",
-        staffTiming: data.shift_timing || "",
-        teamName: data.team_name || "",
-        joinDate: data.start_date ? new Date(data.start_date) : null,
-        endDate: data.end_date ? new Date(data.end_date) : null,
-        workUndertaken: [
-          ...(data.is_attendance_access ? ["Attendance Management"] : []),
-          ...(data.is_payroll_access ? ["Payment Management"] : []),
-          ...(data.is_internmanagement_access ? ["Intern Management"] : []),
-          ...(data.is_assert_access ? ["Asset Management"] : []),
-        ],
-        loginTime: prev.loginTime,
-        dob: prev.dob,
-        gender: prev.gender,
-        location: prev.location,
-        mobileNumber: prev.mobileNumber,
-      }));
-      
-      setSnackbarMessage("Staff data loaded successfully.");
-      setSnackbarSeverity("success");
-      setSnackbarOpen(true);
-    } catch (err) {
-      setSnackbarMessage("Staff not found.");
-      setSnackbarSeverity("error");
-      setSnackbarOpen(true);
-      console.error("Fetch error:", err.response?.data || err.message);
-    }
-  };
-  
   const handleSubmit = async () => {
     setLoading(true);
     try {
@@ -277,6 +229,39 @@ const StaffCreationForm = ({ switchToRegister, formData }) => {
       await axios.patch(
         `http://localhost:8000/Sims/user-data/${staffData.staffId}/`,
         payload,
+        {
+          headers: {
+            Authorization: `Token ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      
+      const payload2 = {
+        email: staffData.email,
+        phone_no: staffData.mobileNumber,
+        date_of_birth: staffData.dob?.toISOString().split("T")[0],
+        gender: staffData.gender,
+        address1: staffData.location,
+      }
+      await axios.put(
+        `http://localhost:8000/Sims/personal-data/${staffData.staffId}/`,
+        payload2,
+        {
+          headers: {
+            Authorization: `Token ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      
+      const payload3 = {
+        email: staffData.email
+        
+      }
+      await axios.patch(
+        `http://localhost:8000/Sims/user/update/${staffData.staffId}/`,
+        payload3,
         {
           headers: {
             Authorization: `Token ${token}`,
@@ -675,7 +660,7 @@ const StaffCreationForm = ({ switchToRegister, formData }) => {
                       onChange={handleChange}
                     >
                       <FormControlLabel 
-                        value="Male" 
+                        value="M" 
                         control={<Radio />} 
                         label={
                           <Box display="flex" alignItems="center">
@@ -685,7 +670,7 @@ const StaffCreationForm = ({ switchToRegister, formData }) => {
                         } 
                       />
                       <FormControlLabel 
-                        value="Female" 
+                        value="F" 
                         control={<Radio />} 
                         label={
                           <Box display="flex" alignItems="center">
@@ -694,7 +679,7 @@ const StaffCreationForm = ({ switchToRegister, formData }) => {
                           </Box>
                         } 
                       />
-                      <FormControlLabel value="Other" control={<Radio />} label="Other" />
+                      <FormControlLabel value="O" control={<Radio />} label="Other" />
                     </RadioGroup>
                   </FormControl>
                 </Grid>
