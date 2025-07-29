@@ -4741,7 +4741,7 @@ from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from .models import AttendanceClaim
 from .serializers import AttendanceClaimSerializer, DocumentVersionSerializer
 from Sims.permissions import StaffUserDataAccessPermission
-from Sims.utils.email_utils import send_offer_letter_reportlab
+from Sims.utils.email_utils import  send_offer_letter_reportlab 
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -4752,7 +4752,7 @@ from rest_framework.permissions import IsAuthenticated
 from Sims.models import Document, DocumentVersion, Temp, UserData
 from Sims.serializers import DocumentSerializer, DocumentVersionSerializer
 from Sims.permissions import StaffUserDataAccessPermission
-from Sims.utils.email_utils import send_offer_letter_reportlab
+
 
 class DocumentView(APIView):
     permission_classes = [IsAuthenticated, StaffUserDataAccessPermission]
@@ -5195,60 +5195,134 @@ from rest_framework import status
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def generate_offer_letter_api(request):
+    """API endpoint to generate and send an offer letter."""
+    logger = logging.getLogger(__name__)
+    error_details = {
+        'step': 'Initialization',
+        'error_type': None,
+        'message': None
+    }
+
     try:
-        user_temp = Temp.objects.get(user=request.user)
+        # 1. User Authentication and Permission Check
+        error_details['step'] = 'Authentication'
+        try:
+            user_temp = Temp.objects.get(user=request.user)
+            if user_temp.role.lower() not in ["admin", "hr", "staff"]:
+                error_msg = "Only staff/admin/hr can generate offer letters"
+                logger.warning(f"Permission denied for user: {request.user.username}")
+                return Response(
+                    {"success": False, "error": error_msg}, 
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        except Temp.DoesNotExist:
+            error_msg = "User profile not found. Please complete your profile."
+            logger.error(error_msg)
+            return Response(
+                {"success": False, "error": error_msg}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
 
-        # ✅ Only allow admin/hr/staff to generate offer letters for interns
-        if user_temp.role.lower() not in ["admin", "hr", "staff"]:
-            return Response({"error": "Only staff/admin/hr can generate offer letters"}, status=status.HTTP_403_FORBIDDEN)
-
-        # ✅ Required intern_emp_id
-        intern_emp_id = request.data.get("emp_id")
+        # 2. Validate Request Data
+        error_details['step'] = 'Request Validation'
+        data = request.data
+        intern_emp_id = data.get("emp_id")
+        
         if not intern_emp_id:
-            return Response({"error": "Intern emp_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+            error_msg = "Intern emp_id is required"
+            logger.error(error_msg)
+            return Response(
+                {"success": False, "error": error_msg}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
+        # 3. Get Intern Details
+        error_details['step'] = 'Fetch Intern Details'
         try:
             intern_temp = Temp.objects.get(emp_id=intern_emp_id, role__iexact="intern")
+            logger.info(f"Found intern: {intern_temp.user.get_full_name()} ({intern_temp.emp_id})")
         except Temp.DoesNotExist:
-            return Response({"error": "Intern not found"}, status=status.HTTP_404_NOT_FOUND)
+            error_msg = f"Intern with emp_id {intern_emp_id} not found"
+            logger.error(error_msg)
+            return Response(
+                {"success": False, "error": "Intern not found"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
 
-        # ✅ Dynamic data from frontend
-        college_name = request.data.get("college_name") or "N/A"
-        start_date = request.data.get("start_date") or "N/A"
-        end_date = request.data.get("end_date") or "N/A"
+        # 4. Prepare Data for Offer Letter
+        error_details['step'] = 'Prepare Offer Letter Data'
+        try:
+            # Get data from request with fallbacks
+            offer_data = {
+                'college_name': data.get("college_name", "").strip(),
+                'start_date': data.get("start_date", ""),
+                'end_date': data.get("end_date", ""),
+                'position_title': data.get("position_title", "FullStack Intern").strip(),
+                'domain': data.get("domain", "VDart Academy").strip(),
+                'shift_time': data.get("shift_time", "9:00 AM to 1:00 PM IST").strip(),
+                'shift_days': data.get("shift_days", "Monday to Friday").strip(),
+                'work_location': data.get(
+                    "work_location", 
+                    "VDart, Global Capability Center, Mannarpuram"
+                ).strip(),
+                'reporting_to': data.get("reporting_to", "Derrick Alex").strip()
+            }
 
-        position_title = request.data.get("position_title", "FullStack Intern")
-        domain = request.data.get("domain", "VDart Academy")
-        shift_time = request.data.get("shift_time", "9:00 AM to 1:00 PM IST")
-        shift_days = request.data.get("shift_days", "Monday to Friday")
-        work_location = request.data.get("work_location", "VDart, Global Capability Center, Mannarpuram")
-        reporting_to = request.data.get("reporting_to", "Derrick Alex")
+            # Log the request details
+            logger.info(f"Generating offer letter with data: {json.dumps(offer_data, indent=2)}")
 
-        success = send_offer_letter_reportlab(
-            user=intern_temp.user,
-            emp_id=intern_temp.emp_id,
-            college_name=college_name,
-            start_date=start_date,
-            end_date=end_date,
-            position_title=position_title,
-            domain=domain,
-            shift_time=shift_time,
-            shift_days=shift_days,
-            work_location=work_location,
-            reporting_to=reporting_to,
-        )
+            # 5. Generate and Send Offer Letter
+            error_details['step'] = 'Generate and Send Offer Letter'
+            success, message, error_info = send_offer_letter_reportlab(
+                user=intern_temp.user,
+                emp_id=intern_temp.emp_id,
+                **offer_data
+            )
 
-        if success:
-            return Response({"message": f"Offer letter sent to intern {intern_emp_id} successfully!"}, status=status.HTTP_200_OK)
-        else:
-            return Response({"error": "Failed to generate or send offer letter"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            if success:
+                logger.info(f"Successfully sent offer letter to {intern_temp.user.email}")
+                return Response(
+                    {"success": True, "message": message},
+                    status=status.HTTP_200_OK
+                )
+            else:
+                error_msg = f"Failed to send offer letter: {message}"
+                logger.error(error_msg)
+                error_details.update({
+                    'error_type': 'Offer Letter Error',
+                    'message': message,
+                    'details': error_info
+                })
+                return Response(
+                    {"success": False, "error": message, "details": error_info},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
 
-    except Temp.DoesNotExist:
-        return Response({"error": "User profile not found"}, status=status.HTTP_403_FORBIDDEN)
+        except Exception as e:
+            error_msg = f"Error processing offer letter data: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            error_details.update({
+                'error_type': 'Data Processing Error',
+                'message': str(e),
+                'traceback': traceback.format_exc()
+            })
+            return Response(
+                {"success": False, "error": "Error processing request", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
     except Exception as e:
-        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
+        error_msg = f"Unexpected error in generate_offer_letter_api: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        error_details.update({
+            'error_type': 'Unexpected Error',
+            'message': str(e),
+            'traceback': traceback.format_exc()
+        })
+        return Response(
+            {"success": False, "error": "An unexpected error occurred", "details": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 # class LeaveHistoryView(APIView):
 #     permission_classes = [IsAuthenticated]
 
