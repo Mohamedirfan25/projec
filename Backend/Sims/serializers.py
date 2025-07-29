@@ -600,3 +600,18 @@ class AttendanceClaimSerializer(serializers.ModelSerializer):
             validated_data['reviewed_by'] = user
         
         return super().update(instance, validated_data)
+
+class PartialCompletionCertificateSerializer(serializers.ModelSerializer):
+    tasks_completed = TaskSerializer(many=True, read_only=True)
+    
+    class Meta:
+        model = PartialCompletionCertificate
+        fields = '__all__'
+        read_only_fields = ('issue_date', 'is_approved', 'approved_by')
+
+class TaskCertificateSerializer(serializers.Serializer):
+    emp_id = serializers.CharField(max_length=10, required=True)
+    performance_comment = serializers.CharField(required=False, default="outstanding performance")
+
+class AttendanceCertificateSerializer(serializers.Serializer):
+    emp_id = serializers.CharField(max_length=10, required=True)

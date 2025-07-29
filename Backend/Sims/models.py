@@ -333,6 +333,20 @@ class Task(models.Model):
     def __str__(self):
         return f"Task: {self.task_title} - Assigned to {self.assigned_to.username} - Priority: {self.priority}"
 
+class PartialCompletionCertificate(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='partial_certificates')
+    issue_date = models.DateField(auto_now_add=True)
+    completion_percentage = models.DecimalField(max_digits=5, decimal_places=2)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    tasks_completed = models.ManyToManyField(Task, related_name='certificates')
+    remarks = models.TextField(blank=True)
+    is_approved = models.BooleanField(default=False)
+    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='approved_certificates')
+
+    def __str__(self):
+        return f"Partial Completion Certificate - {self.user.username}"
+
 class Log(models.Model):
     is_deleted = models.BooleanField(default=False)
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

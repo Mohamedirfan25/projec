@@ -3,6 +3,8 @@ from rest_framework.response import Response
 from rest_framework import status
 from .models import *
 from .serializers import *
+from pathlib import Path
+from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
 from rest_framework.authtoken.models import Token
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -16,15 +18,10 @@ from django.db import IntegrityError
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Q, F, Sum, Case, When, Value, IntegerField
 from django.db.models.functions import ExtractMonth, ExtractYear
-
 # Import specific models and serializers needed for attendance claims
 from .models import AttendanceClaim, Attendance, AttendanceLog, AttendanceEntries, UserData, Department, Temp, Document, DocumentVersion, Log
 from .serializers import AttendanceClaimSerializer, AttendanceSerializer, AttendanceLogSerializer, AttendanceEntriesSerializer, UserDataSerializer, DepartmentSerializer, TempSerializer, DocumentSerializer, DocumentVersionSerializer
-
-
 from django.db.models import OuterRef, Subquery  # <-- Add this line
-
-
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
 from django.db.models import Sum
@@ -34,39 +31,45 @@ from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from rest_framework.generics import GenericAPIView
 from rest_framework import generics, permissions
-
 from django.db.models import Window, F
 from django.db.models.functions import RowNumber
-
-
 from .models import PasswordResetOTP, AttendanceClaim
 from .serializers import (
     ResetPasswordOTPRequestSerializer, 
     VerifyOTPSerializer,
     AttendanceClaimSerializer
 )
-
 from django.db.models import Count, Q
 from django.db.models import Q 
 from django.db.models.functions import TruncMonth
-
 from rest_framework.decorators import api_view, permission_classes
-
 from decimal import Decimal, InvalidOperation
-
 from django.utils.timezone import now
 from django.db.models.functions import ExtractMonth
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.db.models import Q
-
-
 import json
-
-
 from .permissions import StaffAttendanceAccessPermission,StaffPayRollPermission,StaffAssertAccessPermission,StaffUserDataAccessPermission
-
-
 import random
+from docx import Document
+from docx.shared import Pt, Inches
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from io import BytesIO
+from django.http import HttpResponse
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from datetime import datetime
+from .models import Task, AttendanceClaim
+from .serializers import TaskCertificateSerializer, AttendanceCertificateSerializer
+from .utils.email_utils import send_email_with_attachment
+from docx import Document as DocxDocument
+from docx2pdf import convert
+import os
+import tempfile
+import pythoncom
+
+
 
 logger = logging.getLogger(__name__)
 
@@ -6432,3 +6435,173 @@ def generate_completed_certificate(request, emp_id):
 
     except Temp.DoesNotExist:
         return HttpResponse("Intern not found", status=404)
+
+
+class GenerateTaskCertificate(APIView):
+    def post(self, request, format=None):
+        serializer = TaskCertificateSerializer(data=request.data)
+        if serializer.is_valid():
+            try:
+                intern = Temp.objects.get(emp_id=serializer.validated_data['emp_id'])
+                tasks = Task.objects.filter(
+                    assigned_to=intern.user,
+                    status='completed',
+                    committed_date__isnull=False
+                ).order_by('committed_date')
+                
+                template_path = Path(settings.BASE_DIR) / 'templates' / 'certificates' / 'task_cert_temp.docx'
+                doc = DocxDocument(template_path)
+                
+                # Replace placeholders in the document
+                for paragraph in doc.paragraphs:
+                    paragraph.text = paragraph.text.replace('{{INTERN_NAME}}', intern.user.get_full_name())
+                    paragraph.text = paragraph.text.replace('{{CURRENT_DATE}}', datetime.now().strftime('%B %d, %Y'))
+                    paragraph.text = paragraph.text.replace('{{TOTAL_TASKS}}', str(tasks.count()))
+                    paragraph.text = paragraph.text.replace('{{PERFORMANCE_COMMENT}}', 
+                                                          serializer.validated_data.get('performance_comment', 
+                                                                                      'outstanding performance'))
+
+                        # Add tasks table
+                table = doc.add_table(rows=1, cols=3)
+                
+                # Add headers
+                hdr_cells = table.rows[0].cells
+                hdr_cells[0].text = 'Task Title'
+                hdr_cells[1].text = 'Description'
+                hdr_cells[2].text = 'Completed On'
+                
+                # Add task rows
+                for task in tasks:
+                    row_cells = table.add_row().cells
+                    row_cells[0].text = task.title
+                    row_cells[1].text = task.description
+                    row_cells[2].text = task.committed_date.strftime('%Y-%m-%d')
+                
+                # Save the modified document to a temporary file
+                temp_docx = tempfile.NamedTemporaryFile(suffix=".docx", delete=False)
+                doc.save(temp_docx.name)
+                temp_docx.close()
+
+                # Create a temp PDF output file path
+                temp_pdf_path = temp_docx.name.replace(".docx", ".pdf")
+
+                # Convert DOCX to PDF (save directly to file path)
+                pythoncom.CoInitialize() 
+                convert(temp_docx.name, temp_pdf_path)
+
+                # Now you can read the PDF into memory (optional)
+                with open(temp_pdf_path, 'rb') as pdf_file:
+                    pdf_bytes = pdf_file.read()
+
+                pdf_buffer = BytesIO(pdf_bytes)
+                pdf_buffer.seek(0)
+
+                # Clean up temp files
+                os.unlink(temp_docx.name)
+                os.unlink(temp_pdf_path)
+                
+                # Send email with PDF attachment
+                subject = f"Task Completion Certificate - {intern.user.get_full_name()}"
+                message = f"Dear {intern.user.get_full_name()},\n\nPlease find attached your task completion certificate.\n\nBest regards,\nThe Management"
+                to_email = [intern.user.email]
+                
+                send_email_with_attachment(
+                    subject=subject,
+                    message=message,
+                    recipient_list=to_email,
+                    attachment=pdf_buffer.getvalue(),
+                    filename=f"Task_Certificate_{intern.emp_id}.pdf",
+                    content_type='application/pdf'
+                )
+                
+                return Response(
+                    {"success": True, "message": "Task certificate sent successfully"},
+                    status=status.HTTP_200_OK
+                )
+                
+            except Temp.DoesNotExist:
+                return Response(
+                    {"success": False, "error": "Intern not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            except Exception as e:
+                return Response(
+                    {"success": False, "error": str(e)},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class GenerateAttendanceCertificate(APIView):
+    def post(self, request, format=None):
+        serializer = AttendanceCertificateSerializer(data=request.data)
+        if serializer.is_valid():
+            try:
+                intern = Temp.objects.get(emp_id=serializer.validated_data['emp_id'])
+                attendance = Attendance.objects.filter(user=intern.user)
+                
+                
+                # Load the Word template
+                template_path = 'templates/certificates/attendance_certificate_template.docx'
+                doc = Document(template_path)
+                
+                # Replace placeholders in the document
+                for paragraph in doc.paragraphs:
+                    paragraph.text = paragraph.text.replace('{{INTERN_NAME}}', intern.user.get_full_name())
+                    paragraph.text = paragraph.text.replace('{{CURRENT_DATE}}', datetime.now().strftime('%B %d, %Y'))
+                    paragraph.text = paragraph.text.replace('{{PERIOD}}', attendance.for_period)
+                    paragraph.text = paragraph.text.replace('{{FROM_DATE}}', 
+                                                          attendance.from_date.strftime('%B %d, %Y'))
+                    paragraph.text = paragraph.text.replace('{{TO_DATE}}', 
+                                                         attendance.to_date.strftime('%B %d, %Y'))
+                    paragraph.text = paragraph.text.replace('{{ATTENDANCE_STATUS}}', 
+                                                          'Full-time' if attendance.from_day_type == 'full' 
+                                                          else 'Part-time')
+                    # Add more placeholders as needed
+                    paragraph.text = paragraph.text.replace('{{DOMAIN}}', intern.domain or 'N/A')
+                    paragraph.text = paragraph.text.replace('{{DEPARTMENT}}', intern.department or 'N/A')
+                    paragraph.text = paragraph.text.replace('{{TOTAL_DAYS}}', 
+                                                         str((attendance.to_date - attendance.from_date).days + 1))
+                
+                # Save the modified document to a temporary file
+                with tempfile.NamedTemporaryFile(suffix='.docx', delete=False) as tmp:
+                    doc.save(tmp.name)
+                    tmp_path = tmp.name
+                
+                # Convert to PDF in memory
+                pdf_buffer = BytesIO()
+                convert(tmp_path, pdf_buffer)
+                pdf_buffer.seek(0)
+                
+                # Clean up the temporary file
+                os.unlink(tmp_path)
+                
+                # Send email with PDF attachment
+                subject = f"Attendance Certificate - {intern.user.get_full_name()}"
+                message = f"Dear {intern.user.get_full_name()},\n\nPlease find attached your attendance certificate for {attendance.for_period}.\n\nBest regards,\nThe Management"
+                to_email = [intern.user.email]
+                
+                send_email_with_attachment(
+                    subject=subject,
+                    message=message,
+                    recipient_list=to_email,
+                    attachment=pdf_buffer,
+                    filename=f"Attendance_Certificate_{intern.emp_id}.pdf",
+                    content_type='application/pdf'
+                )
+                
+                return Response(
+                    {"success": True, "message": "Attendance certificate sent successfully"},
+                    status=status.HTTP_200_OK
+                )
+                
+            except (Temp.DoesNotExist, Attendance.DoesNotExist) as e:
+                return Response(
+                    {"success": False, "error": "Intern or attendance not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            except Exception as e:
+                return Response(
+                    {"success": False, "error": str(e)},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
