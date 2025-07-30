@@ -289,7 +289,6 @@ class Attendance(models.Model):
     present_status = models.CharField(max_length=20, choices=PRESENT_STATUS_CHOICES, default='Null')  # Attendance status
     
 
-    # models.py (Attendance model)
     def save(self, *args, **kwargs):
         # If marking as absent without an approved leave request
         if self.present_status == "Absent" and not self.leave_request:
