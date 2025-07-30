@@ -1202,6 +1202,7 @@ const CompanyDetailsForm = ({ onBack, onNext, initialData }) => {
   duration: '',
   days: '',
   shiftTiming: '',
+  workingDays: '',
   scheme: '',
   teamName: '',
   userStatus: '',
@@ -1246,10 +1247,10 @@ const CompanyDetailsForm = ({ onBack, onNext, initialData }) => {
   ];
 
   const workingDaysOptions = [
-    { value: "mon-fri", label: "Monday to Friday" },
-    { value: "mon-sat", label: "Monday to Saturday" },
-    { value: "sun-thu", label: "Sunday to Thursday" },
-    { value: "shift", label: "Rotational Shifts" }
+    { value: "Monday to Friday", label: "Monday to Friday" },
+    { value: "Monday to Saturday", label: "Monday to Saturday" },
+    { value: "Sunday to Thursday", label: "Sunday to Thursday" },
+    { value: "Rotational Shifts", label: "Rotational Shifts" }
   ];
 
   const shiftTimings = [
@@ -1954,6 +1955,7 @@ const DocumentsUpload = ({ onBack, onNext, initialData, allFormData }) => {
           duration: allFormData.companyData.duration || '',
           days: allFormData.companyData.days || allFormData.companyData.workingDays || '',
           shift_timing: allFormData.companyData.shiftTiming || '',
+          shift_days: allFormData.companyData.workingDays || '',
           scheme: allFormData.companyData.scheme || '',
           team_name: allFormData.companyData.teamName || '',
           user_status: allFormData.companyData.userStatus || allFormData.companyData.status || '',

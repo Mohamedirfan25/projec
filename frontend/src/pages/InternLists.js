@@ -470,7 +470,7 @@ const handleCertificateAction = async (type) => {
           reporting_to: userData.data.reportingManager || "Derrick Alex",
           emp_id: selectedIntern.id, 
           shift_time: userData.data.shift_timing,
-          shift_days: 'Monday to Friday'
+          shift_days: userData.data.shift_days
         };
         console.log(data);
         const offer_letter = await axios.post(endpoint, data ,
@@ -502,6 +502,30 @@ const handleCertificateAction = async (type) => {
     
         link.remove();
         window.URL.revokeObjectURL(url);
+        break;
+      case 'Task Certificate':
+        const response2 = await axios.post(
+          `http://localhost:8000/Sims/generate-task-certificate/`,
+          {
+            emp_id: selectedIntern.id,
+          },
+          {
+            headers: { Authorization: `Token ${token}` },
+            responseType: "blob",
+          }
+        );
+        break;
+      case 'Attendance Certificate':
+        const response3 = await axios.post(
+          `http://localhost:8000/Sims/generate-attendance-certificate/`,
+          {
+            emp_id: selectedIntern.id,
+          },
+          {
+            headers: { Authorization: `Token ${token}` },
+            responseType: "blob",
+          }
+        );
         break;
       default:
         break;
@@ -2984,10 +3008,10 @@ const RegisterPage = ({ onNext, initialData, isReturning, onCancel }) => {
             
             
             const workingDaysOptions = [
-            { value: "mon-fri", label: "Monday to Friday" },
-            { value: "mon-sat", label: "Monday to Saturday" },
-            { value: "sun-thu", label: "Sunday to Thursday" },
-            { value: "shift", label: "Rotational Shifts" }
+            { value: "Monday to Friday", label: "Monday to Friday" },
+            { value: "Monday to Saturday", label: "Monday to Saturday" },
+            { value: "Sunday to Thursday", label: "Sunday to Thursday" },
+            { value: "Rotational Shifts", label: "Rotational Shifts" }
             ];
             
             const shiftTimings = [

@@ -131,6 +131,7 @@ class UserData(models.Model):
     duration = models.CharField(max_length=50,null=True,blank=True)
     days = models.CharField(max_length=50,blank=True,null=True)
     shift_timing = models.CharField(max_length=50,null=True,blank=True)
+    shift_days = models.CharField(max_length=50,null=True,blank=True)
     #domain = models.CharField(max_length=250,default="Free")
     domain = models.ForeignKey(Domain, on_delete=models.CASCADE, null=True, to_field="domain")
     

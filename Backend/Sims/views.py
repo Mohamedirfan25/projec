@@ -4759,7 +4759,7 @@ from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from .models import AttendanceClaim
 from .serializers import AttendanceClaimSerializer, DocumentVersionSerializer
 from Sims.permissions import StaffUserDataAccessPermission
-from Sims.utils.email_utils import  send_offer_letter_reportlab 
+from Sims.utils.email_utils import  send_offer_letter
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -6454,7 +6454,7 @@ class GenerateTaskCertificate(APIView):
                 intern = Temp.objects.get(emp_id=serializer.validated_data['emp_id'])
                 tasks = Task.objects.filter(
                     assigned_to=intern.user,
-                    status='completed',
+                    status='Completed',
                     committed_date__isnull=False
                 ).order_by('committed_date')
                 
@@ -6463,28 +6463,45 @@ class GenerateTaskCertificate(APIView):
                 
                 # Replace placeholders in the document
                 for paragraph in doc.paragraphs:
-                    paragraph.text = paragraph.text.replace('{{INTERN_NAME}}', intern.user.get_full_name())
-                    paragraph.text = paragraph.text.replace('{{CURRENT_DATE}}', datetime.now().strftime('%B %d, %Y'))
-                    paragraph.text = paragraph.text.replace('{{TOTAL_TASKS}}', str(tasks.count()))
-                    paragraph.text = paragraph.text.replace('{{PERFORMANCE_COMMENT}}', 
-                                                          serializer.validated_data.get('performance_comment', 
-                                                                                      'outstanding performance'))
+                    if '{{INTERN_NAME}}' in paragraph.text:
+                        paragraph.text = paragraph.text.replace('{{INTERN_NAME}}', intern.user.get_full_name())
+                    if '{{CURRENT_DATE}}' in paragraph.text:
+                        paragraph.text = paragraph.text.replace('{{CURRENT_DATE}}', datetime.now().strftime('%B %d, %Y'))
+                    if '{{TOTAL_TASKS}}' in paragraph.text:
+                        paragraph.text = paragraph.text.replace('{{TOTAL_TASKS}}', str(tasks.count()))
+                    if '{{PERFORMANCE_COMMENT}}' in paragraph.text:
+                        paragraph.text = paragraph.text.replace('{{PERFORMANCE_COMMENT}}', 
+                                                                serializer.validated_data.get('performance_comment', 
+                                                                                            'outstanding performance'))
 
-                        # Add tasks table
-                table = doc.add_table(rows=1, cols=3)
-                
-                # Add headers
-                hdr_cells = table.rows[0].cells
-                hdr_cells[0].text = 'Task Title'
-                hdr_cells[1].text = 'Description'
-                hdr_cells[2].text = 'Completed On'
-                
-                # Add task rows
-                for task in tasks:
-                    row_cells = table.add_row().cells
-                    row_cells[0].text = task.title
-                    row_cells[1].text = task.description
-                    row_cells[2].text = task.committed_date.strftime('%Y-%m-%d')
+                # Find the index of the paragraph containing "Completed Tasks:"
+                insert_index = None
+                for i, paragraph in enumerate(doc.paragraphs):
+                    if 'Completed Tasks:' in paragraph.text:
+                        insert_index = i + 1
+                        break
+
+                # Insert table after "Completed Tasks:"
+                if insert_index is not None:
+                    # Create table
+                    table = doc.add_table(rows=1, cols=3)
+
+                    # Add headers
+                    hdr_cells = table.rows[0].cells
+                    hdr_cells[0].text = 'Task Title'
+                    hdr_cells[1].text = 'Description'
+                    hdr_cells[2].text = 'Completed On'
+
+                    # Add task rows
+                    for task in tasks:
+                        row_cells = table.add_row().cells
+                        row_cells[0].text = task.task_title
+                        row_cells[1].text = task.task_description
+                        row_cells[2].text = task.committed_date.strftime('%Y-%m-%d')
+
+                    # Move the table to the correct position
+                    paragraph = doc.paragraphs[insert_index]
+                    paragraph._element.addnext(table._element)
                 
                 # Save the modified document to a temporary file
                 temp_docx = tempfile.NamedTemporaryFile(suffix=".docx", delete=False)
@@ -6498,30 +6515,36 @@ class GenerateTaskCertificate(APIView):
                 pythoncom.CoInitialize() 
                 convert(temp_docx.name, temp_pdf_path)
 
-                # Now you can read the PDF into memory (optional)
+                # Instead of using BytesIO, let's read the PDF file directly
                 with open(temp_pdf_path, 'rb') as pdf_file:
-                    pdf_bytes = pdf_file.read()
+                    pdf_content = pdf_file.read()
 
-                pdf_buffer = BytesIO(pdf_bytes)
-                pdf_buffer.seek(0)
+                # Send email with PDF attachment
+                subject = f"Task Completion Certificate - {intern.user.get_full_name()}"
+                message = f"Dear {intern.user.get_full_name()},\n\nPlease find attached your task completion certificate.\n\nBest regards,\nThe Management"
+                to_email = ['smanfsaf@gmail.com']
+                
+                # Create email with attachment
+                email = EmailMessage(
+                    subject=subject,
+                    body=message,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    to=to_email,
+                )
+                
+                # Attach the PDF directly from the file
+                email.attach(
+                    f"Task_Certificate_{intern.emp_id}.pdf",
+                    pdf_content,
+                    'application/pdf'
+                )
+                
+                # Send the email
+                email.send(fail_silently=False)
 
                 # Clean up temp files
                 os.unlink(temp_docx.name)
                 os.unlink(temp_pdf_path)
-                
-                # Send email with PDF attachment
-                subject = f"Task Completion Certificate - {intern.user.get_full_name()}"
-                message = f"Dear {intern.user.get_full_name()},\n\nPlease find attached your task completion certificate.\n\nBest regards,\nThe Management"
-                to_email = [intern.user.email]
-                
-                send_email_with_attachment(
-                    subject=subject,
-                    message=message,
-                    recipient_list=to_email,
-                    attachment=pdf_buffer.getvalue(),
-                    filename=f"Task_Certificate_{intern.emp_id}.pdf",
-                    content_type='application/pdf'
-                )
                 
                 return Response(
                     {"success": True, "message": "Task certificate sent successfully"},
@@ -6546,57 +6569,69 @@ class GenerateAttendanceCertificate(APIView):
         if serializer.is_valid():
             try:
                 intern = Temp.objects.get(emp_id=serializer.validated_data['emp_id'])
-                attendance = Attendance.objects.filter(user=intern.user)
+                attendance = Attendance.objects.filter(emp_id=intern, present_status='Present')
+                period = UserData.objects.get(emp_id=intern)
                 
                 
                 # Load the Word template
-                template_path = 'templates/certificates/attendance_certificate_template.docx'
-                doc = Document(template_path)
+                template_path = 'templates/certificates/attendance_cert_temp.docx'
+                doc = DocxDocument(template_path)
                 
                 # Replace placeholders in the document
                 for paragraph in doc.paragraphs:
                     paragraph.text = paragraph.text.replace('{{INTERN_NAME}}', intern.user.get_full_name())
                     paragraph.text = paragraph.text.replace('{{CURRENT_DATE}}', datetime.now().strftime('%B %d, %Y'))
-                    paragraph.text = paragraph.text.replace('{{PERIOD}}', attendance.for_period)
+                    paragraph.text = paragraph.text.replace('{{PERIOD}}', period.duration)
                     paragraph.text = paragraph.text.replace('{{FROM_DATE}}', 
-                                                          attendance.from_date.strftime('%B %d, %Y'))
+                                                          period.start_date.strftime('%B %d, %Y'))
                     paragraph.text = paragraph.text.replace('{{TO_DATE}}', 
-                                                         attendance.to_date.strftime('%B %d, %Y'))
+                                                         period.end_date.strftime('%B %d, %Y'))
                     paragraph.text = paragraph.text.replace('{{ATTENDANCE_STATUS}}', 
-                                                          'Full-time' if attendance.from_day_type == 'full' 
-                                                          else 'Part-time')
-                    # Add more placeholders as needed
-                    paragraph.text = paragraph.text.replace('{{DOMAIN}}', intern.domain or 'N/A')
-                    paragraph.text = paragraph.text.replace('{{DEPARTMENT}}', intern.department or 'N/A')
-                    paragraph.text = paragraph.text.replace('{{TOTAL_DAYS}}', 
-                                                         str((attendance.to_date - attendance.from_date).days + 1))
+                                                          str(round(attendance.count() / ((period.end_date - period.start_date).days+1) * 100, 2)) + '%')
+
                 
                 # Save the modified document to a temporary file
-                with tempfile.NamedTemporaryFile(suffix='.docx', delete=False) as tmp:
-                    doc.save(tmp.name)
-                    tmp_path = tmp.name
-                
-                # Convert to PDF in memory
-                pdf_buffer = BytesIO()
-                convert(tmp_path, pdf_buffer)
-                pdf_buffer.seek(0)
-                
-                # Clean up the temporary file
-                os.unlink(tmp_path)
-                
+                temp_docx = tempfile.NamedTemporaryFile(suffix=".docx", delete=False)
+                doc.save(temp_docx.name)
+                temp_docx.close()
+
+                # Create a temp PDF output file path
+                temp_pdf_path = temp_docx.name.replace(".docx", ".pdf")
+
+                # Convert DOCX to PDF (save directly to file path)
+                pythoncom.CoInitialize() 
+                convert(temp_docx.name, temp_pdf_path)
+
+                # Instead of using BytesIO, let's read the PDF file directly
+                with open(temp_pdf_path, 'rb') as pdf_file:
+                    pdf_content = pdf_file.read()
+
                 # Send email with PDF attachment
                 subject = f"Attendance Certificate - {intern.user.get_full_name()}"
-                message = f"Dear {intern.user.get_full_name()},\n\nPlease find attached your attendance certificate for {attendance.for_period}.\n\nBest regards,\nThe Management"
-                to_email = [intern.user.email]
+                message = f"Dear {intern.user.get_full_name()},\n\nPlease find attached your attendance certificate.\n\nBest regards,\nThe Management"
+                to_email = ['smanfsaf@gmail.com']
                 
-                send_email_with_attachment(
+                # Create email with attachment
+                email = EmailMessage(
                     subject=subject,
-                    message=message,
-                    recipient_list=to_email,
-                    attachment=pdf_buffer,
-                    filename=f"Attendance_Certificate_{intern.emp_id}.pdf",
-                    content_type='application/pdf'
+                    body=message,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    to=to_email,
                 )
+                
+                # Attach the PDF directly from the file
+                email.attach(
+                    f"Attendance_Certificate_{intern.emp_id}.pdf",
+                    pdf_content,
+                    'application/pdf'
+                )
+                
+                # Send the email
+                email.send(fail_silently=False)
+
+                # Clean up temp files
+                os.unlink(temp_docx.name)
+                os.unlink(temp_pdf_path)
                 
                 return Response(
                     {"success": True, "message": "Attendance certificate sent successfully"},
