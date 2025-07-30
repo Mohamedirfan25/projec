@@ -615,3 +615,6 @@ class TaskCertificateSerializer(serializers.Serializer):
 
 class AttendanceCertificateSerializer(serializers.Serializer):
     emp_id = serializers.CharField(max_length=10, required=True)
+
+class PartialCertificateSerializer(serializers.Serializer):
+    emp_id = serializers.CharField(max_length=10, required=True)

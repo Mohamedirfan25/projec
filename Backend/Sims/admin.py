@@ -38,3 +38,4 @@ admin.site.register(Department)
 
 admin.site.register(LeaveRequest)
 admin.site.register(AssertAssignmentLog)
+admin.site.register(PartialCompletionCertificate)
