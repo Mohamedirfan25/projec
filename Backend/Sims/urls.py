@@ -4,7 +4,7 @@ from . import views_attendance_claim
 from .views import generate_offer_letter_api
 from .views import generate_completed_certificate
 from .views import CollegeDetailsView
-from .views import UserPermissionsView, GenerateTaskCertificate, GenerateAttendanceCertificate
+from .views import UserPermissionsView, GenerateTaskCertificate, GenerateAttendanceCertificate, GeneratePartialCertificate
 
 urlpatterns = [
     path("user/update/<str:emp_id>/", views.UserUpdateView.as_view(), name='user-update'),
@@ -14,6 +14,7 @@ urlpatterns = [
          name='generate_offer_letter_api'),
     path('generate-task-certificate/', GenerateTaskCertificate.as_view(), name='generate-task-certificate'),
     path('generate-attendance-certificate/', GenerateAttendanceCertificate.as_view(), name='generate-attendance-certificate'),
+    path('generate-partial-certificate/', GeneratePartialCertificate.as_view(), name='generate-partial-certificate'),
     path('temps/', views.TempView.as_view(), name='temp-list'),
     path('temps/<str:emp_id>/', views.TempView.as_view(), name='temp-detail'),
     
@@ -111,6 +112,10 @@ urlpatterns = [
 
     # Document Download
     path('documents/<uuid:pk>/download/', views.download_document, name='document-download'),
+    
+    # Fees
+    path('fees/', views.FeesView.as_view(), name='fees-list'),
+    path('fees/<str:emp_id>/', views.FeesView.as_view(), name='fees-detail'),
 
     # Available Interns
     path('available-interns/<str:department_name>/', views.interns_without_asset_in_department, name='available-interns'),

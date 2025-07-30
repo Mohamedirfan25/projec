@@ -68,6 +68,7 @@ from docx2pdf import convert
 import os
 import tempfile
 import pythoncom
+from docx.enum.table import WD_TABLE_ALIGNMENT
 
 
 
@@ -1105,11 +1106,22 @@ class AssertStockView(APIView):
                 if 'department' in request_data:
                     del request_data['department']
 
-            # First update the allocated_type directly if it's in the request
+            # First update the fields directly that need special handling
+            update_fields = []
             if 'allocated_type' in request_data:
                 assert_stock.allocated_type = request_data['allocated_type']
-                assert_stock.save(update_fields=['allocated_type'])
+                update_fields.append('allocated_type')
                 
+            # Handle assert_model update directly to ensure it's saved
+            if 'assert_model' in request_data:
+                assert_stock.assert_model = request_data['assert_model']
+                update_fields.append('assert_model')
+                
+            # Save any direct field updates
+            if update_fields:
+                assert_stock.save(update_fields=update_fields)
+                
+            # Create serializer with the updated instance
             serializer = AssertStockSerializer(assert_stock, data=request_data, partial=True)
             
             if serializer.is_valid():
@@ -6783,6 +6795,105 @@ class GenerateCompletionCertificate(APIView):
             except UserData.DoesNotExist:
                 return Response(
                     {"success": False, "error": "User data not found for this intern"},
+
+class GeneratePartialCertificate(APIView):
+    def post(self, request, format=None):
+        serializer = PartialCertificateSerializer(data=request.data)
+        if serializer.is_valid():
+            try:
+                intern = Temp.objects.get(emp_id=serializer.validated_data['emp_id'])
+                data = PartialCompletionCertificate.objects.get(user=intern.user)
+                userdata = UserData.objects.get(emp_id=intern)
+                attendance = Attendance.objects.filter(emp_id=intern, present_status='Present')
+                tasks = Task.objects.filter(
+                    assigned_to=intern.user,
+                    status='Completed',
+                    committed_date__isnull=False
+                ).order_by('committed_date')                
+                
+                # Load the Word template
+                template_path = 'templates/certificates/partial_cert_temp.docx'
+                doc = DocxDocument(template_path)
+                
+                # Replace placeholders in the document
+                for paragraph in doc.paragraphs:
+                    paragraph.text = paragraph.text.replace('{{INTERN_NAME}}', intern.user.get_full_name())
+                    paragraph.text = paragraph.text.replace('{{CURRENT_DATE}}', datetime.now().strftime('%B %d, %Y'))
+                    paragraph.text = paragraph.text.replace('{{PERIOD}}', userdata.duration)
+                    paragraph.text = paragraph.text.replace('{{FROM_DATE}}', 
+                                                          data.start_date.strftime('%B %d, %Y'))
+                    paragraph.text = paragraph.text.replace('{{TO_DATE}}', 
+                                                         data.end_date.strftime('%B %d, %Y'))
+                    paragraph.text = paragraph.text.replace('{{COMPLETION_PERCENTAGE}}', 
+                                                          str(round(attendance.count() / ((data.end_date - data.start_date).days+1) * 100, 2)))
+                    paragraph.text = paragraph.text.replace('{{REMARKS}}', data.remarks)
+                    # Create a table for completed tasks
+                    table = doc.add_table(rows=1, cols=3)
+                    table.style.paragraph_format.alignment = WD_TABLE_ALIGNMENT.CENTER
+                    header_row = table.rows[0]
+                    header_row.cells[0].text = 'Task'
+                    header_row.cells[1].text = 'Description'
+                    header_row.cells[2].text = 'Date Completed'
+                    for task in tasks:
+                        row = table.add_row()
+                        row.cells[0].text = task.task_title
+                        row.cells[1].text = task.task_description
+                        row.cells[2].text = task.committed_date.strftime('%B %d, %Y')
+                    paragraph.text = paragraph.text.replace('{{TASKS_COMPLETED}}', table._element.xml)
+
+
+                
+                # Save the modified document to a temporary file
+                temp_docx = tempfile.NamedTemporaryFile(suffix=".docx", delete=False)
+                doc.save(temp_docx.name)
+                temp_docx.close()
+
+                # Create a temp PDF output file path
+                temp_pdf_path = temp_docx.name.replace(".docx", ".pdf")
+
+                # Convert DOCX to PDF (save directly to file path)
+                pythoncom.CoInitialize() 
+                convert(temp_docx.name, temp_pdf_path)
+
+                # Instead of using BytesIO, let's read the PDF file directly
+                with open(temp_pdf_path, 'rb') as pdf_file:
+                    pdf_content = pdf_file.read()
+
+                # Send email with PDF attachment
+                subject = f"Partial Completion Certificate - {intern.user.get_full_name()}"
+                message = f"Dear {intern.user.get_full_name()},\n\nPlease find attached your partial completion certificate.\n\nBest regards,\nThe Management"
+                to_email = ['smanfsaf@gmail.com']
+                
+                # Create email with attachment
+                email = EmailMessage(
+                    subject=subject,
+                    body=message,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    to=to_email,
+                )
+                
+                # Attach the PDF directly from the file
+                email.attach(
+                    f"Partial_Completion_Certificate_{intern.emp_id}.pdf",
+                    pdf_content,
+                    'application/pdf'
+                )
+                
+                # Send the email
+                email.send(fail_silently=False)
+
+                # Clean up temp files
+                os.unlink(temp_docx.name)
+                os.unlink(temp_pdf_path)
+                
+                return Response(
+                    {"success": True, "message": "Partial completion certificate sent successfully"},
+                    status=status.HTTP_200_OK
+                )
+                
+            except (Temp.DoesNotExist, PartialCompletionCertificate.DoesNotExist) as e:
+                return Response(
+                    {"success": False, "error": "Intern or partial completion certificate not found"},
                     status=status.HTTP_404_NOT_FOUND
                 )
             except Exception as e:
