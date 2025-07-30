@@ -3,6 +3,8 @@ import {
     Box,
     Button,
     Card,
+    ListItemIcon,
+    ListItemText,
     CardContent,
     Typography,
     Accordion,
@@ -58,6 +60,8 @@ const AssetManagement = () => {
     // State management
     const [assets, setAssets] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
+    const [actionMenuAnchorEl, setActionMenuAnchorEl] = useState(null);
+    const [currentActionAsset, setCurrentActionAsset] = useState(null);
     const [statusFilter, setStatusFilter] = useState('');
     const [typeFilter, setTypeFilter] = useState('');
     const [expanded, setExpanded] = useState(false);
@@ -87,10 +91,6 @@ const AssetManagement = () => {
     const [historyModalOpen, setHistoryModalOpen] = useState(false);
     const [historyData, setHistoryData] = useState([]);
     const [selectedAssetId, setSelectedAssetId] = useState('');
-
-    // Action menu states
-    const [actionMenuAnchorEl, setActionMenuAnchorEl] = useState(null);
-    const [currentActionAsset, setCurrentActionAsset] = useState(null);
 
     // Handle view action
     const handleView = (assetId) => {
@@ -135,30 +135,56 @@ const AssetManagement = () => {
 
 
 
+    // Handle action menu open
+    const handleActionMenuOpen = (event, asset) => {
+        setActionMenuAnchorEl(event.currentTarget);
+        setCurrentActionAsset(asset);
+    };
+
+    // Handle action menu close
+    const handleActionMenuClose = () => {
+        setActionMenuAnchorEl(null);
+        setCurrentActionAsset(null);
+    };
+
     // Handle edit action
-    const handleEdit = (assetId) => {
-        const asset = assets.find(a => a.assetId === assetId);
+    const handleEdit = (asset) => {
         if (asset) {
-            // Make sure we have the correct asset name from the backend data
-            const backendAsset = assets.find(a => a.assetId === assetId);
             setCurrentAsset({
                 ...asset,
-                assetName: backendAsset.assetName || backendAsset.asset || '',
-                asset: backendAsset.assetName || backendAsset.asset || ''
+                assetName: asset.assetName || asset.asset || '',
+                asset: asset.assetName || asset.asset || ''
             });
             // Set the selected asset type if it exists
             if (asset.type && asset.type !== 'N/A') {
                 setSelectedAssetType(asset.type);
             }
+            // Set the selected department and intern if they exist
+            if (asset.department) {
+                setSelectedDepartment(asset.department);
+                if (asset.empId) {
+                    setSelectedIntern(asset.empId);
+                }
+            }
             setOpenModal(true);
         }
+        handleActionMenuClose();
     };
 
     // Handle delete action
     const handleDelete = async (assetId) => {
+        if (!assetId) {
+            console.error('No asset ID provided for deletion');
+            return;
+        }
+        
         if (window.confirm('Are you sure you want to delete this asset?')) {
             try {
                 const token = localStorage.getItem("token");
+                if (!token) {
+                    throw new Error('No authentication token found');
+                }
+                
                 const response = await fetch(`http://localhost:8000/Sims/assert-stock/${assetId}/`, {
                     method: 'DELETE',
                     headers: {
@@ -167,17 +193,26 @@ const AssetManagement = () => {
                     },
                 });
 
-                if (response.ok) {
-                    // Refresh the assets list after successful deletion
-                    fetchAssets();
-                } else {
-                    const errorData = await response.json();
-                    console.error('Error deleting asset:', errorData);
-                    alert('Failed to delete asset. Please try again.');
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    console.error('Error deleting asset:', response.status, errorData);
+                    throw new Error(errorData.detail || 'Failed to delete asset');
                 }
+                
+                // Optimistically update the UI
+                setAssets(prevAssets => prevAssets.filter(asset => asset.id !== assetId));
+                
+                // Also remove from selected assets if it was selected
+                setSelectedAssets(prev => prev.filter(id => id !== assetId));
+                
+                // Show success message
+                alert('Asset deleted successfully');
+                
             } catch (error) {
                 console.error('Error deleting asset:', error);
-                alert('An error occurred while deleting the asset.');
+                alert(`Error: ${error.message || 'Failed to delete asset. Please try again.'}`);
+                // Refresh the list to ensure it's in sync with the server
+                fetchAssets();
             }
         }
     };
@@ -916,17 +951,6 @@ const AssetManagement = () => {
         }
     };
 
-    const handleActionMenuOpen = (event, asset) => {
-        event.stopPropagation();
-        setCurrentActionAsset(asset);
-        setActionMenuAnchorEl(event.currentTarget);
-    };
-
-    const handleActionMenuClose = () => {
-        setActionMenuAnchorEl(null);
-        setCurrentActionAsset(null);
-    };
-
     const renderAssetList = () => (
         <Card>
             <CardContent>
@@ -1171,15 +1195,39 @@ const AssetManagement = () => {
                                             />
                                         </TableCell>
                                         <TableCell>
-                                            <IconButton
-                                                size="small"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleActionMenuOpen(e, asset);
-                                                }}
-                                            >
-                                                <MoreVertIcon />
-                                            </IconButton>
+                                            <Box>
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleActionMenuOpen(e, asset);
+                                                    }}
+                                                >
+                                                    <MoreVertIcon />
+                                                </IconButton>
+                                                <Menu
+                                                    anchorEl={actionMenuAnchorEl}
+                                                    open={Boolean(actionMenuAnchorEl && currentActionAsset?.id === asset.id)}
+                                                    onClose={handleActionMenuClose}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                >
+                                                    <MenuItem onClick={() => handleEdit(asset)}>
+                                                        <ListItemIcon>
+                                                            <EditIcon fontSize="small" />
+                                                        </ListItemIcon>
+                                                        <ListItemText>Edit</ListItemText>
+                                                    </MenuItem>
+                                                    <MenuItem onClick={() => {
+                                                        handleActionMenuClose();
+                                                        handleDelete(asset.id);
+                                                    }}>
+                                                        <ListItemIcon>
+                                                            <DeleteIcon fontSize="small" color="error" />
+                                                        </ListItemIcon>
+                                                        <ListItemText primaryTypographyProps={{ color: 'error' }}>Delete</ListItemText>
+                                                    </MenuItem>
+                                                </Menu>
+                                            </Box>
                                         </TableCell>
                                         </TableRow>
                                     ))

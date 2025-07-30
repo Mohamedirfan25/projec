@@ -6665,6 +6665,142 @@ class GenerateAttendanceCertificate(APIView):
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+class GenerateCompletionCertificate(APIView):
+    def post(self, request, format=None):
+        serializer = TaskCertificateSerializer(data=request.data)
+        if serializer.is_valid():
+            try:
+                # Get intern details
+                intern = Temp.objects.get(emp_id=serializer.validated_data['emp_id'])
+                personal_data = PersonalData.objects.get(emp_id=intern)
+                user_data = UserData.objects.get(emp_id=intern)
+                
+                # Determine gender-based pronouns
+                gender = getattr(personal_data, 'gender', '').lower()
+                his_her_their = 'his' if gender == 'm' else 'her' if gender == 'f' else 'their'
+                he_she_they = 'He' if gender == 'm' else 'She' if gender == 'f' else 'They'
+                him_her_them = 'him' if gender == 'm' else 'her' if gender == 'f' else 'them'
+                
+                # Create temp files
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.docx') as temp_docx:
+                    temp_pdf_path = tempfile.mktemp(suffix='.pdf')
+                    
+                    try:
+                        # Load the Word template
+                        template_path = os.path.join(settings.BASE_DIR, 'templates', 'certificates', 'VDart_certificate_ACA016.docx')
+                        doc = DocxDocument(template_path)
+                        
+                        # Prepare replacements with the exact placeholders from your template
+                        replacements = {
+                            '{{intern_name}}': f"{intern.user.first_name} {intern.user.last_name}",
+                            '{{intern_college}}': getattr(user_data, 'college_name', ''),
+                            '{{intern_location}}': getattr(user_data, 'college_location', ''),
+                            '{{intern_start_date}}': user_data.start_date.strftime('%B %d, %Y') if hasattr(user_data, 'start_date') else '',
+                            '{{intern_end_date}}': user_data.end_date.strftime('%B %d, %Y') if hasattr(user_data, 'end_date') else '',
+                            '{{his,her,their}}': his_her_their,
+                            '{{He,she,They}}': he_she_they,
+                            '{{him,her,them}}': him_her_them,
+                            '{{issue_date}}': datetime.now().strftime('%B %d, %Y')
+                        }
+                        
+                        # Replace text in paragraphs
+                        for para in doc.paragraphs:
+                            for old_text, new_text in replacements.items():
+                                if old_text in para.text:
+                                    for run in para.runs:
+                                        if old_text in run.text:
+                                            run.text = run.text.replace(old_text, new_text)
+                        
+                        # Replace text in tables
+                        for table in doc.tables:
+                            for row in table.rows:
+                                for cell in row.cells:
+                                    for para in cell.paragraphs:
+                                        for old_text, new_text in replacements.items():
+                                            if old_text in para.text:
+                                                for run in para.runs:
+                                                    if old_text in run.text:
+                                                        run.text = run.text.replace(old_text, new_text)
+                        
+                        # Save the modified document
+                        doc.save(temp_docx.name)
+                        
+                        # Convert DOCX to PDF
+                        pythoncom.CoInitialize()
+                        convert(temp_docx.name, temp_pdf_path)
+                        
+                        # Read the PDF content
+                        with open(temp_pdf_path, 'rb') as pdf_file:
+                            pdf_content = pdf_file.read()
+                        
+                        # Send email with PDF attachment
+                        subject = f"Completion Certificate - {intern.user.get_full_name()}"
+                        message = f"Dear {intern.user.get_full_name()},\n\nPlease find attached your completion certificate.\n\nBest regards,\nVDart Team"
+                        to_email = [intern.user.email]
+                        
+                        # Create email with attachment
+                        email = EmailMessage(
+                            subject=subject,
+                            body=message,
+                            from_email=settings.DEFAULT_FROM_EMAIL,
+                            to=to_email,
+                        )
+                        
+                        # Attach the PDF
+                        email.attach(
+                            f"Completion_Certificate_{intern.emp_id}.pdf",
+                            pdf_content,
+                            'application/pdf'
+                        )
+                        
+                        # Send the email
+                        email.send(fail_silently=False)
+                        
+                        # Log the activity
+                        log_activity(
+                            request.user,
+                            "Generated",
+                            "Completion Certificate",
+                            intern.emp_id,
+                            f"Generated completion certificate for {intern.user.username}",
+                            request
+                        )
+                        
+                        return Response(
+                            {"success": True, "message": "Completion certificate sent successfully"},
+                            status=status.HTTP_200_OK
+                        )
+                        
+                    except Exception as e:
+                        return Response(
+                            {"success": False, "error": str(e)},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                        )
+                    finally:
+                        # Clean up temp files
+                        try:
+                            os.unlink(temp_docx.name)
+                            if os.path.exists(temp_pdf_path):
+                                os.unlink(temp_pdf_path)
+                        except:
+                            pass
+                        pythoncom.CoUninitialize()
+                        
+            except Temp.DoesNotExist:
+                return Response(
+                    {"success": False, "error": "Intern not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            except PersonalData.DoesNotExist:
+                return Response(
+                    {"success": False, "error": "Personal data not found for this intern"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            except UserData.DoesNotExist:
+                return Response(
+                    {"success": False, "error": "User data not found for this intern"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
 
 class GeneratePartialCertificate(APIView):
     permission_classes = [IsAuthenticated]
