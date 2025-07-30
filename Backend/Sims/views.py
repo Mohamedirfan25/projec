@@ -6795,6 +6795,8 @@ class GenerateCompletionCertificate(APIView):
             except UserData.DoesNotExist:
                 return Response(
                     {"success": False, "error": "User data not found for this intern"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
 
 class GeneratePartialCertificate(APIView):
     def post(self, request, format=None):
