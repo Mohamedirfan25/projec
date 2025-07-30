@@ -112,6 +112,10 @@ urlpatterns = [
 
     # Document Download
     path('documents/<uuid:pk>/download/', views.download_document, name='document-download'),
+    
+    # Fees
+    path('fees/', views.FeesView.as_view(), name='fees-list'),
+    path('fees/<str:emp_id>/', views.FeesView.as_view(), name='fees-detail'),
 
     # Available Interns
     path('available-interns/<str:department_name>/', views.interns_without_asset_in_department, name='available-interns'),

@@ -64,9 +64,10 @@ const AssetManagement = () => {
     const [selectedAssets, setSelectedAssets] = useState([]);
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(100); 
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(true); // Start with loading true to show shimmer on initial load
     const [initialLoad, setInitialLoad] = useState(true);
     const [error, setError] = useState(null);
+    const [hasFetched, setHasFetched] = useState(false);
     
     // Modal and form states
     const [openModal, setOpenModal] = useState(false);
@@ -138,8 +139,17 @@ const AssetManagement = () => {
     const handleEdit = (assetId) => {
         const asset = assets.find(a => a.assetId === assetId);
         if (asset) {
-            setCurrentAsset(asset);
-            // Add any additional edit-specific logic here
+            // Make sure we have the correct asset name from the backend data
+            const backendAsset = assets.find(a => a.assetId === assetId);
+            setCurrentAsset({
+                ...asset,
+                assetName: backendAsset.assetName || backendAsset.asset || '',
+                asset: backendAsset.assetName || backendAsset.asset || ''
+            });
+            // Set the selected asset type if it exists
+            if (asset.type && asset.type !== 'N/A') {
+                setSelectedAssetType(asset.type);
+            }
             setOpenModal(true);
         }
     };
@@ -174,9 +184,8 @@ const AssetManagement = () => {
 
     // Fetch assets data
     const fetchAssets = useCallback(async () => {
-        if (initialLoad) {
-            setLoading(true);
-        }
+        setLoading(true);
+        setError(null);
         
         const token = localStorage.getItem("token");
         if (!token) {
@@ -184,6 +193,7 @@ const AssetManagement = () => {
             setError(new Error("Authentication required"));
             setLoading(false);
             setInitialLoad(false);
+            setHasFetched(true);
             return [];
         }
 
@@ -317,6 +327,7 @@ const AssetManagement = () => {
         } finally {
             setLoading(false);
             setInitialLoad(false);
+            setHasFetched(true);
         }
     }, [initialLoad]);
 
@@ -743,6 +754,7 @@ const AssetManagement = () => {
             form.reset();
         }
     };
+
     const handleSubmit = async (event) => {
         event.preventDefault();
         const token = localStorage.getItem("token");
@@ -764,20 +776,22 @@ const AssetManagement = () => {
           return;
         }
         
+        // Prepare the data to send to backend
         const assetData = {
           assert_id: assetId,
-          assert_model: assetName,
+          assert_model: assetName,  // This is the correct field name for asset name in backend
           allocated_type: selectedAssetType,
-          configuration: configuration
+          configuration: configuration,
+          ...(currentAsset && { id: currentAsset.id }),
+          ...(selectedDepartment && { department: selectedDepartment }),
+          ...(selectedIntern && { emp_id: selectedIntern })
         };
         
-        if (selectedDepartment) {
-          assetData.department = selectedDepartment;
+        // Remove emp_id if it's explicitly set to null/empty
+        if (selectedIntern === null || selectedIntern === '') {
+          assetData.emp_id = null;
         }
         
-        // Always include emp_id field - empty string for unassignment, emp_id for assignment
-        assetData.emp_id = selectedIntern || null;
-
         const url = currentAsset
           ? `http://localhost:8000/Sims/assert-stock/${currentAsset.id}/`
           : "http://localhost:8000/Sims/assert-stock/";
@@ -824,16 +838,47 @@ const AssetManagement = () => {
           const result = await response.json();
           console.log('Success result:', result);
           
-          // Success - refresh all data and close modal
+          // Success - update the UI with the new data
           try {
-            // Fetch fresh data from the server
+            // For better UX, we'll update the UI optimistically first
+            if (currentAsset) {
+              // For updates, update the existing asset in the state
+              setAssets(prevAssets => 
+                prevAssets.map(asset => 
+                  asset.id === currentAsset.id 
+                    ? { 
+                        ...asset, 
+                        ...result, 
+                        assetName: result.assert_model,  // Ensure assetName is set from assert_model
+                        allocated_type: result.allocated_type,
+                        configuration: result.configuration,
+                        department: selectedDepartment || asset.department,
+                        emp_id: selectedIntern || null
+                      }
+                    : asset
+                )
+              );
+            } else {
+              // For new assets, add to the beginning of the list
+              setAssets(prevAssets => [
+                { 
+                  ...result, 
+                  assetName: result.assert_model,  // Ensure assetName is set from assert_model
+                  department: selectedDepartment || null,
+                  emp_id: selectedIntern || null
+                },
+                ...prevAssets
+              ]);
+            }
+            
+            // Then refresh from server to ensure consistency
             const [assetsData, depts, interns] = await Promise.all([
                 fetchAssets(),
                 fetchDepartments(),
                 fetchInternList()
             ]);
             
-            // Update the assets state with the fresh data
+            // Update the assets state with the fresh data if needed
             if (Array.isArray(assetsData)) {
                 console.log(`Refreshed ${assetsData.length} assets in state`);
                 setAssets(assetsData);
@@ -1071,12 +1116,10 @@ const AssetManagement = () => {
                         </TableHead>
                         <TableBody>
                             {loading ? (
-                                // Show shimmer effect while loading
-                                <>
-                                    {Array(5).fill(0).map((_, index) => (
-                                        <ShimmerRow key={`shimmer-${index}`} columns={9} />
-                                    ))}
-                                </>
+                                // Show shimmer effect when loading
+                                Array(5).fill(0).map((_, index) => (
+                                    <ShimmerRow key={`shimmer-${index}`} columns={9} />
+                                ))
                             ) : error ? (
                                 <TableRow>
                                     <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
@@ -1097,6 +1140,7 @@ const AssetManagement = () => {
                                     </TableCell>
                                 </TableRow>
                             ) : paginatedAssets.length > 0 ? (
+                                // Show assets if we have them
                                 paginatedAssets.map((asset) => (
                                     <TableRow key={asset.id} hover>
                                         <TableCell padding="checkbox">
@@ -1124,106 +1168,64 @@ const AssetManagement = () => {
                                                 label={asset.status}
                                                 color={getStatusColor(asset.status)}
                                                 size="small"
-                                                variant="outlined"
                                             />
                                         </TableCell>
                                         <TableCell>
-                                            <IconButton 
-                                                onClick={(e) => handleActionMenuOpen(e, asset)} 
+                                            <IconButton
                                                 size="small"
-                                                aria-label="asset actions"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleActionMenuOpen(e, asset);
+                                                }}
                                             >
                                                 <MoreVertIcon />
                                             </IconButton>
-                                            <Menu
-                                                anchorEl={actionMenuAnchorEl}
-                                                open={Boolean(actionMenuAnchorEl)}
-                                                onClose={handleActionMenuClose}
-                                                onClick={(e) => e.stopPropagation()}
-                                                anchorOrigin={{
-                                                    vertical: 'bottom',
-                                                    horizontal: 'right',
-                                                }}
-                                                transformOrigin={{
-                                                    vertical: 'top',
-                                                    horizontal: 'right',
-                                                }}
-                                            >
-                                                <MenuItem 
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleOpenModal(currentActionAsset);
-                                                        handleActionMenuClose();
-                                                    }}
-                                                    disableRipple
-                                                >
-                                                    <EditIcon fontSize="small" sx={{ mr: 1 }} />
-                                                    Edit
-                                                </MenuItem>
-                                            </Menu>
                                         </TableCell>
-                                    </TableRow>
-                                ))
+                                        </TableRow>
+                                    ))
                             ) : (
+                                // Show empty state when no assets are found
                                 <TableRow>
-                                    <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
-                                        <Box textAlign="center">
-                                            <SearchIcon sx={{ fontSize: 60, color: 'text.disabled', mb: 1 }} />
-                                            <Typography variant="body1" color="textSecondary">
-                                                {assets.length === 0 
-                                                    ? 'No assets found. Add your first asset using the "Add Asset" button.'
-                                                    : 'No assets match your current filters'
-                                                }
-                                            </Typography>
-                                            {(statusFilter || typeFilter || searchTerm) && (
-                                                <Button
-                                                    variant="text"
-                                                    onClick={() => {
-                                                        setStatusFilter("");
-                                                        setTypeFilter("");
-                                                        setSearchTerm("");
-                                                    }}
-                                                    sx={{ mt: 1 }}
-                                                >
-                                                    Clear all filters
-                                                </Button>
-                                            )}
-                                        </Box>
-                                    </TableCell>
+                                    <TableCell colSpan={9}></TableCell>
                                 </TableRow>
                             )}
                         </TableBody>
                     </Table>
                 </TableContainer>
 
-                {filteredAssets.length > 0 ? (
+                {loading ? (
+                    // Show loading indicator in the pagination area
+                    <Box display="flex" justifyContent="center" p={2}>
+                        <CircularProgress size={24} />
+                    </Box>
+                ) : filteredAssets.length > 0 ? (
                     <TablePagination
-                    rowsPerPageOptions={[25, 50, 100, { label: 'All', value: -1 }]}
-                    component="div"
-                    count={filteredAssets.length}
-                    rowsPerPage={rowsPerPage}
-                    page={page}
-                    onPageChange={(e, newPage) => setPage(newPage)}
-                    onRowsPerPageChange={(e) => {
-                        const newRowsPerPage = parseInt(e.target.value, 10);
-                        setRowsPerPage(newRowsPerPage === -1 ? filteredAssets.length : newRowsPerPage);
-                        setPage(0);
-                    }}
-                    labelRowsPerPage="Rows per page:"
-                    labelDisplayedRows={({ from, to, count }) => 
-                        rowsPerPage === -1 
-                            ? `All ${count} rows` 
-                            : `${from}-${to} of ${count}${count !== filteredAssets.length ? ` (filtered from ${filteredAssets.length})` : ''}`
-                    }
-                    sx={{ 
-                        mt: 2,
-                        '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
-                            marginTop: '0.5rem',
-                            marginBottom: '0.5rem',
-                        },
-                    }}
-                />
-                ) : !loading && (
+                        rowsPerPageOptions={[25, 50, 100, { label: 'All', value: -1 }]}
+                        component="div"
+                        count={filteredAssets.length}
+                        rowsPerPage={rowsPerPage}
+                        page={page}
+                        onPageChange={(e, newPage) => setPage(newPage)}
+                        onRowsPerPageChange={(e) => {
+                            const newRowsPerPage = parseInt(e.target.value, 10);
+                            setRowsPerPage(newRowsPerPage === -1 ? filteredAssets.length : newRowsPerPage);
+                            setPage(0);
+                        }}
+                        labelRowsPerPage="Rows per page:"
+                        labelDisplayedRows={({ from, to, count }) => 
+                            rowsPerPage === -1 
+                                ? `All ${count} rows` 
+                                : `${from}-${to} of ${count}${count !== filteredAssets.length ? ` (filtered from ${filteredAssets.length})` : ''}`
+                        }
+                        sx={{ 
+                            mt: 2,
+                            '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
+                                marginTop: '0.5rem',
+                                marginBottom: '0.5rem',
+                            },
+                        }}
+                    />
+                ) : (
                     <Box mt={2} textAlign="center">
                         <SearchIcon sx={{ fontSize: 60, color: 'text.disabled', mb: 1 }} />
                         <Typography variant="body1" color="textSecondary">
@@ -1292,7 +1294,7 @@ const AssetManagement = () => {
                                 fullWidth
                                 label="Asset Name"
                                 name="assetName"
-                                defaultValue={currentAsset?.asset || ''}
+                                defaultValue={currentAsset?.assetName || currentAsset?.asset || ''}
                                 required
                                 size="small"
                             />
