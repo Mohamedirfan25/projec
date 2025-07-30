@@ -4759,7 +4759,7 @@ from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from .models import AttendanceClaim
 from .serializers import AttendanceClaimSerializer, DocumentVersionSerializer
 from Sims.permissions import StaffUserDataAccessPermission
-from Sims.utils.email_utils import  send_offer_letter_reportlab 
+from Sims.utils.email_utils import  send_offer_letter
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
