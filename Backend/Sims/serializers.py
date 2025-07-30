@@ -616,5 +616,24 @@ class TaskCertificateSerializer(serializers.Serializer):
 class AttendanceCertificateSerializer(serializers.Serializer):
     emp_id = serializers.CharField(max_length=10, required=True)
 
-class PartialCertificateSerializer(serializers.Serializer):
-    emp_id = serializers.CharField(max_length=10, required=True)
+class PartialCertificateSerializer(serializers.ModelSerializer):
+    emp_id = serializers.CharField(write_only=True)
+
+    class Meta:
+        model = PartialCompletionCertificate
+        fields = [
+            'emp_id','start_date', 'end_date', 'remarks', 
+            'is_approved', 'approved_by', 'completion_percentage'
+        ]
+        read_only_fields = ['user', 'issue_date', 'tasks_completed']
+
+    def create(self, validated_data):
+        emp_id = validated_data.pop('emp_id')
+        intern = Temp.objects.get(emp_id=emp_id)
+        validated_data['user'] = intern.user
+        return super().create(validated_data)
+
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Temp
+        fields = ['emp_id', 'user', 'role']

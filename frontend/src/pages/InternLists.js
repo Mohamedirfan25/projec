@@ -276,7 +276,33 @@ const InternLists = ({ setActiveComponent, showAddForm: externalShowAddForm, onF
   const [isSending, setIsSending] = useState(false);
   const [certificateSentStatus, setCertificateSentStatus] = useState({});
   const [activeCertMenu, setActiveCertMenu] = useState('inProgress');
+  const [openPartialCertDialog, setOpenPartialCertDialog] = useState(false);
+const [partialCertData, setPartialCertData] = useState({
+  start_date: '',
+  end_date: '',
+  remarks: '',
+  is_approved: false,
+  approved_by: ''
+});
 
+const [users, setUsers] = useState([]);
+
+// Add this useEffect to fetch users when the component mounts
+useEffect(() => {
+  const fetchUsers = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.get('http://localhost:8000/Sims/users/', {
+        headers: { 'Authorization': `Token ${token}` }
+      });
+      setUsers(response.data);
+      console.log("Users:",response.data);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    }
+  };
+  fetchUsers();
+}, []);
 
   const fetchInterns = async () => {
     try {
@@ -429,7 +455,7 @@ const handleCertificatesMenuClose = () => {
   setSelectedCertInternId(null);
 };
 
-const handleCertificateAction = async (type) => {
+const handleCertificateAction = async (type, intern) => {
   if (!selectedCertInternId) return;
 
   try {
@@ -526,6 +552,10 @@ const handleCertificateAction = async (type) => {
             responseType: "blob",
           }
         );
+        break;
+      case 'Partial Certificate':
+        setSelectedIntern(intern);
+        setOpenPartialCertDialog(true);
         break;
       default:
         break;
@@ -1730,7 +1760,7 @@ const handleUndoDelete = async (internId) => {
                                   <MenuItem onClick={() => handleCertificateAction('Offer Letter')}>
                                     Send Offer Letter
                                   </MenuItem>
-                                  <MenuItem onClick={() => handleCertificateAction('Partial Certificate')}>
+                                  <MenuItem onClick={() => handleCertificateAction('Partial Certificate', intern)}>
                                     Send Partial Certificate
                                   </MenuItem>
                                 </>
@@ -1879,6 +1909,127 @@ const handleUndoDelete = async (internId) => {
               </Box>
             </Box>
           )}
+          <Dialog open={openPartialCertDialog} onClose={() => setOpenPartialCertDialog(false)}>
+  <DialogTitle>Generate Partial Completion Certificate</DialogTitle>
+  <DialogContent>
+    <TextField
+      margin="dense"
+      label="Start Date"
+      type="date"
+      fullWidth
+      variant="outlined"
+      InputLabelProps={{ shrink: true }}
+      value={partialCertData.start_date}
+      onChange={(e) => setPartialCertData({...partialCertData, start_date: e.target.value})}
+    />
+    <TextField
+      margin="dense"
+      label="End Date"
+      type="date"
+      fullWidth
+      variant="outlined"
+      InputLabelProps={{ shrink: true }}
+      value={partialCertData.end_date}
+      onChange={(e) => setPartialCertData({...partialCertData, end_date: e.target.value})}
+    />
+    <TextField
+      margin="dense"
+      label="Remarks"
+      fullWidth
+      multiline
+      rows={3}
+      variant="outlined"
+      value={partialCertData.remarks}
+      onChange={(e) => setPartialCertData({...partialCertData, remarks: e.target.value})}
+    />
+    <FormControlLabel
+      control={
+        <Checkbox
+          checked={partialCertData.is_approved}
+          onChange={(e) => setPartialCertData({...partialCertData, is_approved: e.target.checked})}
+        />
+      }
+      label="Approved"
+    />
+    {partialCertData.is_approved && (
+      <FormControl fullWidth margin="dense" variant="outlined">
+  <InputLabel id="approved-by-label">Approved By</InputLabel>
+  <Select
+    labelId="approved-by-label"
+    value={partialCertData.approved_by || ''}
+    onChange={(e) => setPartialCertData({...partialCertData, approved_by: e.target.value})}
+    label="Approved By"
+  >
+    <MenuItem value="">
+      <em>Select a user</em>
+    </MenuItem>
+    {users.map((user) => (
+      <MenuItem key={user.emp_id} value={user.emp_id}>
+        {user.emp_id} {user.user}
+      </MenuItem>
+    ))}
+  </Select>
+</FormControl>
+    )}
+  </DialogContent>
+  <DialogActions>
+    <Button onClick={() => setOpenPartialCertDialog(false)}>Cancel</Button>
+    <Button 
+      onClick={async () => {
+        try {
+          const token = localStorage.getItem("token");
+          const requestData = {
+            emp_id: selectedIntern.id,
+            start_date: partialCertData.start_date,
+            end_date: partialCertData.end_date,
+            remarks: partialCertData.remarks,
+            is_approved: partialCertData.is_approved,
+            approved_by: partialCertData.is_approved ? partialCertData.approved_by : null
+          };
+          
+          console.log('Sending request with data:', requestData);  // Add this line
+          
+          const response = await axios.post(
+            `http://localhost:8000/Sims/generate-partial-certificate/`,
+            requestData,
+            {
+              headers: { 
+                'Authorization': `Token ${token}`,
+                'Content-Type': 'application/json'
+              },
+              responseType: "blob",
+            }
+          );
+          
+          // Handle the response (e.g., download the certificate)
+          const url = window.URL.createObjectURL(new Blob([response.data]));
+          const link = document.createElement('a');
+          link.href = url;
+          link.setAttribute('download', `partial_certificate_${selectedIntern.id}.pdf`);
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          
+          setOpenPartialCertDialog(false);
+          // Reset form
+          setPartialCertData({
+            start_date: '',
+            end_date: '',
+            remarks: '',
+            is_approved: false,
+            approved_by: ''
+          });
+        } catch (error) {
+          console.error('Error generating certificate:', error);
+          // Handle error (show error message to user)
+        }
+      }}
+      color="primary"
+    >
+      Generate
+    </Button>
+  </DialogActions>
+</Dialog>
         </Box>
       </> 
       )}

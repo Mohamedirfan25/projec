@@ -20,7 +20,7 @@ from django.db.models import Count, Q, F, Sum, Case, When, Value, IntegerField
 from django.db.models.functions import ExtractMonth, ExtractYear
 # Import specific models and serializers needed for attendance claims
 from .models import AttendanceClaim, Attendance, AttendanceLog, AttendanceEntries, UserData, Department, Temp, Document, DocumentVersion, Log
-from .serializers import AttendanceClaimSerializer, AttendanceSerializer, AttendanceLogSerializer, AttendanceEntriesSerializer, UserDataSerializer, DepartmentSerializer, TempSerializer, DocumentSerializer, DocumentVersionSerializer
+from .serializers import AttendanceClaimSerializer, AttendanceSerializer, AttendanceLogSerializer, AttendanceEntriesSerializer, UserDataSerializer, DepartmentSerializer, TempSerializer, DocumentSerializer, DocumentVersionSerializer,UserSerializer
 from django.db.models import OuterRef, Subquery  # <-- Add this line
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
@@ -140,6 +140,10 @@ def generate_emp_id(role, department=None):
             num = int(last_id.emp_id[5:]) + 1 if last_id else 1
             return f"STAFF{num:03d}"
 
+class UserListView(generics.ListAPIView):
+    queryset = Temp.objects.exclude(role="intern")
+    serializer_class = UserSerializer
+    permission_classes = [IsAuthenticated]
 
 class TempView(APIView):
     def get(self, request, emp_id=None):
@@ -6663,19 +6667,30 @@ class GenerateAttendanceCertificate(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class GeneratePartialCertificate(APIView):
+    permission_classes = [IsAuthenticated]
     def post(self, request, format=None):
         serializer = PartialCertificateSerializer(data=request.data)
         if serializer.is_valid():
             try:
-                intern = Temp.objects.get(emp_id=serializer.validated_data['emp_id'])
-                data = PartialCompletionCertificate.objects.get(user=intern.user)
+                certificate = serializer.save()
+                intern = Temp.objects.get(emp_id=request.data.get('emp_id'))
                 userdata = UserData.objects.get(emp_id=intern)
-                attendance = Attendance.objects.filter(emp_id=intern, present_status='Present')
-                tasks = Task.objects.filter(
+                completed_tasks = Task.objects.filter(
                     assigned_to=intern.user,
                     status='Completed',
-                    committed_date__isnull=False
-                ).order_by('committed_date')                
+                    committed_date__range=[certificate.start_date, certificate.end_date]
+                )         
+                certificate.tasks_completed.set(completed_tasks)    
+                                # Calculate completion percentage (you can adjust this logic)
+                total_days = (certificate.end_date - certificate.start_date).days + 1
+                attendance = Attendance.objects.filter(
+                    emp_id=intern,
+                    present_status='Present',
+                    date__range=[certificate.start_date, certificate.end_date]
+                ).count()
+                
+                certificate.completion_percentage = round((attendance / total_days) * 100, 2)
+                certificate.save()   
                 
                 # Load the Word template
                 template_path = 'templates/certificates/partial_cert_temp.docx'
@@ -6687,12 +6702,12 @@ class GeneratePartialCertificate(APIView):
                     paragraph.text = paragraph.text.replace('{{CURRENT_DATE}}', datetime.now().strftime('%B %d, %Y'))
                     paragraph.text = paragraph.text.replace('{{PERIOD}}', userdata.duration)
                     paragraph.text = paragraph.text.replace('{{FROM_DATE}}', 
-                                                          data.start_date.strftime('%B %d, %Y'))
+                                                          certificate.start_date.strftime('%B %d, %Y'))
                     paragraph.text = paragraph.text.replace('{{TO_DATE}}', 
-                                                         data.end_date.strftime('%B %d, %Y'))
+                                                         certificate.end_date.strftime('%B %d, %Y'))
                     paragraph.text = paragraph.text.replace('{{COMPLETION_PERCENTAGE}}', 
-                                                          str(round(attendance.count() / ((data.end_date - data.start_date).days+1) * 100, 2)))
-                    paragraph.text = paragraph.text.replace('{{REMARKS}}', data.remarks)
+                                                          str(certificate.completion_percentage))
+                    paragraph.text = paragraph.text.replace('{{REMARKS}}', certificate.remarks)
                     # Create a table for completed tasks
                     table = doc.add_table(rows=1, cols=3)
                     table.style.paragraph_format.alignment = WD_TABLE_ALIGNMENT.CENTER
@@ -6700,7 +6715,7 @@ class GeneratePartialCertificate(APIView):
                     header_row.cells[0].text = 'Task'
                     header_row.cells[1].text = 'Description'
                     header_row.cells[2].text = 'Date Completed'
-                    for task in tasks:
+                    for task in certificate.tasks_completed.all():
                         row = table.add_row()
                         row.cells[0].text = task.task_title
                         row.cells[1].text = task.task_description
