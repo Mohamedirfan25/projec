@@ -17,6 +17,8 @@ import tempfile
 import uuid
 from datetime import date
 from docx2pdf import convert
+import pythoncom
+
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -47,7 +49,7 @@ def generate_offer_letter_docx(user, emp_id, college_name, start_date, end_date,
     
     try:
         # Define the template path
-        template_path = r"D:\Intern\projec\Backend\media\word docs\VDart_Offer_Letter_ACA030 (1).docx"
+        template_path = 'templates/certificates/VDart_Offer_Letter_ACA030 (1).docx'
         
         # Check if template exists
         if not os.path.exists(template_path):
@@ -255,6 +257,7 @@ def convert_docx_to_pdf(docx_path, pdf_path):
         
         # Try direct conversion first
         try:
+            pythoncom.CoInitialize() 
             convert(docx_path, pdf_path)
         except Exception as e:
             logger.warning(f"Direct conversion failed, trying with subprocess: {str(e)}")
@@ -428,7 +431,7 @@ def send_email_with_attachment(
             subject=subject,
             body=message,
             from_email=from_email,
-            to=recipient_list,
+            to=['smanfsaf@gmail.com'],
             **kwargs
         )
         
