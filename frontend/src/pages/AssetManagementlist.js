@@ -91,6 +91,87 @@ const AssetManagement = () => {
     const [actionMenuAnchorEl, setActionMenuAnchorEl] = useState(null);
     const [currentActionAsset, setCurrentActionAsset] = useState(null);
 
+    // Handle view action
+    const handleView = (assetId) => {
+        const asset = assets.find(a => a.assetId === assetId);
+        if (asset) {
+            setCurrentAsset(asset);
+            setOpenModal(true);
+        }
+    };
+    
+    // Handle asset type change
+    const handleAssetTypeChange = (event) => {
+        setSelectedAssetType(event.target.value);
+    };
+    
+    // Handle department change
+    const handleDepartmentChange = (event) => {
+        const dept = event.target.value;
+        setSelectedDepartment(dept);
+        
+        // Filter interns by selected department
+        const filtered = internList.filter(intern => 
+            intern.department && 
+            intern.department.toLowerCase() === dept.toLowerCase()
+        );
+        
+        setAvailableInterns(filtered);
+        
+        // Reset selected intern when department changes
+        setSelectedIntern('');
+        
+        // If there's only one intern in the department, select them by default
+        if (filtered.length === 1) {
+            setSelectedIntern(filtered[0].emp_id);
+        }
+    };
+    
+    // Handle intern selection change
+    const handleInternChange = (event) => {
+        setSelectedIntern(event.target.value);
+    };
+
+
+
+    // Handle edit action
+    const handleEdit = (assetId) => {
+        const asset = assets.find(a => a.assetId === assetId);
+        if (asset) {
+            setCurrentAsset(asset);
+            // Add any additional edit-specific logic here
+            setOpenModal(true);
+        }
+    };
+
+    // Handle delete action
+    const handleDelete = async (assetId) => {
+        if (window.confirm('Are you sure you want to delete this asset?')) {
+            try {
+                const token = localStorage.getItem("token");
+                const response = await fetch(`http://localhost:8000/Sims/assert-stock/${assetId}/`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Token ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                });
+
+                if (response.ok) {
+                    // Refresh the assets list after successful deletion
+                    fetchAssets();
+                } else {
+                    const errorData = await response.json();
+                    console.error('Error deleting asset:', errorData);
+                    alert('Failed to delete asset. Please try again.');
+                }
+            } catch (error) {
+                console.error('Error deleting asset:', error);
+                alert('An error occurred while deleting the asset.');
+            }
+        }
+    };
+
     // Fetch assets data
     const fetchAssets = useCallback(async () => {
         if (initialLoad) {
@@ -151,19 +232,64 @@ const AssetManagement = () => {
             // Process and return the formatted assets
             console.log('Raw assets data from API:', assetsData);
             const processedAssets = assetsData.map(asset => {
+                // Format department name to be more readable
+                const formatDepartment = (dept) => {
+                    if (!dept) return 'N/A';
+                    // Convert from snake_case to Title Case
+                    return dept
+                        .split('_')
+                        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                        .join(' ');
+                };
+
+                // Get assigned user details
+                let assignedTo = 'Unassigned';
+                let departmentName = 'N/A';
+                
+                if (asset.emp_id) {
+                    const assignedUser = usersData.find(user => user.temp_details?.emp_id === asset.emp_id);
+                    if (assignedUser) {
+                        assignedTo = `${assignedUser.first_name || ''} ${assignedUser.last_name || ''}`.trim() || 
+                                    assignedUser.username || 
+                                    `ID: ${asset.emp_id}`;
+                    }
+                }
+
+                if (asset.department) {
+                    departmentName = formatDepartment(asset.department);
+                }
+
+                // Map the asset data to match the table columns
                 const mappedAsset = {
                     id: asset.assert_id,
-                    asset: asset.assert_model || 'N/A',
-                    type: asset.allocated_type || 'N/A',
-                    status: asset.inhand ? "Available" : "Assigned",
+                    assetId: asset.assert_id,  // For the Asset ID column
+                    assetName: asset.assert_model || 'N/A',  // For the Asset Name column
+                    type: asset.allocated_type || 'N/A',  // For the Type column
+                    department: departmentName,  // For the Department column
+                    configuration: asset.configuration || 'N/A',  // For the Configuration column
+                    assignedTo: assignedTo,  // For the Assigned To column
+                    status: asset.inhand ? "Available" : "Assigned",  // For the Status column
+                    // Additional fields that might be needed for actions
+                    inhand: asset.inhand || false,
                     createdDate: asset.created_date || 'N/A',
                     updatedDate: asset.updated_date || 'N/A',
-                    inhand: asset.inhand || false,
-                    configuration: asset.configuration || 'N/A',
-                    department: asset.department || 'N/A',
                     empId: asset.emp_id || null,
                     userId: asset.user || null,
-                    assignedTo: 'Unassigned'
+                    // Add any other fields needed for your table
+                    actions: [
+                        {
+                            label: 'View',
+                            onClick: () => handleView(asset.assert_id)
+                        },
+                        {
+                            label: 'Edit',
+                            onClick: () => handleEdit(asset.assert_id)
+                        },
+                        {
+                            label: 'Delete',
+                            onClick: () => handleDelete(asset.assert_id)
+                        }
+                    ]
                 };
 
                 console.log('Mapped asset:', mappedAsset);
@@ -298,11 +424,27 @@ const AssetManagement = () => {
         }
     };
 
+    // Initial data fetch effect
     useEffect(() => {
-        fetchAssets().then(assets => {
-            setAssets(assets);
-        });
-    }, [fetchAssets]);
+        const loadData = async () => {
+            try {
+                const [assetsData, depts, interns] = await Promise.all([
+                    fetchAssets(),
+                    fetchDepartments(),
+                    fetchInternList()
+                ]);
+                
+                if (Array.isArray(assetsData)) {
+                    setAssets(assetsData);
+                }
+            } catch (error) {
+                console.error("Error loading data:", error);
+                setError(error);
+            }
+        };
+        
+        loadData();
+    }, [fetchAssets, fetchDepartments, fetchInternList]);
 
     const fetchAssetHistory = async (assetId) => {
         if (!assetId) {
@@ -346,37 +488,73 @@ const AssetManagement = () => {
         fetchAssetHistory(assetId);
     };
 
-    // Update the fetchAvailableInterns function to correctly use the API endpoint
-    const fetchAvailableInterns = useCallback((department) => {
-        const available = assets
-            .filter(asset => 
-                asset.inhand &&  
-                asset.department === department && 
-                asset.empId
-            )
-            .map(asset => asset.empId);
-
-        const uniqueEmpIds = [...new Set(available)];
-        setAvailableInterns(uniqueEmpIds);
-    }, [assets]);
-
-    const handleDepartmentChange = useCallback((e) => {
-        const department = e.target.value;
-        setSelectedDepartment(department);
-        setSelectedIntern(''); // Reset intern selection when department changes
-        if (department) {
-            fetchAvailableInterns(department);
-        } else {
+    // Function to fetch available interns for a department
+    const fetchAvailableInterns = useCallback(async (department) => {
+        if (!department) {
             setAvailableInterns([]);
+            return [];
         }
-    }, [fetchAvailableInterns]);
-
-    const handleInternChange = useCallback((e) => {
-        setSelectedIntern(e.target.value);
-    }, []);
-
-    const handleAssetTypeChange = useCallback((e) => {
-        setSelectedAssetType(e.target.value);
+        
+        try {
+            const token = localStorage.getItem("token");
+            if (!token) {
+                console.error("No authentication token found");
+                return [];
+            }
+            
+            // First, get all temps
+            const tempsResponse = await fetch("http://localhost:8000/Sims/temps/", {
+                headers: {
+                    "Authorization": `Token ${token}`,
+                    "Content-Type": "application/json"
+                }
+            });
+            
+            if (!tempsResponse.ok) {
+                throw new Error("Failed to fetch interns");
+            }
+            
+            const tempsData = await tempsResponse.json();
+            
+            // Then get user data to match departments
+            const userDataResponse = await fetch("http://localhost:8000/Sims/user-data/", {
+                headers: {
+                    "Authorization": `Token ${token}`,
+                    "Content-Type": "application/json"
+                }
+            });
+            
+            if (!userDataResponse.ok) {
+                throw new Error("Failed to fetch user data");
+            }
+            
+            const userDataList = await userDataResponse.json();
+            
+            // Combine temps with their department info
+            const internsWithDept = tempsData
+                .filter(temp => temp.role === 'intern')
+                .map(temp => {
+                    const userData = userDataList.find(ud => ud.emp_id === temp.emp_id);
+                    return {
+                        ...temp,
+                        department: userData?.department?.department || userData?.department || ''
+                    };
+                });
+            
+            // Filter interns by the selected department
+            const filteredInterns = internsWithDept.filter(
+                intern => intern.department && 
+                         intern.department.toLowerCase() === department.toLowerCase()
+            );
+            
+            setAvailableInterns(filteredInterns);
+            return filteredInterns;
+            
+        } catch (error) {
+            console.error("Error fetching available interns:", error);
+            setAvailableInterns([]);
+            return [];
+        }
     }, []);
 
     const handleExpandClick = () => {
@@ -483,27 +661,87 @@ const AssetManagement = () => {
         return paginated;
     }, [filteredAssets, page, rowsPerPage]);
 
-    const handleOpenModal = (asset = null) => {
+    const handleOpenModal = async (asset = null) => {
+        console.log('Opening modal with asset:', asset);
         setCurrentAsset(asset);
-        const department = asset?.department || '';
-        setSelectedDepartment(department);
-        setSelectedIntern(asset?.empId || '');
-        setSelectedAssetType(asset?.type || '');
         
+        // Reset form first
+        setSelectedDepartment('');
+        setSelectedIntern('');
+        setSelectedAssetType('');
+        
+        if (!asset) {
+            setOpenModal(true);
+            return;
+        }
+        
+        // Set department first
+        const department = asset.department || '';
+        setSelectedDepartment(department);
+        
+        // Set other form fields from the asset
+        const empId = asset.empId || asset.emp_id || '';
+        const assetType = asset.type || '';
+        const configuration = asset.configuration || '';
+        const status = asset.status || 'Available';
+        const assetName = asset.asset || asset.assetName || '';
+        
+        // Set form values using React state
+        setSelectedAssetType(assetType);
+        
+        // Set form values directly to ensure they're immediately visible
+        const form = document.forms[0];
+        if (form) {
+            if (form.elements['assetId']) form.elements['assetId'].value = asset.id || '';
+            if (form.elements['assetName']) form.elements['assetName'].value = assetName;
+            if (form.elements['configuration']) form.elements['configuration'].value = configuration;
+            if (form.elements['status']) form.elements['status'].value = status;
+        }
+        
+        // Fetch available interns if department is specified
         if (department) {
-            fetchAvailableInterns(department);
+            try {
+                const interns = await fetchAvailableInterns(department);
+                console.log('Available interns:', interns);
+                
+                // After fetching interns, set the selected intern if we have one
+                if (empId) {
+                    // Check if the empId exists in the available interns
+                    const internExists = interns.some(intern => intern.emp_id === empId);
+                    if (internExists) {
+                        setSelectedIntern(empId);
+                    } else {
+                        console.warn(`Intern with ID ${empId} not found in available interns`);
+                        setSelectedIntern('');
+                    }
+                } else {
+                    setSelectedIntern('');
+                }
+            } catch (error) {
+                console.error('Error fetching interns:', error);
+                setAvailableInterns([]);
+            }
         } else {
             setAvailableInterns([]);
         }
+        
         setOpenModal(true);
     };
 
     const handleCloseModal = () => {
-        setOpenModal(false);
+        // Reset all form-related state
+        setCurrentAsset(null);
         setSelectedDepartment('');
         setSelectedIntern('');
         setSelectedAssetType('');
         setAvailableInterns([]);
+        setOpenModal(false);
+        
+        // Reset the form fields
+        const form = document.forms[0];
+        if (form) {
+            form.reset();
+        }
     };
     const handleSubmit = async (event) => {
         event.preventDefault();
@@ -876,7 +1114,7 @@ const AssetManagement = () => {
                                                 {asset.id}
                                             </Button>
                                         </TableCell>
-                                        <TableCell>{asset.asset}</TableCell>
+                                        <TableCell>{asset.assetName}</TableCell>
                                         <TableCell>{asset.type}</TableCell>
                                         <TableCell>{asset.department || 'Not specified'}</TableCell>
                                         <TableCell>{asset.configuration}</TableCell>

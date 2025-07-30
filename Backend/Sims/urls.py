@@ -79,6 +79,8 @@ urlpatterns = [
     path('staffs-details/', views.StaffDetailsView.as_view(), name='staff-detail'),
 
     # Assets
+    path('assert-stock/', views.AssertStockView.as_view(), name='assert-stock'),
+    path('assert-stock/<str:pk>/', views.AssertStockView.as_view(), name='assert-stock-detail'),
     path('assert-stock-count/', views.AssertStockCountView.as_view(), name='assert-stock-count'),
     path('asset-trend/', views.AssetTrendView.as_view(), name='asset-trend'),
     path("available-assets/", views.AvailableAssetCountView.as_view(), name="available-assets"),
