@@ -1039,6 +1039,10 @@ const handleUndoDelete = async (internId) => {
     }
   };
 
+  useEffect(() => {
+  setPage(1);
+}, [activeTab]);
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -1735,6 +1739,16 @@ const handleUndoDelete = async (internId) => {
                                 <Description fontSize="small" sx={{ mr: 1 }} /> Certificates
                               </MenuItem>
                             )}
+                            {activeTab === 'Yet to Join' && (
+                              <MenuItem 
+                                onClick={(e) => {
+                                  handleMenuClose();
+                                  handleCertificatesMenuOpen(e, intern.id, 'yetToJoin');
+                                }}
+                              >
+                                <Description fontSize="small" sx={{ mr: 1 }} /> Certificates
+                              </MenuItem>
+                            )}
                           </Menu>
                           <Menu
                             anchorEl={actionSubMenuAnchorEl}
@@ -1764,7 +1778,7 @@ const handleUndoDelete = async (internId) => {
                                     Send Partial Certificate
                                   </MenuItem>
                                 </>
-                              ) : (
+                              ) : activeCertMenu === 'completed' ? (
                                 // Completed tab certificates
                                 <>
                                   <MenuItem onClick={() => handleCertificateAction('Completion Certificate')}>
@@ -1775,6 +1789,13 @@ const handleUndoDelete = async (internId) => {
                                   </MenuItem>
                                   <MenuItem onClick={() => handleCertificateAction('Task Certificate')}>
                                     Generate Task Certificate
+                                  </MenuItem>
+                                </>
+                              ) : (
+                                // Yet to Join tab certificates
+                                <>
+                                  <MenuItem onClick={() => handleCertificateAction('Offer Letter')}>
+                                    Send Offer Letter
                                   </MenuItem>
                                 </>
                               )}
@@ -1964,7 +1985,7 @@ const handleUndoDelete = async (internId) => {
       <em>Select a user</em>
     </MenuItem>
     {users.map((user) => (
-      <MenuItem key={user.emp_id} value={user.emp_id}>
+      <MenuItem key={user.user} value={user.user}>
         {user.emp_id} {user.user}
       </MenuItem>
     ))}
