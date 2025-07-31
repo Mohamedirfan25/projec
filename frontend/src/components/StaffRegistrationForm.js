@@ -68,7 +68,7 @@ const StaffRegistrationForm = ({ switchToUpdate, setFormDataForUpdate }) => {
     workUndertaken: [],
     mobileNumber: '',
     email: '',    
-    staffDomain: '',
+    staffDomain: [],
     staffTiming: '',
     loginTime: null,
     joinDate: null,
@@ -245,7 +245,8 @@ const StaffRegistrationForm = ({ switchToUpdate, setFormDataForUpdate }) => {
 
         team_name: formData.teamName,
         shift_timing: formData.staffTiming,
-        domain: formData.staffDomain,
+        domain: formData.staffDomain.map(
+    name => domainOptions.find(opt => opt.domain === name)?.id),
         start_date: formData.joinDate?.toISOString().split("T")[0],
         end_date: formData.endDate?.toISOString().split("T")[0],
         duration: "3Month",
@@ -262,6 +263,7 @@ const StaffRegistrationForm = ({ switchToUpdate, setFormDataForUpdate }) => {
         is_assert_access: formData.workUndertaken.includes("Assets"),
         certicate_sent: "false",
       };
+      console.log("staffPayload", staffPayload);
 
       await axios.patch(
         `http://localhost:8000/Sims/user-data/${registerResponse.data.emp_id}/`,
@@ -333,7 +335,7 @@ const StaffRegistrationForm = ({ switchToUpdate, setFormDataForUpdate }) => {
         role: "staff",
         teamName: "",
         workUndertaken: [],
-        staffDomain: "",
+        staffDomain: [],
         staffTiming: "",
         loginTime: null,
         joinDate: null,
@@ -637,26 +639,37 @@ const StaffRegistrationForm = ({ switchToUpdate, setFormDataForUpdate }) => {
               </Grid>
 
               <Grid item xs={12} md={6}>
-                <FormControl fullWidth error={!!errors.staffDomain}>
-                  <InputLabel>Staff Domain</InputLabel>
-                  <Select
-                    name="staffDomain"
-                    value={formData.staffDomain}
-                    onChange={handleChange}
-                    label="Staff Domain"
-                  >
-                    {domainOptions.map((domainObj) => (
-                      <MenuItem key={domainObj.id} value={domainObj.domain}>
-                        {domainObj.domain}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                  {errors.staffDomain && (
-                    <Typography variant="caption" color="error">
-                      {errors.staffDomain}
-                    </Typography>
-                  )}
-                </FormControl>
+              <FormControl fullWidth error={!!errors.staffDomain}>
+                <InputLabel>Staff Domain</InputLabel>
+                <Select
+                  name="staffDomain"
+                  multiple
+                  value={formData.staffDomain}
+                  onChange={(e) => {
+                    setFormData({
+                      ...formData,
+                      staffDomain: typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value,
+                    });
+                    if (errors.staffDomain) {
+                      setErrors({ ...errors, staffDomain: "" });
+                    }
+                  }}
+                  label="Staff Domain"
+                  renderValue={(selected) => selected.join(', ')}
+                >
+                  {domainOptions.map((domainObj) => (
+                    <MenuItem key={domainObj.id} value={domainObj.domain}>
+                      <Checkbox checked={formData.staffDomain.indexOf(domainObj.domain) > -1} />
+                      {domainObj.domain}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {errors.staffDomain && (
+                  <Typography variant="caption" color="error">
+                    {errors.staffDomain}
+                  </Typography>
+                )}
+              </FormControl>
               </Grid>
 
               <Grid item xs={12}>

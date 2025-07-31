@@ -4,12 +4,12 @@ from . import views_attendance_claim
 from .views import generate_offer_letter_api
 from .views import generate_completed_certificate
 from .views import CollegeDetailsView
-from .views import UserPermissionsView, GenerateTaskCertificate, GenerateAttendanceCertificate, GeneratePartialCertificate, UserListView
+from .views import UserPermissionsView, GenerateTaskCertificate, GenerateAttendanceCertificate, GeneratePartialCertificate, UserListView, GenerateCompletionCertificate
 
 urlpatterns = [
     path("user/update/<str:emp_id>/", views.UserUpdateView.as_view(), name='user-update'),
-    path("generate-completed-certificate/<str:emp_id>/",
-         generate_completed_certificate, name="generate_completed_certificate"),
+    path("generate-completion-certificate/",
+         GenerateCompletionCertificate.as_view(), name="generate_completion_certificate"),
     path('generate-offer-letter/', generate_offer_letter_api,
          name='generate_offer_letter_api'),
     path('generate-task-certificate/', GenerateTaskCertificate.as_view(), name='generate-task-certificate'),
