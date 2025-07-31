@@ -33,7 +33,7 @@ from rest_framework.generics import GenericAPIView
 from rest_framework import generics, permissions
 from django.db.models import Window, F
 from django.db.models.functions import RowNumber
-from .models import PasswordResetOTP, AttendanceClaim
+from .models import PasswordResetOTP, AttendanceClaim, AssertStock
 from .serializers import (
     ResetPasswordOTPRequestSerializer, 
     VerifyOTPSerializer,
@@ -628,7 +628,9 @@ class AllUserDataView(APIView):
                         'is_payroll_access': getattr(user, 'is_payroll_access', False),
                         'is_internmanagement_access': getattr(user, 'is_internmanagement_access', False),
                         'is_assert_access': getattr(user, 'is_assert_access', False)
-                    }
+                    },
+                    'asset_code': user.asset_code.assert_id if user.asset_code else None
+
                 })
             
             return Response({
@@ -5517,17 +5519,62 @@ class DeletedUsersView(APIView):
 
 #-------------------------------------------------changes new 24-4 ------------------------------------#
 class EmpEmailLookupView(APIView):
-    permission_classes = [AllowAny]  # Allow unrestricted access
-
+    permission_classes = [AllowAny]
+    
     def get(self, request, emp_id):
         try:
             temp = Temp.objects.get(emp_id=emp_id, is_deleted=False)
-            user = temp.user
-            return Response({"emp_id": emp_id, "email": user.email})
+            return Response({
+                'email': temp.user.email if temp.user else None,
+                'username': temp.user.username if temp.user else None
+            })
         except Temp.DoesNotExist:
-            return Response({"error": "Employee not found."}, status=404)
+            return Response({'error': 'Employee not found'}, status=404)
 
 
+class AssetLookupView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, asset_code):
+        try:
+            asset = AssertStock.objects.get(assert_id=asset_code, is_deleted=False)
+            return Response({
+                'asset_id': asset.assert_id,
+                'configuration': asset.configuration,
+                'model': asset.assert_model,
+                'in_hand': asset.inhand,
+                'allocated_to': asset.emp_id.emp_id if asset.emp_id else None,
+                'allocated_type': asset.allocated_type
+            })
+        except AssertStock.DoesNotExist:
+            return Response({'error': 'Asset not found or has been deleted'}, status=404)
+
+
+class AssetByUsernameView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, username):
+        try:
+            # Get the user by username
+            user = User.objects.get(username=username, is_active=True)
+            
+            # Get the user's temp record
+            temp = Temp.objects.get(user=user, is_deleted=False)
+            
+            # Find all assets allocated to this user
+            assets = AssertStock.objects.filter(emp_id=temp, is_deleted=False)
+            
+            if not assets.exists():
+                return Response({'error': 'No assets found for this user'}, status=404)
+                
+            # Return all assets (though typically a user would have just one)
+            serializer = AssertStockSerializer(assets, many=True)
+            return Response(serializer.data)
+            
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=404)
+        except Temp.DoesNotExist:
+            return Response({'error': 'User profile not found'}, status=404)
 
 
 class AssignedTaskHistoryView(APIView):

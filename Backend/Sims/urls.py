@@ -102,6 +102,10 @@ urlpatterns = [
 
     # Email
     path('emp-email/<str:emp_id>/', views.EmpEmailLookupView.as_view(), name='emp-email-lookup'),
+    
+    # Asset Lookup
+    path('asset-lookup/<str:asset_code>/', views.AssetLookupView.as_view(), name='asset-lookup'),
+    path('asset-by-username/<str:username>/', views.AssetByUsernameView.as_view(), name='asset-by-username'),
 
     # Tasks
     path('tasks/assigned-history/', views.AssignedTaskHistoryView.as_view(), name='assigned-task-history'),
@@ -135,6 +139,10 @@ urlpatterns = [
     # Asset History
     path('asserthistory/',views.AssertAllTimeHistoryView.as_view(),name='asset-history'),
     path('assertuserhistory/',views.UserAssertAllTimeHistoryView.as_view(),name='asset-user-history'),
+    
+    # Asset Issue
+    path('assert-issue/', views.AssertIssueView.as_view(), name='assert-issue'),
+    path('assert-issue/<uuid:pk>/', views.AssertIssueView.as_view(), name='assert-issue-detail'),
 
     # Deleted Users
     path('deleted-users/', views.DeletedUsersView.as_view(), name='deleted-users'),

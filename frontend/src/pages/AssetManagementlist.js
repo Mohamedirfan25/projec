@@ -875,48 +875,25 @@ const AssetManagement = () => {
           
           // Success - update the UI with the new data
           try {
-            // For better UX, we'll update the UI optimistically first
-            if (currentAsset) {
-              // For updates, update the existing asset in the state
-              setAssets(prevAssets => 
-                prevAssets.map(asset => 
-                  asset.id === currentAsset.id 
-                    ? { 
-                        ...asset, 
-                        ...result, 
-                        assetName: result.assert_model,  // Ensure assetName is set from assert_model
-                        allocated_type: result.allocated_type,
-                        configuration: result.configuration,
-                        department: selectedDepartment || asset.department,
-                        emp_id: selectedIntern || null
-                      }
-                    : asset
-                )
-              );
-            } else {
-              // For new assets, add to the beginning of the list
-              setAssets(prevAssets => [
-                { 
-                  ...result, 
-                  assetName: result.assert_model,  // Ensure assetName is set from assert_model
-                  department: selectedDepartment || null,
-                  emp_id: selectedIntern || null
-                },
-                ...prevAssets
-              ]);
-            }
-            
-            // Then refresh from server to ensure consistency
-            const [assetsData, depts, interns] = await Promise.all([
-                fetchAssets(),
-                fetchDepartments(),
-                fetchInternList()
+            // First, refresh the assets list to get the latest data
+            const [freshAssets, depts, interns] = await Promise.all([
+              fetchAssets(),
+              fetchDepartments(),
+              fetchInternList()
             ]);
             
-            // Update the assets state with the fresh data if needed
-            if (Array.isArray(assetsData)) {
-                console.log(`Refreshed ${assetsData.length} assets in state`);
-                setAssets(assetsData);
+            // Update the assets state with the fresh data
+            if (Array.isArray(freshAssets)) {
+              console.log(`Refreshed ${freshAssets.length} assets in state`);
+              setAssets(freshAssets);
+              
+              // If this was an update, ensure the updated asset is in the list
+              if (currentAsset) {
+                const updatedAsset = freshAssets.find(a => a.id === currentAsset.id);
+                if (updatedAsset) {
+                  console.log('Updated asset data from server:', updatedAsset);
+                }
+              }
             }
             
             // Show success message and close the modal
