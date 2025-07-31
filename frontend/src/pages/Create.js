@@ -28,6 +28,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import dayjs from 'dayjs';
 import { AddTask, CalendarToday, Delete, ExpandMore, ExpandLess, ArrowBack } from '@mui/icons-material';
+import { ro } from 'date-fns/locale';
 
 const CreateTask = () => {
   const navigate = useNavigate();
@@ -37,7 +38,8 @@ const CreateTask = () => {
   const [committedDate, setCommittedDate] = useState(dayjs());
   const [assignTo, setAssignTo] = useState(null);
   const [assignBy, setAssignBy] = useState(null);
-  const [users, setUsers] = useState([]);
+  const [staff, setStaff] = useState([]);
+  const [intern, setIntern] = useState([]);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [tasks, setTasks] = useState([]);
@@ -54,7 +56,7 @@ const CreateTask = () => {
   ];
 
   // Fetch users for autocomplete
-  const fetchUsers = async () => {
+  const fetchStaffs = async () => {
     const token = localStorage.getItem("token");
     if (!token) {
       alert("Authentication token is missing! Please log in.");
@@ -70,53 +72,22 @@ const CreateTask = () => {
         },
         withCredentials: true,
       });
-      
-      console.log("Raw API response:", response);
-      console.log("Response data type:", Array.isArray(response.data) ? 'Array' : typeof response.data);
-      
+      console.log("Raw API response:", response.data);
+
       if (!response.data || !Array.isArray(response.data)) {
         console.error("Unexpected API response format:", response.data);
         alert("Failed to load users: Unexpected response format");
         return;
       }
       
-      // Log the first user object to understand its structure
-      if (response.data.length > 0) {
-        console.log("First user object:", JSON.stringify(response.data[0], null, 2));
-      }
-      
       // Map the response to include both username and email for better user identification
       const userOptions = response.data.map((user, index) => {
-        // Log each user object structure
-        console.log(`User ${index + 1}:`, user);
-        
-        // Try to extract username and email from different possible locations
-        const username = user.username || 
-                        user.user?.username || 
-                        user.temp?.username || 
-                        user.user_data?.username ||
-                        `User-${index + 1}`;
-                        
-        const email = user.email || 
-                     user.user?.email || 
-                     user.temp?.email || 
-                     user.user_data?.email ||
-                     '';
-        
-        const displayName = user.first_name || 
-                          user.user?.first_name || 
-                          user.temp?.first_name ||
-                          user.user_data?.first_name ||
-                          username;
+        // Log each user object structure for debugging
         
         const userOption = {
-          id: user.id || user.emp_id || user.user?.id || user.temp?.emp_id || `user-${index}`,
-          username: username,
-          email: email,
-          displayName: displayName,
-          label: displayName + (email ? ` (${email})` : ''),
-          // Include the raw user object for debugging
-          _raw: user
+          id: user.id || user.emp_id || user.user?.id || user.temp?.emp_id,
+          username: user.username,
+          role: user.role || 'intern',
         };
         
         console.log(`Processed user ${index + 1}:`, userOption);
@@ -124,7 +95,7 @@ const CreateTask = () => {
       });
       
       console.log("Processed user options:", userOptions);
-      setUsers(userOptions);
+      setStaff(userOptions);
     } catch (error) {
       console.error("Error fetching users:", error);
       console.log("Error response:", error.response?.data);
@@ -134,10 +105,59 @@ const CreateTask = () => {
     }
   };
 
+  const fetchInterns = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      alert("Authentication token is missing! Please log in.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      console.log("Fetching interns from API...");
+      const response = await axios.get("http://localhost:8000/Sims/interns/", {
+        headers: {
+          "Authorization": `Token ${token}`,
+        },
+        withCredentials: true,
+      });
+      console.log("Raw API response:", response.data);
+
+      if (!response.data || !Array.isArray(response.data)) {
+        console.error("Unexpected API response format:", response.data);
+        alert("Failed to load interns: Unexpected response format");
+        return;
+      }
+
+      const internOptions = response.data.map((user, index) => {
+        // Log each user object structure for debugging
+        console.log(`Intern ${index + 1}:`, user);
+
+        const userOption = {
+          id: user.id || user.emp_id || user.user?.id || user.temp?.emp_id,
+          username: user.username,
+          role: user.role || 'intern',
+        };
+
+        return userOption;
+      });
+
+      console.log("Processed intern options:", internOptions);
+      setIntern(internOptions);
+    } catch (error) {
+      console.error("Error fetching interns:", error);
+      console.log("Error response:", error.response?.data);
+      alert("Failed to load intern list. Please check the console for details.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     // Fetch users when component mounts
-    fetchUsers();
-    
+    fetchStaffs();
+    fetchInterns();
+
     if (showTaskList) {
       fetchTasks();
     }
@@ -156,14 +176,15 @@ const CreateTask = () => {
         },
         withCredentials: true,
       });
+      console.log("Raw tasks response:", response.data);
       const fetchedTasks = response.data.map(task => ({
         id: task.id,
         taskName: task.task_title,
         taskDescription: task.task_description,
         priority: task.priority,
         committedDate: task.committed_date,
-        assignTo: task.assigned_to_username || task.assigned_to,
-        assignBy: task.assigned_by_username || task.assigned_by,
+        assignTo: task.assigned_to_user || task.assigned_to,
+        assignBy: task.assigned_by_user || task.assigned_by,
         status: task.status || 'Not_Started'
       }));
       setTasks(fetchedTasks);
@@ -384,7 +405,7 @@ const CreateTask = () => {
                 </Grid>
                 <Grid item xs={12} sm={6}>
                   <Autocomplete
-                    options={users}
+                    options={intern}
                     getOptionLabel={(option) => {
                       if (!option) return '';
                       if (typeof option === 'string') return option;
@@ -433,7 +454,7 @@ const CreateTask = () => {
                 </Grid>
                 <Grid item xs={12} sm={6}>
                   <Autocomplete
-                    options={users}
+                    options={staff}
                     getOptionLabel={(option) => {
                       if (!option) return '';
                       if (typeof option === 'string') return option;

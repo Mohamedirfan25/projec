@@ -28,6 +28,7 @@ urlpatterns = [
 
     # User Data
     path('users/', UserListView.as_view(), name='user-list'),
+    path('interns/', views.InternListView.as_view(), name='intern-list'),
     path('all-user-data/', views.AllUserDataView.as_view(), name='all-user-data'),
     path('user-data/', views.UserDataView.as_view(), name='user-data-list'),
     path('user-data/<str:emp_id>/', views.UserDataView.as_view(), name='user-data-detail'),
