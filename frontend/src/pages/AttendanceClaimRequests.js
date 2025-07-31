@@ -121,23 +121,78 @@ const AttendanceClaimRequests = ({ onBack }) => {
     }
   };
 
-  const handleApprove = async (claimId) => {
+  const handleStatusChange = async (claimId, newStatus, rejectionReason = '') => {
     try {
       setActionLoading(true);
       const token = localStorage.getItem('token');
-      await axios.post(
-        `http://localhost:8000/Sims/attendance-claims/${claimId}/approve/`,
-        {},
-        { headers: { Authorization: `Token ${token}` } }
+      
+      console.log('Attempting to update claim status:', { claimId, newStatus });
+      
+      // Find the claim in the existing claims list
+      const claim = claims.find(c => c.id === claimId);
+      
+      if (!claim) {
+        throw new Error('Claim not found in local state');
+      }
+      
+      console.log('Found claim:', claim);
+      
+      // Prepare the update data
+      const updateData = {};
+      if (newStatus === 'REJECTED') {
+        updateData.rejection_reason = rejectionReason;
+      }
+      
+      // Use the claim's ID from the local state
+      const endpoint = newStatus === 'APPROVED' 
+        ? `http://localhost:8000/Sims/attendance-claims/${claimId}/approve/`
+        : `http://localhost:8000/Sims/attendance-claims/${claimId}/reject/`;
+      
+      console.log('Making request to:', endpoint);
+      
+      // Use POST for approve/reject actions
+      const response = await axios.post(
+        endpoint,
+        updateData,
+        { 
+          headers: { 
+            'Authorization': `Token ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
       );
+      
+      console.log('Update response:', response.data);
+      
+      // Refresh the claims list
       await fetchClaims();
-      setSnackbar({ open: true, message: 'Claim approved successfully', severity: 'success' });
+      
+      // Show success message
+      setSnackbar({ 
+        open: true, 
+        message: response.data.detail || `Claim ${newStatus.toLowerCase()} successfully`,
+        severity: 'success' 
+      });
+      
+      // Close any open dialogs
+      setRejectDialogOpen(false);
+      setDialogOpen(false);
+      
     } catch (err) {
-      setSnackbar({ open: true, message: 'Failed to approve claim', severity: 'error' });
+      console.error(`Error ${newStatus.toLowerCase()}ing claim:`, err);
+      setSnackbar({
+        open: true,
+        message: `Failed to ${newStatus.toLowerCase()} claim: ${err.response?.data?.detail || err.message}`,
+        severity: 'error'
+      });
     } finally {
       setActionLoading(false);
     }
   };
+  
+  // Wrapper functions for approve/reject for backward compatibility
+  const handleApprove = (claimId) => handleStatusChange(claimId, 'APPROVED');
+  const handleReject = (claimId, reason) => handleStatusChange(claimId, 'REJECTED', reason);
 
   const handleView = (claim) => {
     setSelectedClaim(claim);
@@ -150,26 +205,18 @@ const AttendanceClaimRequests = ({ onBack }) => {
     setRejectDialogOpen(true);
   };
 
-  const handleRejectSubmit = async () => {
-    if (!rejectReason.trim()) return;
-    
-    try {
-      setActionLoading(true);
-      const token = localStorage.getItem('token');
-      await axios.post(
-        `http://localhost:8000/Sims/attendance-claims/${rejectTarget.id}/reject/`,
-        { rejection_reason: rejectReason },
-        { headers: { Authorization: `Token ${token}` } }
-      );
-      setSnackbar({ open: true, message: 'Claim rejected successfully', severity: 'success' });
-      await fetchClaims();
-      setRejectDialogOpen(false);
-      setDialogOpen(false);
-    } catch (err) {
-      setSnackbar({ open: true, message: 'Failed to reject claim', severity: 'error' });
-    } finally {
-      setActionLoading(false);
+  const handleRejectSubmit = () => {
+    if (!rejectReason.trim()) {
+      setSnackbar({
+        open: true,
+        message: 'Please provide a rejection reason',
+        severity: 'warning'
+      });
+      return;
     }
+    
+    // Call the unified status change handler with reject parameters
+    handleStatusChange(rejectTarget.id, 'REJECTED', rejectReason);
   };
 
   // Open/close per-row action menu

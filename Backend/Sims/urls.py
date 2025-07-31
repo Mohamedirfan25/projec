@@ -153,16 +153,16 @@ urlpatterns = [
         'get': 'list',
         'post': 'create'
     }), name='attendance-claims-list'),
-    path('attendance-claims/<uuid:pk>/', views_attendance_claim.AttendanceClaimViewSet.as_view({
+    path('attendance-claims/<int:pk>/', views_attendance_claim.AttendanceClaimViewSet.as_view({
         'get': 'retrieve',
         'put': 'update',
         'patch': 'partial_update',
         'delete': 'destroy'
     }), name='attendance-claim-detail'),
-    path('attendance-claims/<uuid:pk>/approve/', views_attendance_claim.AttendanceClaimViewSet.as_view({
+    path('attendance-claims/<int:pk>/approve/', views_attendance_claim.AttendanceClaimViewSet.as_view({
         'post': 'approve'
     }), name='attendance-claim-approve'),
-    path('attendance-claims/<uuid:pk>/reject/', views_attendance_claim.AttendanceClaimViewSet.as_view({
+    path('attendance-claims/<int:pk>/reject/', views_attendance_claim.AttendanceClaimViewSet.as_view({
         'post': 'reject'
     }), name='attendance-claim-reject'),
     path('attendance-claims/my-claims/', views_attendance_claim.AttendanceClaimViewSet.as_view({
