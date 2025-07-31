@@ -145,6 +145,11 @@ class UserListView(generics.ListAPIView):
     serializer_class = UserSerializer
     permission_classes = [IsAuthenticated]
 
+class InternListView(generics.ListAPIView):
+    queryset = Temp.objects.filter(role="intern", is_deleted=False)
+    serializer_class = UserSerializer
+    permission_classes = [IsAuthenticated]
+
 class TempView(APIView):
     def get(self, request, emp_id=None):
         try:

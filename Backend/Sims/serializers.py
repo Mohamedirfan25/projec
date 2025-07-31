@@ -663,11 +663,13 @@ class PartialCertificateSerializer(serializers.ModelSerializer):
         intern = Temp.objects.get(emp_id=emp_id)
         validated_data['user'] = intern.user
         return super().create(validated_data)
+ 
 
 class UserSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source='user.username', read_only=True)
     class Meta:
         model = Temp
-        fields = ['emp_id', 'user', 'role']
+        fields = ['emp_id', 'user', 'role', 'username']
 
 class CompletionCertificateSerializer(serializers.Serializer):
     emp_id = serializers.CharField(max_length=10, required=True)
