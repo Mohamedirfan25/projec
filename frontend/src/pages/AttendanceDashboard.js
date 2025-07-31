@@ -390,7 +390,6 @@ const AttendanceLists = () => {
   };
 
   const filteredInterns = interns.filter(intern =>
-    intern.status === activeTab &&
     (intern.id.toString().includes(searchTerm) ||
       intern.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       intern.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -590,56 +589,6 @@ const AttendanceLists = () => {
           </Box>
         </Stack>
       </Popover>
-
-      <Tabs
-        value={activeTab}
-        onChange={(e, newValue) => setActiveTab(newValue)}
-        sx={{
-          mb: 3,
-          '& .MuiTabs-indicator': {
-            height: 3,
-            borderRadius: 3
-          }
-        }}
-        variant="fullWidth"
-      >
-        <Tab
-          label="In Progress"
-          value="InProgress"
-          icon={<WorkIcon fontSize="small" />}
-          iconPosition="start"
-          sx={{
-            textTransform: 'none',
-            fontWeight: 500,
-            fontSize: '0.875rem',
-            minHeight: 48
-          }}
-        />
-        <Tab
-          label="Completed"
-          value="Completed"
-          icon={<CheckCircleIcon fontSize="small" />}
-          iconPosition="start"
-          sx={{
-            textTransform: 'none',
-            fontWeight: 500,
-            fontSize: '0.875rem',
-            minHeight: 48
-          }}
-        />
-        <Tab
-          label="Discontinued"
-          value="Discontinued"
-          icon={<CancelIcon fontSize="small" />}
-          iconPosition="start"
-          sx={{
-            textTransform: 'none',
-            fontWeight: 500,
-            fontSize: '0.875rem',
-            minHeight: 48
-          }}
-        />
-      </Tabs>
 
       <TableContainer
         component={Paper}

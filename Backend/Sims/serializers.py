@@ -53,17 +53,25 @@ class PersonalDataSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ('id','user','emp_id') # Make id read-only
 
+class DomainSimpleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Domain
+        fields = ['id', 'domain']
+
 class UserDataSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='emp_id.user.username', read_only=True)
     reporting_manager_username = serializers.CharField(source='reporting_manager.username', read_only=True)
     reporting_supervisor_username = serializers.CharField(source='reporting_supervisor.username', read_only=True)
-    domain_name = serializers.CharField(source='domain.domain', read_only=True)
-    
+    domain = serializers.PrimaryKeyRelatedField(
+        queryset=Domain.objects.all(),
+        many=True,
+        required=False
+    )
+    domain_details = DomainSimpleSerializer(source='domain', many=True, read_only=True)
     # Add Temp details
     temp_details = TempSerializer(source='emp_id', read_only=True)
     reporting_manager = serializers.CharField(write_only=True, required=False, allow_null=True)
     reporting_supervisor = serializers.CharField(write_only=True, required=False, allow_null=True)
-    domain_name = serializers.CharField(source='domain.domain', read_only=True)
     
     class Meta:
         model = UserData
@@ -646,9 +654,9 @@ class PartialCertificateSerializer(serializers.ModelSerializer):
         model = PartialCompletionCertificate
         fields = [
             'emp_id','start_date', 'end_date', 'remarks', 
-            'is_approved', 'approved_by', 'completion_percentage'
+            'is_approved', 'approved_by'
         ]
-        read_only_fields = ['user', 'issue_date', 'tasks_completed']
+        read_only_fields = ['user', 'issue_date', 'tasks_completed', 'completion_percentage']
 
     def create(self, validated_data):
         emp_id = validated_data.pop('emp_id')
@@ -660,3 +668,6 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = Temp
         fields = ['emp_id', 'user', 'role']
+
+class CompletionCertificateSerializer(serializers.Serializer):
+    emp_id = serializers.CharField(max_length=10, required=True)

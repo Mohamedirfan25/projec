@@ -71,7 +71,7 @@ const StaffList = () => {
         workUndertaken: [], // Initialize as empty array
         mobileNumber: '',
         email: '',
-        staffDomain: '',
+        staffDomain: [],
         staffTiming: '',
         loginTime: null,
         joinDate: null,
@@ -112,7 +112,7 @@ const StaffList = () => {
                     name: item.username,
                     dept: item.department || 'N/A',
                     role: item.temp_details.role || 'N/A',
-                    domain: item.domain_name || 'N/A',
+                    domain: item.domain.domain || 'N/A',
                     status: item.user_status === 'active' ? 'Working' : 'Resigned'
                 }));
 
@@ -158,7 +158,7 @@ const StaffList = () => {
             ...prev,
             staffName: data.username || "",
             email: data2.email || "",
-            staffDomain: data.domain_name || data.domain || "",
+            staffDomain: data.domain_details ? data.domain_details.map(d => d.domain) : [],
             department: data.department || "",
             staffTiming: data.shift_timing || "",
             teamName: data.team_name || "",
