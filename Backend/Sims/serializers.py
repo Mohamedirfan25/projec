@@ -546,19 +546,42 @@ class AssertAssignmentLogSerializer(serializers.ModelSerializer):
 
 
 class AttendanceClaimSerializer(serializers.ModelSerializer):
+    # Add intern display fields
+    employee_name = serializers.SerializerMethodField(read_only=True)
+    employee_id = serializers.SerializerMethodField(read_only=True)
     user = serializers.CharField(source='user.username', read_only=True)
     reviewed_by_username = serializers.CharField(source='reviewed_by.username', read_only=True)
+    
+    def get_employee_name(self, obj):
+        """Return intern full name or username"""
+        full_name = f"{obj.user.first_name} {obj.user.last_name}".strip()
+        return full_name if full_name else obj.user.username
+
+    def get_employee_id(self, obj):
+        """Return intern ID from related Temp model or UserData"""
+        # Try Temp model first
+        temp = getattr(obj.user, 'temp', None)
+        if temp and hasattr(temp, 'emp_id'):
+            return temp.emp_id
+        # Fallback to UserData
+        try:
+            user_data = UserData.objects.get(user=obj.user, is_deleted=False)
+            if user_data.emp_id:
+                return user_data.emp_id.emp_id if hasattr(user_data.emp_id, 'emp_id') else None
+        except UserData.DoesNotExist:
+            pass
+        return None
     
     class Meta:
         model = AttendanceClaim
         fields = [
-            'id', 'user', 'for_period', 'from_date', 'to_date', 
+            'id', 'user', 'employee_name', 'employee_id', 'for_period', 'from_date', 'to_date', 
             'from_day_type', 'from_half_day_type', 'to_day_type', 'to_half_day_type',
             'comments', 'status', 'reviewed_by_username', 'rejection_reason',
             'created_at', 'updated_at'
         ]
         read_only_fields = [
-            'id', 'user', 'status', 'reviewed_by_username', 'reviewed_by',
+            'id', 'user', 'employee_name', 'employee_id', 'status', 'reviewed_by_username', 'reviewed_by',
             'rejection_reason', 'created_at', 'updated_at'
         ]
     
