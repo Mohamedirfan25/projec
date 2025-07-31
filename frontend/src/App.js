@@ -272,7 +272,7 @@ function App() {
             <InternHoursCalculator />
           </ProtectedRoute>
         } />
-        <Route path="/AssetReport" element={
+        <Route path="/AssetReport/:assetId?" element={
           <ProtectedRoute>
             <AssetReport />
           </ProtectedRoute>
