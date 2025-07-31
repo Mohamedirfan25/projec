@@ -52,6 +52,7 @@ const AttendanceClaimRequests = () => {
       const response = await axios.get(url, {
         headers: { Authorization: `Token ${token}` },
       });
+      console.log('Attendance claims:', response.data);
       
       setClaims(Array.isArray(response.data) ? response.data : []);
       setLoading(false);

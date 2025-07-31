@@ -14,6 +14,7 @@ import axios from 'axios';
 
 // Helper function to generate a color from a string
 function stringToColor(string) {
+  if (!string) return '#9e9e9e';
   let hash = 0;
   let i;
   for (i = 0; i < string.length; i += 1) {
@@ -28,6 +29,33 @@ function stringToColor(string) {
 }
 
 // Helper function to get initials from a name
+
+// Helper to format a date range like "31/07/2025 - 01/08/2025"
+const formatDateRange = (from, to) => {
+  if (!from) return 'Invalid Date';
+  const fromStr = new Date(from).toLocaleDateString('en-GB');
+  if (!to || from === to) return fromStr;
+  const toStr = new Date(to).toLocaleDateString('en-GB');
+  return `${fromStr} - ${toStr}`;
+};
+
+// Map API half-day codes to user-friendly labels
+const halfMap = {
+  first_half: 'First Half',
+  second_half: 'Second Half',
+  morning: 'First Half',
+  afternoon: 'Second Half',
+  am: 'First Half',
+  pm: 'Second Half'
+};
+
+const formatHalfInfo = (fromHalf, toHalf) => {
+  if (!fromHalf && !toHalf) return null;
+  const start = halfMap[fromHalf] || fromHalf;
+  const end = halfMap[toHalf] || toHalf;
+  if (!toHalf || start === end) return start;
+  return `${start} - ${end}`;
+};
 function getInitials(name) {
   if (!name) return '??';
   return name
@@ -52,6 +80,13 @@ const AttendanceClaimRequests = ({ onBack }) => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  // Rejection dialog state
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  // Menu for per-row actions
+  const [actionMenuAnchor, setActionMenuAnchor] = useState(null);
+  const [actionMenuClaim, setActionMenuClaim] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [rejectTarget, setRejectTarget] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [stats, setStats] = useState({ total: 0, approved: 0, pending: 0, rejected: 0 });
 
@@ -66,8 +101,12 @@ const AttendanceClaimRequests = ({ onBack }) => {
       const response = await axios.get('http://localhost:8000/Sims/attendance-claims/', {
         headers: { Authorization: `Token ${token}` }
       });
-      setClaims(response.data);
-      const stats = response.data.reduce((acc, claim) => {
+      console.log('Attendance claims:', response.data);
+      const rawClaims = Array.isArray(response.data) ? response.data : response.data.results || [];
+      const claimData = rawClaims.map(c => ({ ...c, status: c.status?.toLowerCase() }));
+      setClaims(claimData);
+      console.log('Claim data:', claimData);
+      const stats = claimData.reduce((acc, claim) => {
         acc.total++;
         if (claim.status === 'approved') acc.approved++;
         if (claim.status === 'pending') acc.pending++;
@@ -82,12 +121,12 @@ const AttendanceClaimRequests = ({ onBack }) => {
     }
   };
 
-  const handleApprove = async (claim) => {
+  const handleApprove = async (claimId) => {
     try {
       setActionLoading(true);
       const token = localStorage.getItem('token');
       await axios.post(
-        `http://localhost:8000/Sims/attendance-claims/${claim.id}/approve/`,
+        `http://localhost:8000/Sims/attendance-claims/${claimId}/approve/`,
         {},
         { headers: { Authorization: `Token ${token}` } }
       );
@@ -105,26 +144,42 @@ const AttendanceClaimRequests = ({ onBack }) => {
     setDialogOpen(true);
   };
 
-  const handleReject = async (claim) => {
-    const reason = prompt('Reason for rejection:');
-    if (!reason) return;
+  const openRejectDialog = (claim) => {
+    setRejectTarget(claim);
+    setRejectReason('');
+    setRejectDialogOpen(true);
+  };
+
+  const handleRejectSubmit = async () => {
+    if (!rejectReason.trim()) return;
     
     try {
       setActionLoading(true);
       const token = localStorage.getItem('token');
       await axios.post(
-        `http://localhost:8000/Sims/attendance-claims/${claim.id}/reject/`,
-        { reason },
+        `http://localhost:8000/Sims/attendance-claims/${rejectTarget.id}/reject/`,
+        { rejection_reason: rejectReason },
         { headers: { Authorization: `Token ${token}` } }
       );
       setSnackbar({ open: true, message: 'Claim rejected successfully', severity: 'success' });
       await fetchClaims();
+      setRejectDialogOpen(false);
       setDialogOpen(false);
     } catch (err) {
       setSnackbar({ open: true, message: 'Failed to reject claim', severity: 'error' });
     } finally {
       setActionLoading(false);
     }
+  };
+
+  // Open/close per-row action menu
+  const handleActionMenuOpen = (event, claim) => {
+    setActionMenuAnchor(event.currentTarget);
+    setActionMenuClaim(claim);
+  };
+  const handleActionMenuClose = () => {
+    setActionMenuAnchor(null);
+    setActionMenuClaim(null);
   };
 
   const handleChangePage = (event, newPage) => {
@@ -158,15 +213,17 @@ const AttendanceClaimRequests = ({ onBack }) => {
 
   const filteredClaims = claims.filter(claim => {
     const matchesSearch = claim.employee_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      claim.reason?.toLowerCase().includes(searchTerm.toLowerCase());
+      (claim.comments || claim.reason || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = filterStatus === 'all' || claim.status === filterStatus;
     return matchesSearch && matchesStatus;
   });
+  console.log('Filtered claims:', filteredClaims);
 
   const paginatedClaims = filteredClaims.slice(
     page * rowsPerPage,
     page * rowsPerPage + rowsPerPage
   );
+  console.log('Paginated claims:', paginatedClaims);
 
   return (
     <Box sx={{ p: 3 }}>
@@ -228,7 +285,7 @@ const AttendanceClaimRequests = ({ onBack }) => {
                 <FilterListIcon sx={{ mr: 0.5, fontSize: 20 }} />
                 Filters
               </Button>
-              
+
               <Menu
                 anchorEl={anchorEl}
                 open={Boolean(anchorEl)}
@@ -267,9 +324,7 @@ const AttendanceClaimRequests = ({ onBack }) => {
                   </Button>
                 </Box>
               </Menu>
-            </Box>
-            
-            <Box sx={{ display: 'flex', gap: 1 }}>
+
               <Button
                 variant="outlined"
                 color="inherit"
@@ -288,9 +343,9 @@ const AttendanceClaimRequests = ({ onBack }) => {
               >
                 Refresh
               </Button>
-
             </Box>
           </Box>
+
           {loading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
               <CircularProgress />
@@ -302,16 +357,15 @@ const AttendanceClaimRequests = ({ onBack }) => {
                   <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
                     <TableCell>INTERN</TableCell>
                     <TableCell>ID</TableCell>
-                    <TableCell>CLAIM TYPE</TableCell>
                     <TableCell>DATES</TableCell>
                     <TableCell>DURATION</TableCell>
-                    <TableCell>REASON</TableCell>
+                    <TableCell>COMMENTS</TableCell>
                     <TableCell>STATUS</TableCell>
                     <TableCell align="right">ACTIONS</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {paginatedClaims.map((claim) => (
+                  {claims.map((claim) => (
                     <TableRow key={claim.id} hover sx={{ '&:hover': { backgroundColor: 'rgba(0, 0, 0, 0.02)' } }}>
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -334,24 +388,16 @@ const AttendanceClaimRequests = ({ onBack }) => {
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <Chip 
-                          label={claim.claim_type || 'Attendance'} 
-                          size="small" 
-                          variant="outlined"
-                          sx={{ 
-                            backgroundColor: 'rgba(25, 118, 210, 0.08)',
-                            color: 'primary.main',
-                            fontWeight: 500
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {new Date(claim.date).toLocaleDateString()}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {claim.period || 'Full day'}
-                        </Typography>
+                        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                          <Typography variant="body2">
+                            {formatDateRange(claim.from_date, claim.to_date)}
+                          </Typography>
+                          {formatHalfInfo(claim.from_half_day_type, claim.to_half_day_type) && (
+                            <Typography variant="caption" color="text.secondary">
+                              {formatHalfInfo(claim.from_half_day_type, claim.to_half_day_type)}
+                            </Typography>
+                          )}
+                        </Box>
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2">
@@ -359,9 +405,9 @@ const AttendanceClaimRequests = ({ onBack }) => {
                         </Typography>
                       </TableCell>
                       <TableCell sx={{ maxWidth: 200 }}>
-                        <Tooltip title={claim.reason}>
+                        <Tooltip title={claim.comments || claim.reason}>
                           <Typography noWrap variant="body2">
-                            {claim.reason || 'No reason provided'}
+                            {claim.comments || 'No comments'}
                           </Typography>
                         </Tooltip>
                       </TableCell>
@@ -379,58 +425,9 @@ const AttendanceClaimRequests = ({ onBack }) => {
                         />
                       </TableCell>
                       <TableCell align="right">
-                        <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
-                          {claim.status === 'pending' ? (
-                            <>
-                              <Button
-                                variant="contained"
-                                color="success"
-                                size="small"
-                                startIcon={<CheckIcon />}
-                                onClick={() => handleApprove(claim.id)}
-                                disabled={actionLoading}
-                                sx={{
-                                  minWidth: 'auto',
-                                  px: 1,
-                                  '& .MuiButton-startIcon': {
-                                    margin: 0
-                                  }
-                                }}
-                              />
-                              <Button
-                                variant="outlined"
-                                color="error"
-                                size="small"
-                                startIcon={<CloseIcon />}
-                                onClick={() => {
-                                  setSelectedClaim(claim);
-                                  setDialogOpen(true);
-                                }}
-                                disabled={actionLoading}
-                                sx={{
-                                  minWidth: 'auto',
-                                  px: 1,
-                                  '& .MuiButton-startIcon': {
-                                    margin: 0
-                                  }
-                                }}
-                              />
-                            </>
-                          ) : (
-                            <IconButton 
-                              size="small" 
-                              onClick={() => handleView(claim)}
-                              sx={{
-                                color: 'text.secondary',
-                                '&:hover': {
-                                  backgroundColor: 'rgba(0, 0, 0, 0.04)'
-                                }
-                              }}
-                            >
-                              <MoreVertIcon />
-                            </IconButton>
-                          )}
-                        </Box>
+                        <IconButton size="small" onClick={(e) => handleActionMenuOpen(e, claim)}>
+                          <MoreVertIcon />
+                        </IconButton>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -440,6 +437,32 @@ const AttendanceClaimRequests = ({ onBack }) => {
           )}
         </CardContent>
       </Card>
+
+      {/* Row action menu */}
+      <Menu
+        anchorEl={actionMenuAnchor}
+        open={Boolean(actionMenuAnchor)}
+        onClose={handleActionMenuClose}
+      >
+        <MenuItem
+          onClick={() => {
+            if (actionMenuClaim) handleApprove(actionMenuClaim.id);
+            handleActionMenuClose();
+          }}
+          disabled={!actionMenuClaim || actionMenuClaim.status !== 'pending'}
+        >
+          Approve
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            if (actionMenuClaim) openRejectDialog(actionMenuClaim);
+            handleActionMenuClose();
+          }}
+          disabled={!actionMenuClaim || actionMenuClaim.status !== 'pending'}
+        >
+          Reject
+        </MenuItem>
+      </Menu>
 
       {/* Claim Details Dialog */}
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
@@ -456,57 +479,83 @@ const AttendanceClaimRequests = ({ onBack }) => {
             </DialogTitle>
             <DialogContent>
               <Box sx={{ mt: 2 }}>
-                <Typography variant="subtitle2" color="textSecondary">Employee</Typography>
-                <Typography gutterBottom>{selectedClaim.employee_name || 'Unknown'}</Typography>
+                <Typography variant="subtitle2" color="text.secondary" gutterBottom>Employee</Typography>
+                <Typography variant="body1" gutterBottom>{selectedClaim.employee_name}</Typography>
                 
-                <Typography variant="subtitle2" color="textSecondary" sx={{ mt: 2 }}>Date</Typography>
-                <Typography gutterBottom>{new Date(selectedClaim.date).toLocaleDateString()}</Typography>
+                <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 2 }} gutterBottom>Date Range</Typography>
+                <Typography variant="body1" gutterBottom>
+                  {formatDateRange(selectedClaim.from_date, selectedClaim.to_date)}
+                </Typography>
                 
-                <Typography variant="subtitle2" color="textSecondary">Period</Typography>
-                <Typography gutterBottom>{selectedClaim.period || 'Full Day'}</Typography>
+                {selectedClaim.comments && (
+                  <>
+                    <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 2 }} gutterBottom>Comments</Typography>
+                    <Typography variant="body1">{selectedClaim.comments}</Typography>
+                  </>
+                )}
                 
-                <Typography variant="subtitle2" color="textSecondary">Reason</Typography>
-                <Typography gutterBottom>{selectedClaim.reason || 'No reason provided'}</Typography>
-                
-                {selectedClaim.status === 'rejected' && selectedClaim.rejection_reason && (
-                  <Alert severity="error" sx={{ mt: 2 }}>
-                    <Typography variant="subtitle2">Rejection Reason:</Typography>
-                    {selectedClaim.rejection_reason}
-                  </Alert>
+                {selectedClaim.rejection_reason && (
+                  <>
+                    <Typography variant="subtitle2" color="error" sx={{ mt: 2 }} gutterBottom>Rejection Reason</Typography>
+                    <Typography variant="body1" color="error">{selectedClaim.rejection_reason}</Typography>
+                  </>
                 )}
               </Box>
             </DialogContent>
             <DialogActions>
               <Button onClick={() => setDialogOpen(false)}>Close</Button>
-              {selectedClaim.status === 'pending' && (
-                <>
-                  <Button
-                    color="error"
-                    onClick={() => handleReject(selectedClaim.id)}
-                    disabled={actionLoading}
-                  >
-                    Reject
-                  </Button>
-                  <Button
-                    variant="contained"
-                    onClick={() => handleApprove(selectedClaim.id)}
-                    disabled={actionLoading}
-                  >
-                    Approve
-                  </Button>
-                </>
-              )}
             </DialogActions>
           </>
         )}
       </Dialog>
 
+      {/* Reject Reason Dialog */}
+      <Dialog open={rejectDialogOpen} onClose={() => !actionLoading && setRejectDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Reject Attendance Claim</DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="body1" gutterBottom>
+              Please provide a reason for rejecting this claim:
+            </Typography>
+            <TextField
+              autoFocus
+              margin="dense"
+              label="Rejection Reason"
+              type="text"
+              fullWidth
+              variant="outlined"
+              multiline
+              rows={4}
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              disabled={actionLoading}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRejectDialogOpen(false)} disabled={actionLoading}>Cancel</Button>
+          <Button 
+            variant="contained" 
+            color="error" 
+            onClick={handleRejectSubmit} 
+            disabled={actionLoading || !rejectReason.trim()}
+          >
+            {actionLoading ? <CircularProgress size={24} /> : 'Reject'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Snackbar
         open={snackbar.open}
-        autoHideDuration={4000}
+        autoHideDuration={6000}
         onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
       >
-        <Alert severity={snackbar.severity}>
+        <Alert
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          severity={snackbar.severity}
+          sx={{ width: '100%' }}
+        >
           {snackbar.message}
         </Alert>
       </Snackbar>

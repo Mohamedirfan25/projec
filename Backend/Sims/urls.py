@@ -4,12 +4,12 @@ from . import views_attendance_claim
 from .views import generate_offer_letter_api
 from .views import generate_completed_certificate
 from .views import CollegeDetailsView
-from .views import UserPermissionsView, GenerateTaskCertificate, GenerateAttendanceCertificate, GeneratePartialCertificate, UserListView
+from .views import UserPermissionsView, GenerateTaskCertificate, GenerateAttendanceCertificate, GeneratePartialCertificate, UserListView, GenerateCompletionCertificate
 
 urlpatterns = [
     path("user/update/<str:emp_id>/", views.UserUpdateView.as_view(), name='user-update'),
-    path("generate-completed-certificate/<str:emp_id>/",
-         generate_completed_certificate, name="generate_completed_certificate"),
+    path("generate-completion-certificate/",
+         GenerateCompletionCertificate.as_view(), name="generate_completion_certificate"),
     path('generate-offer-letter/', generate_offer_letter_api,
          name='generate_offer_letter_api'),
     path('generate-task-certificate/', GenerateTaskCertificate.as_view(), name='generate-task-certificate'),
@@ -102,6 +102,10 @@ urlpatterns = [
 
     # Email
     path('emp-email/<str:emp_id>/', views.EmpEmailLookupView.as_view(), name='emp-email-lookup'),
+    
+    # Asset Lookup
+    path('asset-lookup/<str:asset_code>/', views.AssetLookupView.as_view(), name='asset-lookup'),
+    path('asset-by-username/<str:username>/', views.AssetByUsernameView.as_view(), name='asset-by-username'),
 
     # Tasks
     path('tasks/assigned-history/', views.AssignedTaskHistoryView.as_view(), name='assigned-task-history'),
@@ -135,6 +139,10 @@ urlpatterns = [
     # Asset History
     path('asserthistory/',views.AssertAllTimeHistoryView.as_view(),name='asset-history'),
     path('assertuserhistory/',views.UserAssertAllTimeHistoryView.as_view(),name='asset-user-history'),
+    
+    # Asset Issue
+    path('assert-issue/', views.AssertIssueView.as_view(), name='assert-issue'),
+    path('assert-issue/<uuid:pk>/', views.AssertIssueView.as_view(), name='assert-issue-detail'),
 
     # Deleted Users
     path('deleted-users/', views.DeletedUsersView.as_view(), name='deleted-users'),

@@ -1,145 +1,158 @@
+# In views_attendance_claim.py
 from rest_framework import viewsets, status
-from rest_framework.response import Response
 from rest_framework.decorators import action
+from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.db.models import Q
+from rest_framework.pagination import PageNumberPagination
 from django.utils import timezone
-from .models import AttendanceClaim, Temp
+from .models import AttendanceClaim, Temp, UserData
 from .serializers import AttendanceClaimSerializer
-from .permissions import IsAdmin, IsStaff
+from django.db import transaction
+
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 100
 
 class AttendanceClaimViewSet(viewsets.ModelViewSet):
-    """
-    API endpoint for managing attendance claims.
-    """
     serializer_class = AttendanceClaimSerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
     
     def get_queryset(self):
-        """
-        Return attendance claims for the current user.
-        Staff users can see all claims, regular users only see their own.
-        """
+        """Return queryset based on role and optional status filter, mirroring leave logic."""
         user = self.request.user
-        queryset = AttendanceClaim.objects.all()
+        base_qs = AttendanceClaim.objects.all().order_by('-created_at')
+
+        # Status filter
+        status_param = self.request.query_params.get('status')
+        if status_param:
+            base_qs = base_qs.filter(status__iexact=status_param.upper())
+
+        try:
+            temp = Temp.objects.get(user=user)
+        except Temp.DoesNotExist:
+            return AttendanceClaim.objects.none()
+
+        role = temp.role.lower()
         
-        # If not staff, only return user's own claims
-        if not (user.is_staff or user.is_superuser):
+        # Admin -> all
+        if role == 'admin':
+            return base_qs
+        # Staff -> only interns in same department
+        if role == 'staff':
+            try:
+                staff_dept = UserData.objects.get(user=user,is_deleted=False).department
+                interns_in_dept = UserData.objects.filter(department=staff_dept, emp_id__role='intern', is_deleted=False).values_list('user', flat=True)
+                return base_qs.filter(user__in=interns_in_dept)
+            except UserData.DoesNotExist:
+                return AttendanceClaim.objects.none()
+        # Intern -> own
+        return base_qs.filter(user=user)
+        user = self.request.user
+        queryset = AttendanceClaim.objects.all().order_by('-created_at')
+        
+        # Filter by status if provided
+        status_param = self.request.query_params.get('status')
+        if status_param:
+            queryset = queryset.filter(status__iexact=status_param.upper())
+            
+        # Non-staff users can only see their own claims
+        if not user.is_staff:
             queryset = queryset.filter(user=user)
             
-        # Filter by status if provided
-        status_param = self.request.query_params.get('status', None)
-        if status_param:
-            queryset = queryset.filter(status=status_param.upper())
-            
-        # Filter by date range if provided
-        start_date = self.request.query_params.get('start_date', None)
-        end_date = self.request.query_params.get('end_date', None)
+        return queryset
+
+    @action(detail=False, methods=['get'])
+    def my_claims(self, request):
+        """Return claims of the logged-in user (intern dashboard)."""
+        qs = self.get_queryset().filter(user=request.user)
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        return Response(self.get_serializer(qs, many=True).data)
+
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        # Prevent duplicate claims for same date range
+        existing_claim = AttendanceClaim.objects.filter(
+            user=request.user,
+            from_date__lte=request.data.get('to_date'),
+            to_date__gte=request.data.get('from_date'),
+            status__in=['PENDING', 'APPROVED']
+        ).exists()
         
-        if start_date:
-            queryset = queryset.filter(from_date__gte=start_date)
-        if end_date:
-            queryset = queryset.filter(to_date__lte=end_date)
-            
-        return queryset.order_by('-created_at')
-    
-    def perform_create(self, serializer):
-        """Set the user to the current user when creating a claim."""
-        serializer.save(user=self.request.user)
-    
-    @action(detail=True, methods=['post'])
-    def approve(self, request, pk=None):
-        """Approve an attendance claim (staff only)."""
-        if not (request.user.is_staff or request.user.is_superuser):
+        if existing_claim:
             return Response(
-                {"detail": "You do not have permission to perform this action."},
-                status=status.HTTP_403_FORBIDDEN
+                {'detail': 'You already have a pending or approved claim for this date range.'},
+                status=status.HTTP_400_BAD_REQUEST
             )
             
+        return super().create(request, *args, **kwargs)
+
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
         claim = self.get_object()
         
         if claim.status == 'APPROVED':
             return Response(
-                {"detail": "This claim has already been approved."},
+                {'detail': 'This claim has already been approved.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
             
         claim.status = 'APPROVED'
         claim.reviewed_by = request.user
-        claim.updated_at = timezone.now()
+        claim.reviewed_at = timezone.now()
         claim.save()
         
-        # TODO: Add logic to update attendance records here
+        # TODO: Update attendance records here
+        # update_attendance_records(claim)
         
-        return Response(
-            {"detail": "Claim approved successfully."},
-            status=status.HTTP_200_OK
-        )
-    
+        # TODO: Send notification to user
+        # send_notification(claim.user, 'Your attendance claim has been approved')
+        
+        return Response({'detail': 'Claim approved successfully.'})
+
     @action(detail=True, methods=['post'])
     def reject(self, request, pk=None):
-        """Reject an attendance claim (staff only)."""
-        if not (request.user.is_staff or request.user.is_superuser):
-            return Response(
-                {"detail": "You do not have permission to perform this action."},
-                status=status.HTTP_403_FORBIDDEN
-            )
-            
         claim = self.get_object()
-        rejection_reason = request.data.get('rejection_reason', '')
+        rejection_reason = request.data.get('rejection_reason', '').strip()
         
         if not rejection_reason:
             return Response(
-                {"detail": "Rejection reason is required."},
+                {'detail': 'Rejection reason is required.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
             
         if claim.status == 'REJECTED':
             return Response(
-                {"detail": "This claim has already been rejected."},
+                {'detail': 'This claim has already been rejected.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
             
         claim.status = 'REJECTED'
         claim.reviewed_by = request.user
         claim.rejection_reason = rejection_reason
-        claim.updated_at = timezone.now()
+        claim.reviewed_at = timezone.now()
         claim.save()
         
-        return Response(
-            {"detail": "Claim rejected successfully."},
-            status=status.HTTP_200_OK
-        )
-    
-    @action(detail=False, methods=['get'])
-    def my_claims(self, request):
-        """Get the current user's claims."""
-        queryset = self.filter_queryset(self.get_queryset())
-        queryset = queryset.filter(user=request.user)
+        # TODO: Send notification to user
+        # send_notification(claim.user, f'Your attendance claim has been rejected. Reason: {rejection_reason}')
         
-        # Apply pagination
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-            
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)
-    
+        return Response({'detail': 'Claim rejected successfully.'})
+
     @action(detail=False, methods=['get'])
     def pending_approval(self, request):
-        """Get claims pending approval (staff only)."""
-        if not (request.user.is_staff or request.user.is_superuser):
+        if not request.user.is_staff:
             return Response(
-                {"detail": "You do not have permission to view this."},
+                {'detail': 'You do not have permission to perform this action.'},
                 status=status.HTTP_403_FORBIDDEN
             )
             
-        queryset = self.filter_queryset(self.get_queryset())
-        queryset = queryset.filter(status='PENDING')
-        
-        # Apply pagination
+        queryset = self.get_queryset().filter(status='PENDING')
         page = self.paginate_queryset(queryset)
+        
         if page is not None:
             serializer = self.get_serializer(page, many=True)
             return self.get_paginated_response(serializer.data)

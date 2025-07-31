@@ -53,17 +53,25 @@ class PersonalDataSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ('id','user','emp_id') # Make id read-only
 
+class DomainSimpleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Domain
+        fields = ['id', 'domain']
+
 class UserDataSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='emp_id.user.username', read_only=True)
     reporting_manager_username = serializers.CharField(source='reporting_manager.username', read_only=True)
     reporting_supervisor_username = serializers.CharField(source='reporting_supervisor.username', read_only=True)
-    domain_name = serializers.CharField(source='domain.domain', read_only=True)
-    
+    domain = serializers.PrimaryKeyRelatedField(
+        queryset=Domain.objects.all(),
+        many=True,
+        required=False
+    )
+    domain_details = DomainSimpleSerializer(source='domain', many=True, read_only=True)
     # Add Temp details
     temp_details = TempSerializer(source='emp_id', read_only=True)
     reporting_manager = serializers.CharField(write_only=True, required=False, allow_null=True)
     reporting_supervisor = serializers.CharField(write_only=True, required=False, allow_null=True)
-    domain_name = serializers.CharField(source='domain.domain', read_only=True)
     
     class Meta:
         model = UserData
@@ -546,19 +554,42 @@ class AssertAssignmentLogSerializer(serializers.ModelSerializer):
 
 
 class AttendanceClaimSerializer(serializers.ModelSerializer):
+    # Add intern display fields
+    employee_name = serializers.SerializerMethodField(read_only=True)
+    employee_id = serializers.SerializerMethodField(read_only=True)
     user = serializers.CharField(source='user.username', read_only=True)
     reviewed_by_username = serializers.CharField(source='reviewed_by.username', read_only=True)
+    
+    def get_employee_name(self, obj):
+        """Return intern full name or username"""
+        full_name = f"{obj.user.first_name} {obj.user.last_name}".strip()
+        return full_name if full_name else obj.user.username
+
+    def get_employee_id(self, obj):
+        """Return intern ID from related Temp model or UserData"""
+        # Try Temp model first
+        temp = getattr(obj.user, 'temp', None)
+        if temp and hasattr(temp, 'emp_id'):
+            return temp.emp_id
+        # Fallback to UserData
+        try:
+            user_data = UserData.objects.get(user=obj.user, is_deleted=False)
+            if user_data.emp_id:
+                return user_data.emp_id.emp_id if hasattr(user_data.emp_id, 'emp_id') else None
+        except UserData.DoesNotExist:
+            pass
+        return None
     
     class Meta:
         model = AttendanceClaim
         fields = [
-            'id', 'user', 'for_period', 'from_date', 'to_date', 
+            'id', 'user', 'employee_name', 'employee_id', 'for_period', 'from_date', 'to_date', 
             'from_day_type', 'from_half_day_type', 'to_day_type', 'to_half_day_type',
             'comments', 'status', 'reviewed_by_username', 'rejection_reason',
             'created_at', 'updated_at'
         ]
         read_only_fields = [
-            'id', 'user', 'status', 'reviewed_by_username', 'reviewed_by',
+            'id', 'user', 'employee_name', 'employee_id', 'status', 'reviewed_by_username', 'reviewed_by',
             'rejection_reason', 'created_at', 'updated_at'
         ]
     
@@ -637,3 +668,6 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = Temp
         fields = ['emp_id', 'user', 'role']
+
+class CompletionCertificateSerializer(serializers.Serializer):
+    emp_id = serializers.CharField(max_length=10, required=True)

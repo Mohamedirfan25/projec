@@ -58,7 +58,7 @@ const StaffCreationForm = ({ switchToRegister, formData }) => {
     workUndertaken: [], // Initialize as empty array
     mobileNumber: '',
     email: '',
-    staffDomain: '',
+    staffDomain: [],
     staffTiming: '',
     loginTime: null,
     joinDate: null,
@@ -134,7 +134,7 @@ const StaffCreationForm = ({ switchToRegister, formData }) => {
         workUndertaken: formData.workUndertaken || [], // Ensure array exists
         mobileNumber: formData.mobileNumber || '',
         email: formData.email || '',
-        staffDomain: formData.staffDomain || '',
+        staffDomain: formData.staffDomain || [],
         staffTiming: formData.staffTiming || '',
         loginTime: formData.loginTime || null,
         joinDate: formData.joinDate || null,
@@ -182,7 +182,7 @@ const StaffCreationForm = ({ switchToRegister, formData }) => {
       staffData.workUndertaken.length > 0 &&
       staffData.mobileNumber &&
       staffData.email &&
-      staffData.staffDomain &&
+      staffData.staffDomain.length > 0 &&
       staffData.staffTiming &&
       staffData.loginTime &&
       staffData.joinDate &&
@@ -210,7 +210,8 @@ const StaffCreationForm = ({ switchToRegister, formData }) => {
       const payload = {
         team_name: staffData.teamName,
         shift_timing: staffData.staffTiming,
-        domain: staffData.staffDomain,
+        domain: staffData.staffDomain.map(
+    name => domainOptions.find(opt => opt.domain === name)?.id),
         start_date: staffData.joinDate?.toISOString().split("T")[0],
         end_date: staffData.endDate?.toISOString().split("T")[0],
         duration: "3Month",
@@ -225,6 +226,7 @@ const StaffCreationForm = ({ switchToRegister, formData }) => {
         is_internmanagement_access: staffData.workUndertaken.includes("Intern Management"),
         is_assert_access: staffData.workUndertaken.includes("Asset Management"),
       };
+      console.log("Payload for user-data:", payload);
       
       await axios.patch(
         `http://localhost:8000/Sims/user-data/${staffData.staffId}/`,
@@ -523,12 +525,20 @@ const StaffCreationForm = ({ switchToRegister, formData }) => {
                 <InputLabel>Staff Domain</InputLabel>
                 <Select
                   name="staffDomain"
+                  multiple
                   value={staffData.staffDomain}
-                  onChange={handleChange}
+                  onChange={(e) => {
+                    setStaffData({
+                      ...staffData,
+                      staffDomain: typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value,
+                    });
+                  }}
                   label="Staff Domain"
+                  renderValue={(selected) => selected.join(', ')}
                 >
                   {domainOptions.map((domainObj) => (
                     <MenuItem key={domainObj.id} value={domainObj.domain}>
+                      <Checkbox checked={staffData.staffDomain.indexOf(domainObj.domain) > -1} />
                       {domainObj.domain}
                     </MenuItem>
                   ))}

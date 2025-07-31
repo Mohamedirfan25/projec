@@ -20,7 +20,7 @@ from django.db.models import Count, Q, F, Sum, Case, When, Value, IntegerField
 from django.db.models.functions import ExtractMonth, ExtractYear
 # Import specific models and serializers needed for attendance claims
 from .models import AttendanceClaim, Attendance, AttendanceLog, AttendanceEntries, UserData, Department, Temp, Document, DocumentVersion, Log
-from .serializers import AttendanceClaimSerializer, AttendanceSerializer, AttendanceLogSerializer, AttendanceEntriesSerializer, UserDataSerializer, DepartmentSerializer, TempSerializer, DocumentSerializer, DocumentVersionSerializer,UserSerializer
+from .serializers import AttendanceClaimSerializer, AttendanceSerializer, AttendanceLogSerializer, AttendanceEntriesSerializer, UserDataSerializer, DepartmentSerializer, TempSerializer, DocumentSerializer, DocumentVersionSerializer,UserSerializer, CompletionCertificateSerializer
 from django.db.models import OuterRef, Subquery  # <-- Add this line
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
@@ -33,7 +33,7 @@ from rest_framework.generics import GenericAPIView
 from rest_framework import generics, permissions
 from django.db.models import Window, F
 from django.db.models.functions import RowNumber
-from .models import PasswordResetOTP, AttendanceClaim
+from .models import PasswordResetOTP, AttendanceClaim, AssertStock
 from .serializers import (
     ResetPasswordOTPRequestSerializer, 
     VerifyOTPSerializer,
@@ -628,7 +628,9 @@ class AllUserDataView(APIView):
                         'is_payroll_access': getattr(user, 'is_payroll_access', False),
                         'is_internmanagement_access': getattr(user, 'is_internmanagement_access', False),
                         'is_assert_access': getattr(user, 'is_assert_access', False)
-                    }
+                    },
+                    'asset_code': user.asset_code.assert_id if user.asset_code else None
+
                 })
             
             return Response({
@@ -5517,17 +5519,62 @@ class DeletedUsersView(APIView):
 
 #-------------------------------------------------changes new 24-4 ------------------------------------#
 class EmpEmailLookupView(APIView):
-    permission_classes = [AllowAny]  # Allow unrestricted access
-
+    permission_classes = [AllowAny]
+    
     def get(self, request, emp_id):
         try:
             temp = Temp.objects.get(emp_id=emp_id, is_deleted=False)
-            user = temp.user
-            return Response({"emp_id": emp_id, "email": user.email})
+            return Response({
+                'email': temp.user.email if temp.user else None,
+                'username': temp.user.username if temp.user else None
+            })
         except Temp.DoesNotExist:
-            return Response({"error": "Employee not found."}, status=404)
+            return Response({'error': 'Employee not found'}, status=404)
 
 
+class AssetLookupView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, asset_code):
+        try:
+            asset = AssertStock.objects.get(assert_id=asset_code, is_deleted=False)
+            return Response({
+                'asset_id': asset.assert_id,
+                'configuration': asset.configuration,
+                'model': asset.assert_model,
+                'in_hand': asset.inhand,
+                'allocated_to': asset.emp_id.emp_id if asset.emp_id else None,
+                'allocated_type': asset.allocated_type
+            })
+        except AssertStock.DoesNotExist:
+            return Response({'error': 'Asset not found or has been deleted'}, status=404)
+
+
+class AssetByUsernameView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, username):
+        try:
+            # Get the user by username
+            user = User.objects.get(username=username, is_active=True)
+            
+            # Get the user's temp record
+            temp = Temp.objects.get(user=user, is_deleted=False)
+            
+            # Find all assets allocated to this user
+            assets = AssertStock.objects.filter(emp_id=temp, is_deleted=False)
+            
+            if not assets.exists():
+                return Response({'error': 'No assets found for this user'}, status=404)
+                
+            # Return all assets (though typically a user would have just one)
+            serializer = AssertStockSerializer(assets, many=True)
+            return Response(serializer.data)
+            
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=404)
+        except Temp.DoesNotExist:
+            return Response({'error': 'User profile not found'}, status=404)
 
 
 class AssignedTaskHistoryView(APIView):
@@ -6667,140 +6714,100 @@ class GenerateAttendanceCertificate(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 class GenerateCompletionCertificate(APIView):
     def post(self, request, format=None):
-        serializer = TaskCertificateSerializer(data=request.data)
+        serializer = CompletionCertificateSerializer(data=request.data)
         if serializer.is_valid():
             try:
                 # Get intern details
                 intern = Temp.objects.get(emp_id=serializer.validated_data['emp_id'])
                 personal_data = PersonalData.objects.get(emp_id=intern)
                 user_data = UserData.objects.get(emp_id=intern)
+                college_data = CollegeDetails.objects.get(emp_id=intern)
                 
                 # Determine gender-based pronouns
-                gender = getattr(personal_data, 'gender', '').lower()
-                his_her_their = 'his' if gender == 'm' else 'her' if gender == 'f' else 'their'
-                he_she_they = 'He' if gender == 'm' else 'She' if gender == 'f' else 'They'
-                him_her_them = 'him' if gender == 'm' else 'her' if gender == 'f' else 'them'
+                gender = personal_data.gender
+                pronoun = 'his' if gender == 'M' else 'her' if gender == 'F' else 'their'
+                pronoun2 = 'He' if gender == 'M' else 'She' if gender == 'F' else 'They'
+                pronoun3 = 'him' if gender == 'M' else 'her' if gender == 'F' else 'them'
                 
-                # Create temp files
-                with tempfile.NamedTemporaryFile(delete=False, suffix='.docx') as temp_docx:
-                    temp_pdf_path = tempfile.mktemp(suffix='.pdf')
-                    
-                    try:
-                        # Load the Word template
-                        template_path = os.path.join(settings.BASE_DIR, 'templates', 'certificates', 'VDart_certificate_ACA016.docx')
-                        doc = DocxDocument(template_path)
-                        
-                        # Prepare replacements with the exact placeholders from your template
-                        replacements = {
-                            '{{intern_name}}': f"{intern.user.first_name} {intern.user.last_name}",
-                            '{{intern_college}}': getattr(user_data, 'college_name', ''),
-                            '{{intern_location}}': getattr(user_data, 'college_location', ''),
-                            '{{intern_start_date}}': user_data.start_date.strftime('%B %d, %Y') if hasattr(user_data, 'start_date') else '',
-                            '{{intern_end_date}}': user_data.end_date.strftime('%B %d, %Y') if hasattr(user_data, 'end_date') else '',
-                            '{{his,her,their}}': his_her_their,
-                            '{{He,she,They}}': he_she_they,
-                            '{{him,her,them}}': him_her_them,
-                            '{{issue_date}}': datetime.now().strftime('%B %d, %Y')
-                        }
-                        
-                        # Replace text in paragraphs
-                        for para in doc.paragraphs:
-                            for old_text, new_text in replacements.items():
-                                if old_text in para.text:
-                                    for run in para.runs:
-                                        if old_text in run.text:
-                                            run.text = run.text.replace(old_text, new_text)
-                        
-                        # Replace text in tables
-                        for table in doc.tables:
-                            for row in table.rows:
-                                for cell in row.cells:
-                                    for para in cell.paragraphs:
-                                        for old_text, new_text in replacements.items():
-                                            if old_text in para.text:
-                                                for run in para.runs:
-                                                    if old_text in run.text:
-                                                        run.text = run.text.replace(old_text, new_text)
-                        
-                        # Save the modified document
-                        doc.save(temp_docx.name)
-                        
-                        # Convert DOCX to PDF
-                        pythoncom.CoInitialize()
-                        convert(temp_docx.name, temp_pdf_path)
-                        
-                        # Read the PDF content
-                        with open(temp_pdf_path, 'rb') as pdf_file:
-                            pdf_content = pdf_file.read()
-                        
-                        # Send email with PDF attachment
-                        subject = f"Completion Certificate - {intern.user.get_full_name()}"
-                        message = f"Dear {intern.user.get_full_name()},\n\nPlease find attached your completion certificate.\n\nBest regards,\nVDart Team"
-                        to_email = [intern.user.email]
-                        
-                        # Create email with attachment
-                        email = EmailMessage(
-                            subject=subject,
-                            body=message,
-                            from_email=settings.DEFAULT_FROM_EMAIL,
-                            to=to_email,
-                        )
-                        
-                        # Attach the PDF
-                        email.attach(
-                            f"Completion_Certificate_{intern.emp_id}.pdf",
-                            pdf_content,
-                            'application/pdf'
-                        )
-                        
-                        # Send the email
-                        email.send(fail_silently=False)
-                        
-                        # Log the activity
-                        log_activity(
-                            request.user,
-                            "Generated",
-                            "Completion Certificate",
-                            intern.emp_id,
-                            f"Generated completion certificate for {intern.user.username}",
-                            request
-                        )
-                        
-                        return Response(
-                            {"success": True, "message": "Completion certificate sent successfully"},
-                            status=status.HTTP_200_OK
-                        )
-                        
-                    except Exception as e:
-                        return Response(
-                            {"success": False, "error": str(e)},
-                            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                        )
-                    finally:
-                        # Clean up temp files
-                        try:
-                            os.unlink(temp_docx.name)
-                            if os.path.exists(temp_pdf_path):
-                                os.unlink(temp_pdf_path)
-                        except:
-                            pass
-                        pythoncom.CoUninitialize()
-                        
-            except Temp.DoesNotExist:
+                # Load the Word template
+                template_path = 'templates/certificates/completion_cert_temp.docx'
+                doc = DocxDocument(template_path)
+                
+                # Replace placeholders in the document
+                for paragraph in doc.paragraphs:
+                    paragraph.text = paragraph.text.replace('{{NAME}}', intern.user.get_full_name())
+                    paragraph.text = paragraph.text.replace('{{COLLEGE}}', 
+                                                            college_data.college_name)
+                    paragraph.text = paragraph.text.replace('{{DOMAIN}}', user_data.domain.domain)
+                    paragraph.text = paragraph.text.replace('{{LOCATION}}', personal_data.address1)
+                    paragraph.text = paragraph.text.replace('{{ISSUE_DATE}}', datetime.now().strftime('%B %d, %Y'))
+                    paragraph.text = paragraph.text.replace('{{START_DATE}}', user_data.start_date.strftime('%B %d, %Y'))
+                    paragraph.text = paragraph.text.replace('{{END_DATE}}', user_data.end_date.strftime('%B %d, %Y'))
+                    paragraph.text = paragraph.text.replace('{{PRONOUN}}', pronoun)
+                    paragraph.text = paragraph.text.replace('{{PRONOUN2}}', pronoun2)
+                    paragraph.text = paragraph.text.replace('{{PRONOUN3}}', pronoun3)
+
+
+                
+                # Save the modified document to a temporary file
+                temp_docx = tempfile.NamedTemporaryFile(suffix=".docx", delete=False)
+                doc.save(temp_docx.name)
+                temp_docx.close()
+
+                # Create a temp PDF output file path
+                temp_pdf_path = temp_docx.name.replace(".docx", ".pdf")
+
+                # Convert DOCX to PDF (save directly to file path)
+                pythoncom.CoInitialize() 
+                convert(temp_docx.name, temp_pdf_path)
+
+                # Instead of using BytesIO, let's read the PDF file directly
+                with open(temp_pdf_path, 'rb') as pdf_file:
+                    pdf_content = pdf_file.read()
+
+                # Send email with PDF attachment
+                subject = f"Completion Certificate - {intern.user.get_full_name()}"
+                message = f"Dear {intern.user.get_full_name()},\n\nPlease find attached your completion certificate.\n\nBest regards,\nThe Management"
+                to_email = ['smanfsaf@gmail.com']
+                
+                # Create email with attachment
+                email = EmailMessage(
+                    subject=subject,
+                    body=message,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    to=to_email,
+                )
+                
+                # Attach the PDF directly from the file
+                email.attach(
+                    f"Completion_Certificate_{intern.emp_id}.pdf",
+                    pdf_content,
+                    'application/pdf'
+                )
+                
+                # Send the email
+                email.send(fail_silently=False)
+
+                # Clean up temp files
+                os.unlink(temp_docx.name)
+                os.unlink(temp_pdf_path)
+                
                 return Response(
-                    {"success": False, "error": "Intern not found"},
+                    {"success": True, "message": "Completion certificate sent successfully"},
+                    status=status.HTTP_200_OK
+                )
+                
+            except (Temp.DoesNotExist, Attendance.DoesNotExist) as e:
+                return Response(
+                    {"success": False, "error": "Intern or certificate not found"},
                     status=status.HTTP_404_NOT_FOUND
                 )
-            except PersonalData.DoesNotExist:
+            except Exception as e:
                 return Response(
-                    {"success": False, "error": "Personal data not found for this intern"},
-                    status=status.HTTP_404_NOT_FOUND
+                    {"success": False, "error": str(e)},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
-            except UserData.DoesNotExist:
-                return Response(
-                    {"success": False, "error": "User data not found for this intern"},
-                    status=status.HTTP_404_NOT_FOUND
-                )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class GeneratePartialCertificate(APIView):
     permission_classes = [IsAuthenticated]

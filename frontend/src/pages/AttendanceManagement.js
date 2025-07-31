@@ -195,8 +195,8 @@ const AttendanceManagement = () => {
         }, 1500);
       }
     } catch (error) {
-      console.error('Error submitting attendance claim:', error);
-      let errorMessage = 'Failed to submit attendance claim. Please try again.';
+      console.error('Error submitting attendance claim:', error.response?.data || error.message);
+      let errorMessage = error.response?.data?.detail || 'Failed to submit attendance claim. Please try again.';
       
       if (error.response) {
         // Handle validation errors from the server
