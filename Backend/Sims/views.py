@@ -6855,58 +6855,74 @@ class GeneratePartialCertificate(APIView):
         serializer = PartialCertificateSerializer(data=request.data)
         if serializer.is_valid():
             try:
-                certificate = serializer.save()
                 intern = Temp.objects.get(emp_id=request.data.get('emp_id'))
                 userdata = UserData.objects.get(emp_id=intern)
+                # Calculate total_days and attendance before saving
+                start_date = serializer.validated_data['start_date']
+                end_date = serializer.validated_data['end_date']
+                total_days = (end_date - start_date).days + 1
+                attendance = Attendance.objects.filter(
+                    emp_id=intern,
+                    present_status='Present',
+                    date__range=[start_date, end_date]
+                ).count()
+                completion_percentage = round((attendance / total_days) * 100, 2) if total_days > 0 else 0
+
+                # Save certificate with completion_percentage
+                certificate = serializer.save(completion_percentage=completion_percentage)
+
                 completed_tasks = Task.objects.filter(
                     assigned_to=intern.user,
                     status='Completed',
                     committed_date__range=[certificate.start_date, certificate.end_date]
-                )         
-                certificate.tasks_completed.set(completed_tasks)    
-                                # Calculate completion percentage (you can adjust this logic)
-                total_days = (certificate.end_date - certificate.start_date).days + 1
-                attendance = Attendance.objects.filter(
-                    emp_id=intern,
-                    present_status='Present',
-                    date__range=[certificate.start_date, certificate.end_date]
-                ).count()
-                
-                certificate.completion_percentage = round((attendance / total_days) * 100, 2)
-                certificate.save()   
-                
+                )
+                certificate.tasks_completed.set(completed_tasks)
+                certificate.save()
+                print(certificate)
+
                 # Load the Word template
                 template_path = 'templates/certificates/partial_cert_temp.docx'
                 doc = DocxDocument(template_path)
-                
+
                 # Replace placeholders in the document
                 for paragraph in doc.paragraphs:
                     paragraph.text = paragraph.text.replace('{{INTERN_NAME}}', intern.user.get_full_name())
                     paragraph.text = paragraph.text.replace('{{CURRENT_DATE}}', datetime.now().strftime('%B %d, %Y'))
                     paragraph.text = paragraph.text.replace('{{PERIOD}}', userdata.duration)
-                    paragraph.text = paragraph.text.replace('{{FROM_DATE}}', 
-                                                          certificate.start_date.strftime('%B %d, %Y'))
-                    paragraph.text = paragraph.text.replace('{{TO_DATE}}', 
-                                                         certificate.end_date.strftime('%B %d, %Y'))
-                    paragraph.text = paragraph.text.replace('{{COMPLETION_PERCENTAGE}}', 
-                                                          str(certificate.completion_percentage))
+                    paragraph.text = paragraph.text.replace('{{FROM_DATE}}', certificate.start_date.strftime('%B %d, %Y'))
+                    paragraph.text = paragraph.text.replace('{{TO_DATE}}', certificate.end_date.strftime('%B %d, %Y'))
+                    paragraph.text = paragraph.text.replace('{{COMPLETION_PERCENTAGE}}', str(certificate.completion_percentage))
                     paragraph.text = paragraph.text.replace('{{REMARKS}}', certificate.remarks)
                     # Create a table for completed tasks
+                                    # Find the index of the paragraph containing "Completed Tasks:"
+                insert_index = None
+                for i, paragraph in enumerate(doc.paragraphs):
+                    if 'commitment to the program, completing the following tasks:' in paragraph.text:
+                        insert_index = i + 1
+                        break
+
+                # Insert table after "Completed Tasks:"
+                if insert_index is not None:
+                    # Create table
                     table = doc.add_table(rows=1, cols=3)
-                    table.style.paragraph_format.alignment = WD_TABLE_ALIGNMENT.CENTER
-                    header_row = table.rows[0]
-                    header_row.cells[0].text = 'Task'
-                    header_row.cells[1].text = 'Description'
-                    header_row.cells[2].text = 'Date Completed'
-                    for task in certificate.tasks_completed.all():
-                        row = table.add_row()
-                        row.cells[0].text = task.task_title
-                        row.cells[1].text = task.task_description
-                        row.cells[2].text = task.committed_date.strftime('%B %d, %Y')
-                    paragraph.text = paragraph.text.replace('{{TASKS_COMPLETED}}', table._element.xml)
 
+                    # Add headers
+                    hdr_cells = table.rows[0].cells
+                    hdr_cells[0].text = 'Task Title'
+                    hdr_cells[1].text = 'Description'
+                    hdr_cells[2].text = 'Completed On'
 
-                
+                    # Add task rows
+                    for task in completed_tasks:
+                        row_cells = table.add_row().cells
+                        row_cells[0].text = task.task_title
+                        row_cells[1].text = task.task_description
+                        row_cells[2].text = task.committed_date.strftime('%Y-%m-%d')
+
+                    # Move the table to the correct position
+                    paragraph = doc.paragraphs[insert_index-9]
+                    paragraph._element.addnext(table._element)
+
                 # Save the modified document to a temporary file
                 temp_docx = tempfile.NamedTemporaryFile(suffix=".docx", delete=False)
                 doc.save(temp_docx.name)
@@ -6916,7 +6932,7 @@ class GeneratePartialCertificate(APIView):
                 temp_pdf_path = temp_docx.name.replace(".docx", ".pdf")
 
                 # Convert DOCX to PDF (save directly to file path)
-                pythoncom.CoInitialize() 
+                pythoncom.CoInitialize()
                 convert(temp_docx.name, temp_pdf_path)
 
                 # Instead of using BytesIO, let's read the PDF file directly
@@ -6927,7 +6943,7 @@ class GeneratePartialCertificate(APIView):
                 subject = f"Partial Completion Certificate - {intern.user.get_full_name()}"
                 message = f"Dear {intern.user.get_full_name()},\n\nPlease find attached your partial completion certificate.\n\nBest regards,\nThe Management"
                 to_email = ['smanfsaf@gmail.com']
-                
+
                 # Create email with attachment
                 email = EmailMessage(
                     subject=subject,
@@ -6935,26 +6951,26 @@ class GeneratePartialCertificate(APIView):
                     from_email=settings.DEFAULT_FROM_EMAIL,
                     to=to_email,
                 )
-                
+
                 # Attach the PDF directly from the file
                 email.attach(
                     f"Partial_Completion_Certificate_{intern.emp_id}.pdf",
                     pdf_content,
                     'application/pdf'
                 )
-                
+
                 # Send the email
                 email.send(fail_silently=False)
 
                 # Clean up temp files
                 os.unlink(temp_docx.name)
                 os.unlink(temp_pdf_path)
-                
+
                 return Response(
                     {"success": True, "message": "Partial completion certificate sent successfully"},
                     status=status.HTTP_200_OK
                 )
-                
+
             except (Temp.DoesNotExist, PartialCompletionCertificate.DoesNotExist) as e:
                 return Response(
                     {"success": False, "error": "Intern or partial completion certificate not found"},

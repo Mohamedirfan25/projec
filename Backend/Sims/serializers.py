@@ -623,9 +623,9 @@ class PartialCertificateSerializer(serializers.ModelSerializer):
         model = PartialCompletionCertificate
         fields = [
             'emp_id','start_date', 'end_date', 'remarks', 
-            'is_approved', 'approved_by', 'completion_percentage'
+            'is_approved', 'approved_by'
         ]
-        read_only_fields = ['user', 'issue_date', 'tasks_completed']
+        read_only_fields = ['user', 'issue_date', 'tasks_completed', 'completion_percentage']
 
     def create(self, validated_data):
         emp_id = validated_data.pop('emp_id')
