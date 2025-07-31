@@ -20,6 +20,8 @@ import {
   DialogContent,
   DialogActions,
   Pagination,
+  Autocomplete,
+  CircularProgress,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -33,8 +35,10 @@ const CreateTask = () => {
   const [taskDescription, setTaskDescription] = useState('');
   const [priority, setPriority] = useState('');
   const [committedDate, setCommittedDate] = useState(dayjs());
-  const [assignTo, setAssignTo] = useState('');
-  const [assignBy, setAssignBy] = useState('');
+  const [assignTo, setAssignTo] = useState(null);
+  const [assignBy, setAssignBy] = useState(null);
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [tasks, setTasks] = useState([]);
   const [showTaskList, setShowTaskList] = useState(false);
@@ -49,9 +53,95 @@ const CreateTask = () => {
     { value: 'High', label: 'High' },
   ];
 
+  // Fetch users for autocomplete
+  const fetchUsers = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      alert("Authentication token is missing! Please log in.");
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      console.log("Fetching users from API...");
+      const response = await axios.get("http://localhost:8000/Sims/users/", {
+        headers: {
+          "Authorization": `Token ${token}`,
+        },
+        withCredentials: true,
+      });
+      
+      console.log("Raw API response:", response);
+      console.log("Response data type:", Array.isArray(response.data) ? 'Array' : typeof response.data);
+      
+      if (!response.data || !Array.isArray(response.data)) {
+        console.error("Unexpected API response format:", response.data);
+        alert("Failed to load users: Unexpected response format");
+        return;
+      }
+      
+      // Log the first user object to understand its structure
+      if (response.data.length > 0) {
+        console.log("First user object:", JSON.stringify(response.data[0], null, 2));
+      }
+      
+      // Map the response to include both username and email for better user identification
+      const userOptions = response.data.map((user, index) => {
+        // Log each user object structure
+        console.log(`User ${index + 1}:`, user);
+        
+        // Try to extract username and email from different possible locations
+        const username = user.username || 
+                        user.user?.username || 
+                        user.temp?.username || 
+                        user.user_data?.username ||
+                        `User-${index + 1}`;
+                        
+        const email = user.email || 
+                     user.user?.email || 
+                     user.temp?.email || 
+                     user.user_data?.email ||
+                     '';
+        
+        const displayName = user.first_name || 
+                          user.user?.first_name || 
+                          user.temp?.first_name ||
+                          user.user_data?.first_name ||
+                          username;
+        
+        const userOption = {
+          id: user.id || user.emp_id || user.user?.id || user.temp?.emp_id || `user-${index}`,
+          username: username,
+          email: email,
+          displayName: displayName,
+          label: displayName + (email ? ` (${email})` : ''),
+          // Include the raw user object for debugging
+          _raw: user
+        };
+        
+        console.log(`Processed user ${index + 1}:`, userOption);
+        return userOption;
+      });
+      
+      console.log("Processed user options:", userOptions);
+      setUsers(userOptions);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      console.log("Error response:", error.response?.data);
+      alert("Failed to load user list. Please check the console for details.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    fetchTasks1();
-  }, []);
+    // Fetch users when component mounts
+    fetchUsers();
+    
+    if (showTaskList) {
+      fetchTasks();
+    }
+  }, [showTaskList]);
 
   const fetchTasks = async () => {
     const token = localStorage.getItem("token");
@@ -72,83 +162,68 @@ const CreateTask = () => {
         taskDescription: task.task_description,
         priority: task.priority,
         committedDate: task.committed_date,
-        assignTo: task.assigned_to,
-        assignBy: task.assigned_by,
+        assignTo: task.assigned_to_username || task.assigned_to,
+        assignBy: task.assigned_by_username || task.assigned_by,
+        status: task.status || 'Not_Started'
       }));
       setTasks(fetchedTasks);
     } catch (error) {
       console.error("Error fetching tasks:", error);
-      alert("Failed to fetch tasks.");
+      if (showTaskList) {
+        alert("Failed to load task list. Please try again later.");
+      }
     }
-  };
-  useEffect(() => {
-    fetchTasks1();
-  }, []);
-  
-  const fetchTasks1 = async () => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      alert("Authentication token is missing! Please log in.");
-      return;
-    }
-    try {
-      const response = await axios.get("http://localhost:8000/Sims/tasks/assigned-history/", {
-        headers: {
-          "Authorization": `Token ${token}`,
-        },
-        withCredentials: true,
-      });
-      const fetchedTasks = response.data.map(task => ({
-        id: task.id,
-        taskName: task.task_title,
-        committedDate: task.committed_date,
-        taskDescription: task.task_description,
-        startDate: task.start_date,
-        endDate: task.end_date,
-        assignTo: task.assigned_to_username,
-        assignBy: task.assigned_by_username,
-        priority: task.priority,
-        status: task.status,
-      }));
-      setTasks(fetchedTasks);
-    } catch (error) {
-      console.error("Error fetching task history:", error);
-      alert("Failed to fetch task history.");
-    }
-  };
-  
-
-  const validateForm = () => {
-    let tempErrors = {};
-    if (!taskName) tempErrors.task_title = 'Task Name is required.';
-    if (!taskDescription) tempErrors.taskDescription = 'Task Description is required.';
-    if (!priority) tempErrors.priority = 'Priority is required.';
-    if (!assignTo) tempErrors.assignTo = 'Please assign the task.';
-    if (!assignBy) tempErrors.assignBy = 'Please specify who is assigning the task.';
-    setErrors(tempErrors);
-    return Object.keys(tempErrors).length === 0;
   };
 
   const handleSubmit = async () => {
-    const token = localStorage.getItem("token");
-  
-    if (!token) {
-      alert("Authentication token is missing! Please log in.");
+    // Validate form
+    const newErrors = {};
+    if (!taskName.trim()) newErrors.taskName = 'Task name is required';
+    if (!taskDescription.trim()) newErrors.taskDescription = 'Description is required';
+    if (!priority) newErrors.priority = 'Priority is required';
+    if (!committedDate) newErrors.committedDate = 'Committed date is required';
+    if (!assignTo) newErrors.assignTo = 'Please select a user to assign to';
+    if (!assignBy) newErrors.assignBy = 'Please select who is assigning the task';
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
       return;
     }
 
-    if (!validateForm()) return;
-
     try {
-      await axios.post(
+      const token = localStorage.getItem("token");
+      if (!token) {
+        alert("Authentication token is missing! Please log in.");
+        return;
+      }
+
+      // Extract usernames from the selected user objects
+      const getUsername = (user) => {
+        if (!user) return '';
+        if (typeof user === 'string') return user;
+        return user.username || user.label?.split(' (')[0] || '';
+      };
+
+      const assignedToUsername = getUsername(assignTo);
+      const assignedByUsername = getUsername(assignBy);
+
+      console.log("Submitting with usernames:", {
+        assignedTo: assignedToUsername,
+        assignedBy: assignedByUsername,
+        assignToRaw: assignTo,
+        assignByRaw: assignBy
+      });
+
+      const response = await axios.post(
         "http://localhost:8000/Sims/tasks/",
         {
           task_title: taskName,
           task_description: taskDescription,
           priority: priority,
           committed_date: committedDate.format("YYYY-MM-DD"),
-          assigned_to: assignTo,
-          assigned_by: assignBy,
+          assigned_to: assignedToUsername,
+          assigned_by: assignedByUsername,
+          status: "Not_Started"
         },
         {
           headers: {
@@ -158,22 +233,45 @@ const CreateTask = () => {
           withCredentials: true,
         }
       );
+      
+      console.log("Task created successfully:", response.data);
       alert("Task created successfully!");
-      fetchTasks();
+      
+      // Reset form
       setTaskName('');
       setTaskDescription('');
       setPriority('');
       setCommittedDate(dayjs());
-      setAssignTo('');
-      setAssignBy('');
+      setAssignTo(null);
+      setAssignBy(null);
       setErrors({});
+      
+      // Refresh tasks if task list is shown
+      if (showTaskList) {
+        await fetchTasks();
+      }
+      
     } catch (error) {
       console.error("Error creating task:", error);
+      let errorMessage = "Failed to create task.";
+      
       if (error.response) {
-        alert("AssignedTo User or AssignedBy User does not exist");
-      } else {
-        alert("Failed to create task: Unknown error occurred.");
+        console.error("Error response:", error.response.data);
+        if (error.response.data) {
+          // Handle specific error messages from backend
+          if (error.response.data.assigned_to) {
+            errorMessage = `Invalid user: ${error.response.data.assigned_to[0]}`;
+            setErrors(prev => ({ ...prev, assignTo: error.response.data.assigned_to[0] }));
+          } else if (error.response.data.assigned_by) {
+            errorMessage = `Invalid assigner: ${error.response.data.assigned_by[0]}`;
+            setErrors(prev => ({ ...prev, assignBy: error.response.data.assigned_by[0] }));
+          } else if (error.response.data.detail) {
+            errorMessage = error.response.data.detail;
+          }
+        }
       }
+      
+      alert(errorMessage);
     }
   };
 
@@ -190,7 +288,7 @@ const CreateTask = () => {
   };
 
   const handleBackToTasks = () => {
-    navigate('/Dash');
+    navigate('/intern');
   };
 
   return (
@@ -285,25 +383,101 @@ const CreateTask = () => {
                   </LocalizationProvider>
                 </Grid>
                 <Grid item xs={12} sm={6}>
-                  <TextField
-                    label="Assigned To"
-                    variant="outlined"
-                    fullWidth
+                  <Autocomplete
+                    options={users}
+                    getOptionLabel={(option) => {
+                      if (!option) return '';
+                      if (typeof option === 'string') return option;
+                      return option.label || option.displayName || option.username || 'Unknown';
+                    }}
                     value={assignTo}
-                    onChange={(e) => setAssignTo(e.target.value)}
-                    error={!!errors.assignTo}
-                    helperText={errors.assignTo}
+                    onChange={(event, newValue) => {
+                      setAssignTo(newValue);
+                      if (errors.assignTo) {
+                        setErrors(prev => ({
+                          ...prev,
+                          assignTo: undefined
+                        }));
+                      }
+                    }}
+                    isOptionEqualToValue={(option, value) => {
+                      if (!option || !value) return false;
+                      return (option.id && value.id && option.id === value.id) || 
+                             (option.username && value.username && option.username === value.username);
+                    }}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Assigned To"
+                        variant="outlined"
+                        fullWidth
+                        error={!!errors.assignTo}
+                        helperText={errors.assignTo || 'Start typing to search users'}
+                        InputProps={{
+                          ...params.InputProps,
+                          endAdornment: (
+                            <>
+                              {loading ? <CircularProgress color="inherit" size={20} /> : null}
+                              {params.InputProps.endAdornment}
+                            </>
+                          ),
+                        }}
+                      />
+                    )}
+                    renderOption={(props, option) => (
+                      <li {...props} key={option.id || option.username}>
+                        {option.label || option.displayName || option.username || 'Unknown'}
+                      </li>
+                    )}
                   />
                 </Grid>
                 <Grid item xs={12} sm={6}>
-                  <TextField
-                    label="Assigned By"
-                    variant="outlined"
-                    fullWidth
+                  <Autocomplete
+                    options={users}
+                    getOptionLabel={(option) => {
+                      if (!option) return '';
+                      if (typeof option === 'string') return option;
+                      return option.label || option.displayName || option.username || 'Unknown';
+                    }}
                     value={assignBy}
-                    onChange={(e) => setAssignBy(e.target.value)}
-                    error={!!errors.assignBy}
-                    helperText={errors.assignBy}
+                    onChange={(event, newValue) => {
+                      setAssignBy(newValue);
+                      if (errors.assignBy) {
+                        setErrors(prev => ({
+                          ...prev,
+                          assignBy: undefined
+                        }));
+                      }
+                    }}
+                    isOptionEqualToValue={(option, value) => {
+                      if (!option || !value) return false;
+                      return (option.id && value.id && option.id === value.id) || 
+                             (option.username && value.username && option.username === value.username);
+                    }}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Assigned By"
+                        variant="outlined"
+                        fullWidth
+                        error={!!errors.assignBy}
+                        helperText={errors.assignBy || 'Start typing to search users'}
+                        InputProps={{
+                          ...params.InputProps,
+                          endAdornment: (
+                            <>
+                              {loading ? <CircularProgress color="inherit" size={20} /> : null}
+                              {params.InputProps.endAdornment}
+                            </>
+                          ),
+                        }}
+                      />
+                    )}
+                    renderOption={(props, option) => (
+                      <li {...props} key={option.id || option.username}>
+                        {option.label || option.displayName || option.username || 'Unknown'}
+                      </li>
+                    )}
                   />
                 </Grid>
                 <Grid item xs={12}>
