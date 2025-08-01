@@ -1695,6 +1695,7 @@ const handleUndoDelete = async (internId) => {
                                 shiftTiming : userData.data.shift_timing,
                                 status : intern.user_status,
                                 scheme : intern.scheme,
+                                domain : userData.data.domain_details ? userData.data.domain_details.map(d => d.domain) : [],
                                 ...documentFields,  // Spread the document fields
                                 documents: documents,
                                 ...userData.data,
@@ -3945,21 +3946,39 @@ const DocumentsUpload = ({ onBack, onNext, initialData, registerData, collegeDat
     const domainOptions = await axios.get("http://localhost:8000/Sims/domains/", {
       headers: { Authorization: `Token ${token}` }
     }).then(res => res.data.results || res.data);
-    console.log('Domain options:', domainOptions);
+    console.log('Domain options from API:', JSON.stringify(domainOptions, null, 2));
+    console.log('Company Data domain:', companyData.domain);
+    console.log('Company Data domain type:', typeof companyData.domain);
 
     // STEP 4: Create user data entry with emp_id
+    // Handle both array and single string cases
+    const domainsToMap = Array.isArray(companyData.domain) 
+      ? companyData.domain 
+      : [companyData.domain];
+    
+    console.log('Domains to map:', domainsToMap);
+    
+    const mappedDomains = domainsToMap
+      .filter(domain => domain) // Filter out null/undefined/empty values
+      .map(name => {
+        console.log('Looking for match for domain:', name);
+        const match = domainOptions.find(opt => {
+          const optDomain = opt.domain?.trim().toLowerCase() || '';
+          const inputDomain = name?.trim().toLowerCase() || '';
+          console.log(`Comparing '${inputDomain}' with option '${optDomain}'`);
+          return optDomain === inputDomain;
+        });
+        console.log('Found match:', match);
+        return match?.id;
+      })
+      .filter(Boolean);
+    console.log('Final mapped domains:', mappedDomains);
+
     const userDataPayload = {
       emp_id: emp_id,
       username: registerData.username,
       department: registerData.department,
-      domain : Array.isArray(companyData.domain)
-  ? companyData.domain
-      .map(name => {
-        const match = domainOptions.find(opt => opt.domain.trim().toLowerCase() === name.trim().toLowerCase());
-        return match?.id;
-      })
-      .filter(Boolean)
-  : [],
+      domain: mappedDomains,
       scheme: companyData.scheme || "",
       team_name: companyData.teamName || "",
       start_date: companyData.startDate ? new Date(companyData.startDate).toISOString().split('T')[0] : null,

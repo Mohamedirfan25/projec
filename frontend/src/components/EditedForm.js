@@ -1053,7 +1053,7 @@ const CollegeInfoForm = ({ onBack, onNext, initialData }) => {
 
 const CompanyDetailsForm = ({ onBack, onNext, initialData }) => {
   const [formData, setFormData] = useState({
-    domain: initialData?.domain || "",
+    domain: initialData?.domain || [],
     department: initialData?.department || "",
     scheme: initialData?.scheme || "",
     teamName: initialData?.teamName || "",
@@ -1114,7 +1114,7 @@ const CompanyDetailsForm = ({ onBack, onNext, initialData }) => {
     if (initialData) {
       setFormData(prev => ({
         ...prev,
-        domain: initialData?.domain || "",
+        domain: initialData?.domain || [],
         department: initialData?.department || "",
         scheme: initialData?.scheme || "",
         teamName: initialData?.teamName || "",
@@ -2202,7 +2202,7 @@ const MultiStepForm = ({ internData, onClose, onSave }) => {
       facultyNumber: internData.facultyNumber || ''
     } : {},
     companyData: internData ? {
-      domain: internData.domain || '',
+      domain: internData.domain || [],
       department: internData.department || '',
       scheme: internData.scheme || '',
       teamName: internData.teamName || '',

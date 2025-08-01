@@ -112,7 +112,7 @@ const StaffList = () => {
                     name: item.username,
                     dept: item.department || 'N/A',
                     role: item.temp_details.role || 'N/A',
-                    domain: item.domain.domain || 'N/A',
+                    domain: item.domain_details ? item.domain_details.map(d => d.domain) : ['N/A'],
                     status: item.user_status === 'active' ? 'Working' : 'Resigned'
                 }));
 
@@ -491,7 +491,11 @@ const StaffList = () => {
                                         <TableCell>{employee.name}</TableCell>
                                         <TableCell>{employee.dept}</TableCell>
                                         <TableCell>{employee.role}</TableCell>
-                                        <TableCell>{employee.domain}</TableCell>
+                                        <TableCell>
+                                            {Array.isArray(employee.domain) 
+                                                ? employee.domain.join(', ')
+                                                : employee.domain}
+                                        </TableCell>
                                         <TableCell>
                                         <Chip
         label={employee.status}
