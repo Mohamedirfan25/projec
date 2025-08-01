@@ -1968,14 +1968,17 @@ class FeesView(APIView):
                     continue  # Skip employees without user data
 
                 # Get fee structure
-                # Get fee structure
                 try:
-                    fee_structure = FeeStructure.objects.get(
-                        domain=user_data.domain,
-                        scheme=user_data.scheme,
-                        is_deleted=False
-                    )
-                    total_price = fee_structure.price
+                    fee_structure = None
+                    total_price = 0
+                    if user_data.domain:  # Only try to get fee structure if domain exists
+                        fee_structure = FeeStructure.objects.filter(
+                            domain=user_data.domain,
+                            scheme=user_data.scheme,
+                            is_deleted=False
+                        ).first()
+                        if fee_structure:
+                            total_price = fee_structure.price
                 except FeeStructure.DoesNotExist:
                     fee_structure = None  # Handle missing fee structure gracefully
                     total_price = 0
@@ -1983,7 +1986,7 @@ class FeesView(APIView):
                 # Get all payments for this employee
                 # Get all payments for this employee
                 payments = Fees.objects.filter(emp_id=employee,is_deleted=False)
-                print(f"🔍 Payments found for {employee.emp_id}: {payments.count()}")
+                print(f" Payments found for {employee.emp_id}: {payments.count()}")
 
                 # Calculate summary
                 total_paid = payments.aggregate(total=Sum('amount'))['total'] or 0
@@ -2002,7 +2005,7 @@ class FeesView(APIView):
                     "id": payments.first().id if payments.exists() else None,
                     "employee_id": employee.emp_id,
                     "employee_name": employee.user.username,
-                    "domain": user_data.domain.domain if user_data.domain else None,
+                    "domain": user_data.domain.domain if user_data.domain and hasattr(user_data.domain, 'domain') else None,
                     "scheme": user_data.scheme,
                     "summary": {
                         "total_fee_amount": float(total_price),
