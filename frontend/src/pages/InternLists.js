@@ -383,7 +383,7 @@ useEffect(() => {
         mobile: item.mobile || "",
         department: item.department || "-",
         scheme: item.scheme || "-",
-        domain: item.domain || "-",
+        domain: item.domain || [],
         startDate: item.start_date || "-",
         endDate: item.end_date || "-",
         status,
@@ -3096,7 +3096,7 @@ const RegisterPage = ({ onNext, initialData, isReturning, onCancel }) => {
           // -----------------------------companydetails---------------------
             const CompanyDetailsForm = ({ onBack, onNext, initialData }) => {
             const [formData, setFormData] = useState(initialData || {
-                domain: "",
+                domain: [],
                 scheme: "",
                 teamName: "",
                 assetCode: "",
@@ -3942,12 +3942,24 @@ const DocumentsUpload = ({ onBack, onNext, initialData, registerData, collegeDat
       }
     }
 
+    const domainOptions = await axios.get("http://localhost:8000/Sims/domains/", {
+      headers: { Authorization: `Token ${token}` }
+    }).then(res => res.data.results || res.data);
+    console.log('Domain options:', domainOptions);
+
     // STEP 4: Create user data entry with emp_id
     const userDataPayload = {
       emp_id: emp_id,
       username: registerData.username,
       department: registerData.department,
-      domain: companyData.domain || "",
+      domain : Array.isArray(companyData.domain)
+  ? companyData.domain
+      .map(name => {
+        const match = domainOptions.find(opt => opt.domain.trim().toLowerCase() === name.trim().toLowerCase());
+        return match?.id;
+      })
+      .filter(Boolean)
+  : [],
       scheme: companyData.scheme || "",
       team_name: companyData.teamName || "",
       start_date: companyData.startDate ? new Date(companyData.startDate).toISOString().split('T')[0] : null,
@@ -3958,6 +3970,8 @@ const DocumentsUpload = ({ onBack, onNext, initialData, registerData, collegeDat
       reporting_supervisor_username: companyData.reportingSupervisor || "",
       user_status: "active"
     };
+
+
 
     const userDataRes = await axios.post("http://localhost:8000/Sims/user-data/", userDataPayload, {
       headers: { Authorization: `Token ${token}` }

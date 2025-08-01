@@ -308,9 +308,18 @@ const CreateTask = () => {
     setTaskToDelete(null);
   };
 
-  const handleBackToTasks = () => {
-    navigate('/intern');
-  };
+const handleBackToTasks = () => {
+  const role = localStorage.getItem('role');
+  if (role === 'admin') {
+    navigate('/AdminDashboard');
+  } else if (role === 'staff') {
+    navigate('/Intern');
+  } else if (role === 'intern') {
+    navigate('/Dash');
+  } else {
+    navigate('/'); // fallback
+  }
+};
 
   return (
     <Box
