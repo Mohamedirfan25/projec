@@ -816,7 +816,7 @@ const AssetManagement = () => {
           assert_id: assetId,
           assert_model: assetName,  // This is the correct field name for asset name in backend
           allocated_type: selectedAssetType,
-          configuration: configuration,
+          configuration: configuration,  // Ensure configuration is included in the payload
           ...(currentAsset && { id: currentAsset.id }),
           ...(selectedDepartment && { department: selectedDepartment }),
           ...(selectedIntern && { emp_id: selectedIntern })
@@ -825,6 +825,15 @@ const AssetManagement = () => {
         // Remove emp_id if it's explicitly set to null/empty
         if (selectedIntern === null || selectedIntern === '') {
           assetData.emp_id = null;
+          // If unassigning, also clear the department
+          if (currentAsset?.empId) {
+            delete assetData.department;
+          }
+        } else if (selectedIntern) {
+          // If assigning to an intern, ensure department is included
+          if (!assetData.department && selectedDepartment) {
+            assetData.department = selectedDepartment;
+          }
         }
         
         const url = currentAsset

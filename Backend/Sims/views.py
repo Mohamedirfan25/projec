@@ -1128,12 +1128,22 @@ class AssertStockView(APIView):
                 assert_stock.assert_model = request_data['assert_model']
                 update_fields.append('assert_model')
                 
+            # Explicitly handle configuration field
+            if 'configuration' in request_data:
+                assert_stock.configuration = request_data['configuration']
+                update_fields.append('configuration')
+                
             # Save any direct field updates
             if update_fields:
                 assert_stock.save(update_fields=update_fields)
                 
-            # Create serializer with the updated instance
-            serializer = AssertStockSerializer(assert_stock, data=request_data, partial=True)
+            # Create serializer with the updated instance and exclude configuration from request_data
+            # to prevent potential validation issues in the serializer
+            serializer_data = request_data.copy()
+            if 'configuration' in serializer_data:
+                del serializer_data['configuration']
+                
+            serializer = AssertStockSerializer(assert_stock, data=serializer_data, partial=True)
             
             if serializer.is_valid():
                 emp_id = request_data.get('emp_id')
